@@ -1,0 +1,15 @@
+{
+  "name": "mfish-thing-model-html",
+  "version": "1.0.0",
+  "description": "替代 Figma 限额，可本地直接打开。Vue 3 CDN + 自研 Ant Design 风格 CSS，1440 管理后台壳。",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

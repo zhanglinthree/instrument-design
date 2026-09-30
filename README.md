@@ -1,1 +1,93 @@
-# instrument-design
+# 设备管控平台 · 物模型 / 设备台账 / 在线监控 — HTML 高保真原型
+
+替代 Figma 限额，可本地直接打开。Vue 3 CDN + 自研 Ant Design 风格 CSS，1440 管理后台壳。
+
+## 打开方式
+
+**文件路径：**
+```
+file:///workspace/mfish-thing-model-html/index.html
+```
+
+**推荐本地静态服务（需联网加载 Vue CDN）：**
+```bash
+cd /workspace/mfish-thing-model-html
+python3 -m http.server 8877
+# 浏览器打开 http://127.0.0.1:8877/
+```
+
+## 模块切换
+
+侧栏可切换 **物模型** / **设备台账** / **在线监控**（同壳同配色，高亮当前模块）。
+物模型品类按类型绑定 **AEP 产品/型号**（下拉选择产品名，不绑定设备或设备 SN）；单台设备在台账由 AEP 绑定自动建档。
+
+## 物模型屏幕
+
+| # | 屏幕 | Hash 直达 |
+|---|------|-----------|
+| 1 | 品类列表 | `#list` |
+| 2 | 新建品类（模态） | `#createCategory` |
+| 3 | 编辑品类（模态） | `#editCategory` |
+| 4 | 物模型详情壳 + Tab | `#detail` |
+| 4a–4e | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 | `#props` `#events` `#points` `#install` `#firmware` |
+| 5–7 | 编辑测点 / 安装字段 / 固件 | `#editPoint` `#editInstall` `#editFirmware` |
+| 8 | 删除确认 | `#deleteConfirm` |
+
+## 设备台账屏幕
+
+| # | 屏幕 | Hash 直达 |
+|---|------|-----------|
+| 1 | 项目列表 | `#projects` |
+| 2 | 新建/编辑项目（模态） | `#createProject` `#editProject` |
+| 3 | 设备列表（筛项目/品类/生命周期/SN；导入导出/AEP对账） | `#devices` |
+| 4 | 设备档案详情（基础信息/坐标无地图/安装参数/照片占位/主从） | `#deviceDetail` |
+| 5 | 编辑设备档案 | `#editDevice` |
+| 6 | AEP 对账（多出/缺失 → 接入或忽略） | `#aepReconcile` |
+| 7 | 导入说明弹窗 | `#importExport` |
+
+## 在线监控屏幕（本期新增）
+
+| # | 屏幕 | Hash 直达 |
+|---|------|-----------|
+| 1 | 监控列表（在线态 / 告警摘要 / 可信 T0～T3+分数；筛项目/品类/在线/告警） | `#monitor` |
+| 2 | 设备监控详情（最新测点、固件、近 24h 可信分；入口曲线） | `#monitorDetail` |
+| 3 | 历史曲线（7 天 / 30 天；预警 orange / 报警 error / 故障 primary 参考线） | `#monitorCurve` |
+| 3b | 长周期曲线（采集周期 >15 分钟 →「历史全量查、不分段」） | `#monitorCurveLong` |
+| 4 | 在线率（该报没报：应报/实报/漏报统计卡片 + 简表） | `#monitorOnlineRate` |
+
+测点时序为 **PostgreSQL 时序示意**，非实时接入。一期不做设施树、地图、通用指令。
+
+## 配色
+
+- 侧栏 `#DBE1F0` · 顶栏 `#F1E8EC` · 主区白
+- primary `#0D6EFD` · error `#DC3545` · orange `#E78212`
+
+## 文件结构
+
+```
+index.html   # 入口
+styles.css   # 样式（物模型 + 台账 + 在线监控）
+app.js       # Vue SPA
+shots/       # 分屏截图
+take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
+```
+
+## 截图
+
+物模型见 `shots/01`–`12`。
+
+设备台账：
+- `ledger-01-projects.png` 项目列表
+- `ledger-02-create-project.png` 新建项目
+- `ledger-03-devices.png` 设备列表
+- `ledger-04-device-detail.png` 设备档案
+- `ledger-05-edit-device.png` 编辑设备档案
+- `ledger-06-aep-reconcile.png` AEP 对账
+- `ledger-07-import.png` 导入说明
+
+在线监控：
+- `monitor-01-list.png` 监控列表
+- `monitor-02-detail.png` 设备监控详情
+- `monitor-03-curve.png` 历史曲线
+- `monitor-04-online-rate.png` 在线率
+- `monitor-05-curve-long-cycle.png` 长周期全量查提示
