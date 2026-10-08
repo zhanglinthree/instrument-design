@@ -19,7 +19,21 @@ python3 -m http.server 8877
 ## 模块切换
 
 侧栏可切换 **物模型** / **设备台账** / **在线监控**（同壳同配色，高亮当前模块）。
-物模型品类按类型绑定 **AEP 产品/型号**（下拉选择产品名，不绑定设备或设备 SN）；单台设备在台账由 AEP 绑定自动建档。
+
+## 产品口径（本期）
+
+### 物模型
+- 物模型定义**产品类型语义**（测点 / 事件 / 阈值 / 安装模板 / 固件）。
+- **不再**在品类上直接绑定 AEP 产品/型号；无「绑定 AEP 产品」主流程。
+- **无解析脚本 UI**：AEP 侧已完成设备数据解析。
+- 品类配置 **归属规则**（通用规则默认匹配 + 特殊处理规则更高优先级）。匹配条件含 AEP 产品 ID、协议 ID/名称等自由文本。
+- AEP 解析后由规则自动挂靠品类；未匹配 → **待归属**。
+
+### 设备台账
+- AEP 自注册且无项目的设备进入 **未定义项目** 池（未归属）。
+- 支持未归属列表筛选 / 入口，以及 **设备转移**（记录操作人 / 时间 / 自 / 至）。
+- 设备上品类默认 **自动匹配**（只读展示）；边缘场景可「改挂」。
+- AEP 对账用于本地台账 vs AEP 清单差异，**不依赖**品类绑定 AEP 产品。
 
 ## 物模型屏幕
 
@@ -29,7 +43,7 @@ python3 -m http.server 8877
 | 2 | 新建品类（模态） | `#createCategory` |
 | 3 | 编辑品类（模态） | `#editCategory` |
 | 4 | 物模型详情壳 + Tab | `#detail` |
-| 4a–4e | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 | `#props` `#events` `#points` `#install` `#firmware` |
+| 4a–4f | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#rules` / `#categoryRules` |
 | 5–7 | 编辑测点 / 安装字段 / 固件 | `#editPoint` `#editInstall` `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
 
@@ -37,15 +51,17 @@ python3 -m http.server 8877
 
 | # | 屏幕 | Hash 直达 |
 |---|------|-----------|
-| 1 | 项目列表 | `#projects` |
+| 1 | 项目列表（含未归属池入口） | `#projects` |
 | 2 | 新建/编辑项目（模态） | `#createProject` `#editProject` |
-| 3 | 设备列表（筛项目/品类/生命周期/SN；导入导出/AEP对账） | `#devices` |
-| 4 | 设备档案详情（基础信息/坐标无地图/安装参数/照片占位/主从） | `#deviceDetail` |
+| 3 | 设备列表 | `#devices` |
+| 3b | **未归属设备 / 未定义项目** | `#unassignedDevices` |
+| 3c | **设备转移**（模态） | `#deviceTransfer` |
+| 4 | 设备档案详情（含转移记录） | `#deviceDetail` |
 | 5 | 编辑设备档案 | `#editDevice` |
-| 6 | AEP 对账（多出/缺失 → 接入或忽略） | `#aepReconcile` |
+| 6 | AEP 对账（清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
 
-## 在线监控屏幕（本期新增）
+## 在线监控屏幕
 
 | # | 屏幕 | Hash 直达 |
 |---|------|-----------|
@@ -68,13 +84,13 @@ python3 -m http.server 8877
 index.html   # 入口
 styles.css   # 样式（物模型 + 台账 + 在线监控）
 app.js       # Vue SPA
-shots/       # 分屏截图
+shots/       # 分屏截图（部分为改口径前截图，以页面为准）
 take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 ```
 
 ## 截图
 
-物模型见 `shots/01`–`12`。
+物模型见 `shots/01`–`12`（历史截图可能仍含旧「绑定 AEP」文案，请以当前页面为准）。
 
 设备台账：
 - `ledger-01-projects.png` 项目列表

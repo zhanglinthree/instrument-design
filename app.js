@@ -2,19 +2,26 @@ const { createApp, ref, computed, reactive, watch, nextTick } = Vue;
 
 /* ========== 物模型 Mock ========== */
 const CATEGORIES = [
-  { id: 'C001', name: '液位监测井', code: 'level_well', industry: '市政排水', aepBound: true, aepProductId: 'AEP-LW-1001', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用' },
-  { id: 'C002', name: '水质监测站', code: 'water_quality', industry: '环保监测', aepBound: true, aepProductId: 'AEP-WQ-2003', deviceCount: 56, modelVersion: 'v2.0.1', updatedAt: '2026-09-26 09:10', status: '启用' },
-  { id: 'C003', name: '管网压力表', code: 'pipe_pressure', industry: '供水', aepBound: false, aepProductId: '', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿' },
-  { id: 'C004', name: '泵站机组', code: 'pump_unit', industry: '市政排水', aepBound: true, aepProductId: 'AEP-PU-3012', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用' },
-  { id: 'C005', name: '雨量计', code: 'rain_gauge', industry: '气象水文', aepBound: false, aepProductId: '', deviceCount: 12, modelVersion: 'v1.1.0', updatedAt: '2026-09-12 08:05', status: '停用' },
+  { id: 'C001', name: '液位监测井', code: 'level_well', industry: '市政排水', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用', ruleCount: 3 },
+  { id: 'C002', name: '水质监测站', code: 'water_quality', industry: '环保监测', deviceCount: 56, modelVersion: 'v2.0.1', updatedAt: '2026-09-26 09:10', status: '启用', ruleCount: 2 },
+  { id: 'C003', name: '管网压力表', code: 'pipe_pressure', industry: '供水', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿', ruleCount: 2 },
+  { id: 'C004', name: '泵站机组', code: 'pump_unit', industry: '市政排水', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用', ruleCount: 2 },
+  { id: 'C005', name: '雨量计', code: 'rain_gauge', industry: '气象水文', deviceCount: 12, modelVersion: 'v1.1.0', updatedAt: '2026-09-12 08:05', status: '停用', ruleCount: 2 },
 ];
 
-const AEP_PRODUCTS = [
-  { id: 'AEP-LW-1001', name: '液位监测井标准型', model: 'MF-LW-100' },
-  { id: 'AEP-WQ-2003', name: '水质监测站标准型', model: 'MF-WQ-200' },
-  { id: 'AEP-PP-4001', name: '管网压力表标准型', model: 'MF-PP-50' },
-  { id: 'AEP-PU-3012', name: '泵站机组控制型', model: 'MF-PU-300' },
-  { id: 'AEP-RG-5001', name: '雨量计基础型', model: 'MF-RG-10' },
+/* 归属规则：通用规则默认匹配；特殊处理规则优先级更高。AEP 侧已完成解析，本侧只做品类自动挂靠。 */
+const CATEGORY_RULES = [
+  { id: 'R101', categoryId: 'C001', name: '液位井 · 标准产品通用匹配', type: '通用', matchAepProduct: 'AEP-LW-1001', matchProtocol: 'MQTT / level-proto-v2', priority: 100, enabled: true, note: '默认：AEP 解析后按产品 ID 挂靠本品类' },
+  { id: 'R102', categoryId: 'C001', name: '旧 CoAP 协议例外', type: '特殊', matchAepProduct: 'AEP-LW-1001', matchProtocol: 'CoAP / legacy-level', priority: 10, enabled: true, note: '特殊协议优先于通用规则' },
+  { id: 'R103', categoryId: 'C001', name: '双探头定制型号', type: '特殊', matchAepProduct: 'AEP-LW-1001-D', matchProtocol: 'MQTT / dual-probe', priority: 20, enabled: true, note: '双探头设备强制挂靠液位井' },
+  { id: 'R201', categoryId: 'C002', name: '水质站通用匹配', type: '通用', matchAepProduct: 'AEP-WQ-2003', matchProtocol: 'MQTT / wq-proto-v1', priority: 100, enabled: true, note: '默认匹配水质 AEP 产品' },
+  { id: 'R202', categoryId: 'C002', name: '临时测试产品例外', type: '特殊', matchAepProduct: 'AEP-WQ-TEST', matchProtocol: '任意', priority: 5, enabled: false, note: '已停用：测试产品不再自动归属' },
+  { id: 'R301', categoryId: 'C003', name: '管网压力通用匹配', type: '通用', matchAepProduct: 'AEP-PP-4001', matchProtocol: 'MQTT / pressure-v1', priority: 100, enabled: true, note: '草稿品类规则，启用后生效' },
+  { id: 'R302', categoryId: 'C003', name: '低压区定制协议', type: '特殊', matchAepProduct: 'AEP-PP-4001', matchProtocol: 'NB-IoT / low-pressure', priority: 15, enabled: true, note: '低压区特殊处理' },
+  { id: 'R401', categoryId: 'C004', name: '泵站机组通用匹配', type: '通用', matchAepProduct: 'AEP-PU-3012', matchProtocol: 'Modbus-TCP / pump-ctrl', priority: 100, enabled: true, note: '默认挂靠泵站机组' },
+  { id: 'R402', categoryId: 'C004', name: '变频柜例外', type: '特殊', matchAepProduct: 'AEP-PU-3012-VFD', matchProtocol: 'Modbus-TCP / vfd', priority: 12, enabled: true, note: '变频柜优先特殊规则' },
+  { id: 'R501', categoryId: 'C005', name: '雨量计通用匹配', type: '通用', matchAepProduct: 'AEP-RG-5001', matchProtocol: 'MQTT / rain-gauge', priority: 100, enabled: true, note: '默认匹配雨量产品' },
+  { id: 'R502', categoryId: 'C005', name: '翻斗式例外', type: '特殊', matchAepProduct: 'AEP-RG-5001-T', matchProtocol: 'RS485 / tipping-bucket', priority: 18, enabled: true, note: '翻斗式雨量计特殊处理' },
 ];
 
 const PROPERTIES = [
@@ -61,22 +68,34 @@ const PROJECTS = [
 ];
 
 const DEVICES = [
-  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153576, lat: 30.287459, address: '杭州市上城区东湖路与环城东路交叉口东南侧检查井', installDate: '2026-04-12', installer: '张伟', masterId: '', masterSn: '', slaves: ['D002'], photos: ['现场全景', '井内安装', '铭牌特写'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.3', well_no: 'JW-2026-001', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
-  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10002', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153610, lat: 30.287480, address: '杭州市上城区东湖路检查井（从机）', installDate: '2026-04-12', installer: '张伟', masterId: 'D001', masterSn: 'MF20260901001', slaves: [], photos: ['从机安装'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.5', well_no: 'JW-2026-001-S', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
-  { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', lifecycle: '离线', aepDeviceId: 'AEP-DEV-20011', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.148220, lat: 30.265110, address: '南湖公园北门入湖口', installDate: '2026-06-01', installer: '刘洋', masterId: '', masterSn: '', slaves: [], photos: ['站房外观', '采水口'], installParams: { sample_depth: '1.2', station_code: 'NH-IN-01' }, updatedAt: '2026-09-28 09:11' },
-  { id: 'D004', sn: 'MF20251108088', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', lifecycle: '停用', aepDeviceId: '', model: 'MF-PP-50', firmware: '0.9.0', lng: 120.165001, lat: 30.274880, address: '解放路 88 号门前阀门井', installDate: '2025-12-05', installer: '孙磊', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { pipe_diameter: '300', install_depth: '1.5' }, updatedAt: '2026-08-10 14:00' },
-  { id: 'D005', sn: 'MF20260915030', name: '城东泵站1#机组', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C004', categoryName: '泵站机组', lifecycle: '在线', aepDeviceId: 'AEP-DEV-30120', model: 'MF-PU-300', firmware: '1.0.3', lng: 120.160100, lat: 30.291200, address: '城东排涝泵站泵房', installDate: '2026-05-20', installer: '赵强', masterId: '', masterSn: '', slaves: [], photos: ['机组铭牌', '控制柜'], installParams: { rated_power: '75', pump_no: '1#' }, updatedAt: '2026-09-30 08:05' },
-  { id: 'D006', sn: 'MF20260120001', name: '气象局雨量-03', projectId: 'PJ05', projectName: '雨量站扩容', categoryId: 'C005', categoryName: '雨量计', lifecycle: '报废', aepDeviceId: 'AEP-DEV-RG-03', model: 'MF-RG-10', firmware: '1.0.0', lng: 120.172000, lat: 30.300000, address: '市气象局观测场', installDate: '2024-03-01', installer: '周伟', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { mount_height: '1.2' }, updatedAt: '2026-07-01 10:00' },
-  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', lifecycle: '待接入', aepDeviceId: '', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.155800, lat: 30.282100, address: '望江路与秋涛路交叉口', installDate: '2026-09-28', installer: '张伟', masterId: '', masterSn: '', slaves: [], photos: ['待装现场'], installParams: { well_depth: '7.2', pipe_diameter: '800', install_height: '0.3', well_no: 'JW-2026-050', cover_type: '复合材料' }, updatedAt: '2026-09-28 16:40' },
-  { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', lifecycle: '在线', aepDeviceId: 'AEP-DEV-20022', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.151100, lat: 30.258900, address: '南湖出水闸附近', installDate: '2026-06-08', installer: '刘洋', masterId: '', masterSn: '', slaves: [], photos: ['站房', '仪表盘'], installParams: { sample_depth: '0.8', station_code: 'NH-OUT-01' }, updatedAt: '2026-09-29 21:00' },
+  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153576, lat: 30.287459, address: '杭州市上城区东湖路与环城东路交叉口东南侧检查井', installDate: '2026-04-12', installer: '张伟', masterId: '', masterSn: '', slaves: ['D002'], photos: ['现场全景', '井内安装', '铭牌特写'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.3', well_no: 'JW-2026-001', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
+  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10002', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153610, lat: 30.287480, address: '杭州市上城区东湖路检查井（从机）', installDate: '2026-04-12', installer: '张伟', masterId: 'D001', masterSn: 'MF20260901001', slaves: [], photos: ['从机安装'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.5', well_no: 'JW-2026-001-S', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
+  { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', lifecycle: '离线', aepDeviceId: 'AEP-DEV-20011', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.148220, lat: 30.265110, address: '南湖公园北门入湖口', installDate: '2026-06-01', installer: '刘洋', masterId: '', masterSn: '', slaves: [], photos: ['站房外观', '采水口'], installParams: { sample_depth: '1.2', station_code: 'NH-IN-01' }, updatedAt: '2026-09-28 09:11' },
+  { id: 'D004', sn: 'MF20251108088', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', categoryMatch: 'manual', lifecycle: '停用', aepDeviceId: '', model: 'MF-PP-50', firmware: '0.9.0', lng: 120.165001, lat: 30.274880, address: '解放路 88 号门前阀门井', installDate: '2025-12-05', installer: '孙磊', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { pipe_diameter: '300', install_depth: '1.5' }, updatedAt: '2026-08-10 14:00' },
+  { id: 'D005', sn: 'MF20260915030', name: '城东泵站1#机组', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C004', categoryName: '泵站机组', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-30120', model: 'MF-PU-300', firmware: '1.0.3', lng: 120.160100, lat: 30.291200, address: '城东排涝泵站泵房', installDate: '2026-05-20', installer: '赵强', masterId: '', masterSn: '', slaves: [], photos: ['机组铭牌', '控制柜'], installParams: { rated_power: '75', pump_no: '1#' }, updatedAt: '2026-09-30 08:05' },
+  { id: 'D006', sn: 'MF20260120001', name: '气象局雨量-03', projectId: 'PJ05', projectName: '雨量站扩容', categoryId: 'C005', categoryName: '雨量计', categoryMatch: 'auto', lifecycle: '报废', aepDeviceId: 'AEP-DEV-RG-03', model: 'MF-RG-10', firmware: '1.0.0', lng: 120.172000, lat: 30.300000, address: '市气象局观测场', installDate: '2024-03-01', installer: '周伟', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { mount_height: '1.2' }, updatedAt: '2026-07-01 10:00' },
+  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '待接入', aepDeviceId: '', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.155800, lat: 30.282100, address: '望江路与秋涛路交叉口', installDate: '2026-09-28', installer: '张伟', masterId: '', masterSn: '', slaves: [], photos: ['待装现场'], installParams: { well_depth: '7.2', pipe_diameter: '800', install_height: '0.3', well_no: 'JW-2026-050', cover_type: '复合材料' }, updatedAt: '2026-09-28 16:40' },
+  { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-20022', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.151100, lat: 30.258900, address: '南湖出水闸附近', installDate: '2026-06-08', installer: '刘洋', masterId: '', masterSn: '', slaves: [], photos: ['站房', '仪表盘'], installParams: { sample_depth: '0.8', station_code: 'NH-OUT-01' }, updatedAt: '2026-09-29 21:00' },
+  { id: 'D009', sn: 'MF20261001001', name: 'AEP自注册-液位-01', projectId: null, projectName: '未定义项目', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-91001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.158200, lat: 30.289100, address: '待现场补录', installDate: '2026-10-01', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-01 09:12' },
+  { id: 'D010', sn: 'MF20261001088', name: 'AEP自注册-未知协议', projectId: null, projectName: '未定义项目', categoryId: '', categoryName: '待归属', categoryMatch: 'none', lifecycle: '待接入', aepDeviceId: 'AEP-DEV-91088', model: 'UNKNOWN', firmware: '', lng: null, lat: null, address: '', installDate: '', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-02 11:05' },
+  { id: 'D011', sn: 'AEP-AUTO-7721', name: '临时水质终端-7721', projectId: null, projectName: '未定义项目', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-7721', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.149500, lat: 30.261000, address: '滨江临时点位', installDate: '2026-10-03', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { sample_depth: '1.0' }, updatedAt: '2026-10-03 14:30' },
+  { id: 'D012', sn: 'MF20261005012', name: 'AEP自注册-泵站探头', projectId: null, projectName: '未定义项目', categoryId: 'C004', categoryName: '泵站机组', categoryMatch: 'auto', lifecycle: '离线', aepDeviceId: 'AEP-DEV-91200', model: 'MF-PU-300', firmware: '1.0.3', lng: 120.161000, lat: 30.292000, address: '', installDate: '2026-10-05', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-05 08:40' },
 ];
 
+const UNASSIGNED_PROJECT_ID = '__unassigned__';
+const UNASSIGNED_PROJECT_NAME = '未定义项目';
+
 const AEP_DIFFS = [
-  { id: 'AD1', type: 'extra', sn: 'AEP-ONLY-9001', aepDeviceId: 'AEP-DEV-9001', aepName: '未知液位设备-9001', productId: 'AEP-LW-1001', hint: 'AEP 有台账无：可能未导入或 SN 不一致', action: 'pending' },
+  { id: 'AD1', type: 'extra', sn: 'AEP-ONLY-9001', aepDeviceId: 'AEP-DEV-9001', aepName: '未知液位设备-9001', productId: 'AEP-LW-1001', hint: 'AEP 有、台账无：可接入后进入未定义项目池', action: 'pending' },
   { id: 'AD2', type: 'extra', sn: 'AEP-ONLY-9008', aepDeviceId: 'AEP-DEV-9008', aepName: '测试压力点-9008', productId: 'AEP-PU-3012', hint: '疑似测试设备残留', action: 'pending' },
   { id: 'AD3', type: 'missing', sn: 'MF20260928050', aepDeviceId: '', aepName: '', productId: 'AEP-LW-1001', localName: '望江路井-待接入', localId: 'D007', hint: '本地已建档，AEP 尚未创建设备', action: 'pending' },
-  { id: 'AD4', type: 'missing', sn: 'MF20251108088', aepDeviceId: '', aepName: '', productId: '', localName: '解放路压力-12', localId: 'D004', hint: '品类未绑定 AEP 产品，无法对账创建设备', action: 'pending' },
+  { id: 'AD4', type: 'missing', sn: 'MF20251108088', aepDeviceId: '', aepName: '', productId: 'AEP-PP-4001', localName: '解放路压力-12', localId: 'D004', hint: '本地有、AEP 无：SN 或产品映射不一致，可补建或忽略', action: 'pending' },
   { id: 'AD5', type: 'extra', sn: 'AEP-ONLY-7712', aepDeviceId: 'AEP-DEV-7712', aepName: '滨江临时终端', productId: 'AEP-LW-1001', hint: '不在本期项目范围', action: 'ignored' },
+];
+
+const TRANSFER_LOGS = [
+  { id: 'TL1', deviceId: 'D001', sn: 'MF20260901001', deviceName: '东湖路井-01', fromProjectId: null, fromProjectName: '未定义项目', toProjectId: 'PJ01', toProjectName: '城东排涝一期', operator: '王建国', time: '2026-04-12 10:20', note: '现场确认后转入城东项目' },
+  { id: 'TL2', deviceId: 'D003', sn: 'MF20260520011', deviceName: '南湖入口站', fromProjectId: 'PJ04', fromProjectName: '滨江泵站改造', toProjectId: 'PJ02', toProjectName: '南湖水质专项', operator: '李敏', time: '2026-06-02 15:40', note: '项目范围调整' },
 ];
 
 const LIFECYCLES = ['待接入', '在线', '离线', '停用', '报废'];
@@ -158,14 +177,18 @@ createApp({
     const detailTab = ref('points');
     const searchKeyword = ref('');
     const filterIndustry = ref('');
-    const filterAep = ref('');
 
     const showCategoryModal = ref(false);
     const categoryModalMode = ref('create');
-    const categoryForm = reactive({ id: '', name: '', code: '', industry: '市政排水', desc: '', aepProductId: '', status: '启用' });
+    const categoryForm = reactive({ id: '', name: '', code: '', industry: '市政排水', desc: '', status: '启用' });
 
-    const showAepModal = ref(false);
-    const aepForm = reactive({ categoryId: '', aepProductId: '' });
+    const showRuleModal = ref(false);
+    const ruleModalMode = ref('create');
+    const ruleForm = reactive({
+      id: '', categoryId: '', name: '', type: '通用', matchAepProduct: '', matchProtocol: '',
+      priority: 100, enabled: true, note: ''
+    });
+    const categoryRules = ref(CATEGORY_RULES.map(r => ({ ...r })));
 
     const showDeleteConfirm = ref(false);
     const deleteTarget = reactive({ type: '', id: '', name: '' });
@@ -199,19 +222,27 @@ createApp({
     const deviceCategoryFilter = ref('');
     const deviceLifecycleFilter = ref('');
     const deviceSnSearch = ref('');
-    const currentDevice = ref(DEVICES[0]);
+    const deviceList = ref(DEVICES.map(d => ({ ...d })));
+    const currentDevice = ref(deviceList.value[0]);
+    const selectedDeviceIds = ref([]);
 
     const showImportModal = ref(false);
     const importMode = ref('import'); // import | export
 
     const showDisableConfirm = ref(false);
+    const showTransferModal = ref(false);
+    const transferForm = reactive({
+      targetProjectId: 'PJ01', note: '', operator: '张三', deviceIds: []
+    });
+    const transferLogs = ref(TRANSFER_LOGS.map(t => ({ ...t })));
+    const showCategoryOverride = ref(false);
 
     const deviceFormMode = ref('edit');
     const deviceForm = reactive({
       id: '', sn: '', name: '', projectId: '', categoryId: '', lifecycle: '待接入',
       aepDeviceId: '', model: '', firmware: '', lng: '', lat: '', address: '',
       installDate: '', installer: '', masterId: '',
-      installParamsText: '', photosText: ''
+      installParamsText: '', photosText: '', categoryMatch: 'auto'
     });
 
     const aepDiffTab = ref('extra'); // extra | missing | ignored
@@ -232,10 +263,19 @@ createApp({
         const kw = searchKeyword.value.trim();
         if (kw && !(c.name.includes(kw) || c.code.includes(kw) || c.id.includes(kw))) return false;
         if (filterIndustry.value && c.industry !== filterIndustry.value) return false;
-        if (filterAep.value === 'bound' && !c.aepBound) return false;
-        if (filterAep.value === 'unbound' && c.aepBound) return false;
         return true;
       });
+    });
+
+    const currentCategoryRules = computed(() => {
+      const cid = currentCategory.value?.id;
+      return categoryRules.value
+        .filter(r => r.categoryId === cid)
+        .slice()
+        .sort((a, b) => {
+          if (a.type !== b.type) return a.type === '特殊' ? -1 : 1;
+          return (a.priority || 0) - (b.priority || 0);
+        });
     });
 
     const industries = ['市政排水', '环保监测', '供水', '气象水文'];
@@ -250,14 +290,27 @@ createApp({
     });
 
     const filteredDevices = computed(() => {
-      return DEVICES.filter(d => {
-        if (deviceProjectFilter.value && d.projectId !== deviceProjectFilter.value) return false;
+      return deviceList.value.filter(d => {
+        if (deviceProjectFilter.value === UNASSIGNED_PROJECT_ID) {
+          if (d.projectId) return false;
+        } else if (deviceProjectFilter.value && d.projectId !== deviceProjectFilter.value) {
+          return false;
+        }
         if (deviceCategoryFilter.value && d.categoryId !== deviceCategoryFilter.value) return false;
         if (deviceLifecycleFilter.value && d.lifecycle !== deviceLifecycleFilter.value) return false;
         const kw = deviceSnSearch.value.trim();
         if (kw && !(d.sn.includes(kw) || d.name.includes(kw) || (d.aepDeviceId || '').includes(kw))) return false;
         return true;
       });
+    });
+
+    const unassignedDevices = computed(() => deviceList.value.filter(d => !d.projectId));
+    const unassignedCount = computed(() => unassignedDevices.value.length);
+
+    const currentDeviceTransferLogs = computed(() => {
+      const d = currentDevice.value;
+      if (!d) return [];
+      return transferLogs.value.filter(t => t.deviceId === d.id || t.sn === d.sn);
     });
 
     const deviceStats = computed(() => {
@@ -381,13 +434,13 @@ createApp({
     const currentDeviceSlaves = computed(() => {
       const d = currentDevice.value;
       if (!d || !d.slaves || !d.slaves.length) return [];
-      return DEVICES.filter(x => d.slaves.includes(x.id));
+      return deviceList.value.filter(x => d.slaves.includes(x.id));
     });
 
     const currentDeviceMaster = computed(() => {
       const d = currentDevice.value;
       if (!d || !d.masterId) return null;
-      return DEVICES.find(x => x.id === d.masterId) || null;
+      return deviceList.value.find(x => x.id === d.masterId) || null;
     });
 
     const installParamEntries = computed(() => {
@@ -410,7 +463,10 @@ createApp({
       }
       if (module.value === 'ledger') {
         if (screen.value === 'projects') return { parent: '设备管控', current: '设备台账 · 项目列表' };
-        if (screen.value === 'devices') return { parent: '设备台账', current: '设备列表' };
+        if (screen.value === 'devices') {
+          const un = deviceProjectFilter.value === UNASSIGNED_PROJECT_ID;
+          return { parent: '设备台账', current: un ? '未归属设备（未定义项目）' : '设备列表' };
+        }
         if (screen.value === 'deviceDetail') return { parent: '设备台账', current: (currentDevice.value?.name || '设备') + ' · 档案' };
         if (screen.value === 'editDevice') return { parent: currentDevice.value?.name || '设备', current: deviceFormMode.value === 'create' ? '新建设备档案' : '编辑设备档案' };
         if (screen.value === 'aepReconcile') return { parent: '设备台账', current: 'AEP 对账' };
@@ -440,30 +496,60 @@ createApp({
 
     function openCreateCategory() {
       categoryModalMode.value = 'create';
-      Object.assign(categoryForm, { id: '', name: '', code: '', industry: '市政排水', desc: '', aepProductId: '', status: '启用' });
+      Object.assign(categoryForm, { id: '', name: '', code: '', industry: '市政排水', desc: '', status: '启用' });
       showCategoryModal.value = true;
     }
     function openEditCategory(cat) {
       categoryModalMode.value = 'edit';
       Object.assign(categoryForm, {
         id: cat.id, name: cat.name, code: cat.code, industry: cat.industry,
-        desc: cat.desc || '', aepProductId: cat.aepProductId || '', status: cat.status
+        desc: cat.desc || '', status: cat.status
       });
       showCategoryModal.value = true;
     }
     function saveCategory() { showCategoryModal.value = false; }
 
-    function aepProductDisplay(productId) {
-      const product = AEP_PRODUCTS.find(p => p.id === productId);
-      return product ? `${product.name}（${product.model}）` : (productId || '未绑定');
+    function openCreateRule() {
+      ruleModalMode.value = 'create';
+      Object.assign(ruleForm, {
+        id: '', categoryId: currentCategory.value.id, name: '', type: '通用',
+        matchAepProduct: '', matchProtocol: '', priority: 100, enabled: true, note: ''
+      });
+      showRuleModal.value = true;
     }
-
-    function openBindAep(cat) {
-      aepForm.categoryId = cat.id;
-      aepForm.aepProductId = cat.aepProductId || '';
-      showAepModal.value = true;
+    function openEditRule(r) {
+      ruleModalMode.value = 'edit';
+      Object.assign(ruleForm, { ...r });
+      showRuleModal.value = true;
     }
-    function saveAep() { showAepModal.value = false; }
+    function saveRule() {
+      if (ruleModalMode.value === 'create') {
+        const id = 'R' + Date.now().toString().slice(-6);
+        categoryRules.value.push({ ...ruleForm, id, categoryId: currentCategory.value.id });
+      } else {
+        const idx = categoryRules.value.findIndex(x => x.id === ruleForm.id);
+        if (idx >= 0) categoryRules.value.splice(idx, 1, { ...ruleForm });
+      }
+      showRuleModal.value = false;
+    }
+    function toggleRuleEnabled(r) {
+      const idx = categoryRules.value.findIndex(x => x.id === r.id);
+      if (idx >= 0) categoryRules.value.splice(idx, 1, { ...r, enabled: !r.enabled });
+    }
+    function categoryMatchLabel(m) {
+      if (m === 'auto') return '自动匹配';
+      if (m === 'manual') return '人工改挂';
+      if (m === 'none') return '待归属';
+      return m || '—';
+    }
+    function isUnassigned(d) {
+      return !d || !d.projectId;
+    }
+    function displayProjectName(d) {
+      if (!d) return '—';
+      if (!d.projectId) return UNASSIGNED_PROJECT_NAME;
+      return d.projectName || projectName(d.projectId);
+    }
 
     function confirmDelete(type, id, name) {
       deleteTarget.type = type;
@@ -515,6 +601,14 @@ createApp({
     /* ---- 设备台账 actions ---- */
     function goProjects() { module.value = 'ledger'; screen.value = 'projects'; }
     function goDevices() { module.value = 'ledger'; screen.value = 'devices'; }
+    function goUnassignedDevices() {
+      deviceProjectFilter.value = UNASSIGNED_PROJECT_ID;
+      deviceCategoryFilter.value = '';
+      deviceLifecycleFilter.value = '';
+      deviceSnSearch.value = '';
+      selectedDeviceIds.value = [];
+      goDevices();
+    }
     function goAepReconcile() { module.value = 'ledger'; screen.value = 'aepReconcile'; aepDiffTab.value = 'extra'; }
 
     function openCreateProject() {
@@ -558,8 +652,10 @@ createApp({
         installer: d.installer || '',
         masterId: d.masterId || '',
         installParamsText: d.installParams ? Object.entries(d.installParams).map(([k, v]) => k + '=' + v).join('\\n') : '',
-        photosText: (d.photos || []).join('、')
+        photosText: (d.photos || []).join('、'),
+        categoryMatch: d.categoryMatch || 'auto'
       });
+      showCategoryOverride.value = false;
     }
 
     function openEditDevice(d) {
@@ -569,7 +665,97 @@ createApp({
       screen.value = 'editDevice';
     }
     function saveDevice() {
+      const idx = deviceList.value.findIndex(x => x.id === deviceForm.id);
+      if (idx >= 0) {
+        const proj = PROJECTS.find(p => p.id === deviceForm.projectId);
+        const cat = CATEGORIES.find(c => c.id === deviceForm.categoryId);
+        const updated = {
+          ...deviceList.value[idx],
+          sn: deviceForm.sn,
+          name: deviceForm.name,
+          projectId: deviceForm.projectId || null,
+          projectName: deviceForm.projectId ? (proj ? proj.name : deviceForm.projectId) : UNASSIGNED_PROJECT_NAME,
+          categoryId: deviceForm.categoryId || '',
+          categoryName: deviceForm.categoryId ? (cat ? cat.name : deviceForm.categoryId) : '待归属',
+          categoryMatch: showCategoryOverride.value ? 'manual' : (deviceForm.categoryMatch || 'auto'),
+          lifecycle: deviceForm.lifecycle,
+          aepDeviceId: deviceForm.aepDeviceId,
+          model: deviceForm.model,
+          firmware: deviceForm.firmware,
+          lng: deviceForm.lng ? Number(deviceForm.lng) : null,
+          lat: deviceForm.lat ? Number(deviceForm.lat) : null,
+          address: deviceForm.address,
+          installDate: deviceForm.installDate,
+          installer: deviceForm.installer,
+          masterId: deviceForm.masterId,
+          updatedAt: '2026-10-08 14:45'
+        };
+        deviceList.value.splice(idx, 1, updated);
+        currentDevice.value = updated;
+      }
       screen.value = 'deviceDetail';
+    }
+
+    function toggleSelectDevice(id) {
+      const i = selectedDeviceIds.value.indexOf(id);
+      if (i >= 0) selectedDeviceIds.value.splice(i, 1);
+      else selectedDeviceIds.value.push(id);
+    }
+    function toggleSelectAllFiltered() {
+      const ids = filteredDevices.value.map(d => d.id);
+      if (ids.length && ids.every(id => selectedDeviceIds.value.includes(id))) {
+        selectedDeviceIds.value = selectedDeviceIds.value.filter(id => !ids.includes(id));
+      } else {
+        const set = new Set([...selectedDeviceIds.value, ...ids]);
+        selectedDeviceIds.value = [...set];
+      }
+    }
+    function openTransferModal(deviceOrNull) {
+      let ids = [];
+      if (deviceOrNull && deviceOrNull.id) ids = [deviceOrNull.id];
+      else if (selectedDeviceIds.value.length) ids = [...selectedDeviceIds.value];
+      else if (currentDevice.value) ids = [currentDevice.value.id];
+      if (!ids.length) return;
+      transferForm.deviceIds = ids;
+      transferForm.targetProjectId = 'PJ01';
+      transferForm.note = '';
+      transferForm.operator = '张三';
+      showTransferModal.value = true;
+    }
+    function confirmTransfer() {
+      const target = PROJECTS.find(p => p.id === transferForm.targetProjectId);
+      if (!target) return;
+      const now = '2026-10-08 14:50';
+      transferForm.deviceIds.forEach(id => {
+        const idx = deviceList.value.findIndex(d => d.id === id);
+        if (idx < 0) return;
+        const d = deviceList.value[idx];
+        const fromName = d.projectId ? d.projectName : UNASSIGNED_PROJECT_NAME;
+        const fromId = d.projectId || null;
+        const updated = {
+          ...d,
+          projectId: target.id,
+          projectName: target.name,
+          updatedAt: now
+        };
+        deviceList.value.splice(idx, 1, updated);
+        if (currentDevice.value && currentDevice.value.id === id) currentDevice.value = updated;
+        transferLogs.value.unshift({
+          id: 'TL' + Date.now().toString().slice(-6) + id,
+          deviceId: d.id,
+          sn: d.sn,
+          deviceName: d.name,
+          fromProjectId: fromId,
+          fromProjectName: fromName,
+          toProjectId: target.id,
+          toProjectName: target.name,
+          operator: transferForm.operator || '张三',
+          time: now,
+          note: transferForm.note || ''
+        });
+      });
+      selectedDeviceIds.value = [];
+      showTransferModal.value = false;
     }
 
     function openDisableDevice() { showDisableConfirm.value = true; }
@@ -632,11 +818,12 @@ createApp({
 
     function resetOverlays() {
       showCategoryModal.value = false;
-      showAepModal.value = false;
+      showRuleModal.value = false;
       showDeleteConfirm.value = false;
       showProjectModal.value = false;
       showImportModal.value = false;
       showDisableConfirm.value = false;
+      showTransferModal.value = false;
     }
 
     function jump(hash) {
@@ -651,6 +838,8 @@ createApp({
         events: () => { openDetail(CATEGORIES[0]); detailTab.value = 'events'; },
         install: () => { openDetail(CATEGORIES[0]); detailTab.value = 'install'; },
         firmware: () => { openDetail(CATEGORIES[0]); detailTab.value = 'firmware'; },
+        rules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
+        categoryRules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         editPoint: () => { openDetail(CATEGORIES[0]); openEditPoint(POINTS[0]); },
         editInstall: () => { openDetail(CATEGORIES[0]); openEditInstall(INSTALL_FIELDS[0]); },
         editFirmware: () => { openDetail(CATEGORIES[0]); openCreateFirmware(); },
@@ -660,11 +849,13 @@ createApp({
         createProject: () => { goProjects(); openCreateProject(); },
         editProject: () => { goProjects(); openEditProject(PROJECTS[0]); },
         devices: () => { deviceProjectFilter.value = ''; goDevices(); },
-        deviceDetail: () => openDeviceDetail(DEVICES[0]),
-        editDevice: () => { openDeviceDetail(DEVICES[0]); openEditDevice(DEVICES[0]); },
+        unassignedDevices: () => goUnassignedDevices(),
+        deviceDetail: () => openDeviceDetail(deviceList.value[0]),
+        editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
         importExport: () => { goDevices(); openImportModal(); },
         exportHelp: () => { goDevices(); openExportModal(); },
+        deviceTransfer: () => { goUnassignedDevices(); openTransferModal(unassignedDevices.value[0] || null); },
         // monitor
         monitor: () => goMonitorList(),
         monitorList: () => goMonitorList(),
@@ -685,36 +876,43 @@ createApp({
 
     window.__protoApp = {
       jump, screen, module, detailTab,
-      showCategoryModal, showDeleteConfirm, showProjectModal, showImportModal, showDisableConfirm
+      showCategoryModal, showRuleModal, showDeleteConfirm, showProjectModal, showImportModal, showDisableConfirm, showTransferModal
     };
 
     return {
-      module, screen, detailTab, searchKeyword, filterIndustry, filterAep,
+      module, screen, detailTab, searchKeyword, filterIndustry,
       filteredCategories, industries, breadcrumb, topbarHint, currentCategory,
-      CATEGORIES, AEP_PRODUCTS, PROPERTIES, EVENTS, POINTS, INSTALL_FIELDS, FIRMWARES,
-      aepProductDisplay,
+      CATEGORIES, PROPERTIES, EVENTS, POINTS, INSTALL_FIELDS, FIRMWARES,
+      CATEGORY_RULES, categoryRules, currentCategoryRules,
       showCategoryModal, categoryModalMode, categoryForm,
-      showAepModal, aepForm,
+      showRuleModal, ruleModalMode, ruleForm,
+      openCreateRule, openEditRule, saveRule, toggleRuleEnabled,
       showDeleteConfirm, deleteTarget,
       pointForm, pointFormMode, installForm, installFormMode, firmwareForm, firmwareFormMode,
       goList, openDetail, openCreateCategory, openEditCategory, saveCategory,
-      openBindAep, saveAep, confirmDelete, doDelete,
+      confirmDelete, doDelete,
       openCreatePoint, openEditPoint, savePoint,
       openCreateInstall, openEditInstall, saveInstall,
       openCreateFirmware, openEditFirmware, saveFirmware,
       jump,
       // ledger
-      PROJECTS, DEVICES, LIFECYCLES, LC_CLASS, LC_TAG, PJ_STATUS_TAG,
+      PROJECTS, DEVICES, deviceList, LIFECYCLES, LC_CLASS, LC_TAG, PJ_STATUS_TAG,
+      UNASSIGNED_PROJECT_ID, UNASSIGNED_PROJECT_NAME,
       projectSearch, projectStatusFilter, filteredProjects,
       showProjectModal, projectModalMode, projectForm,
       openCreateProject, openEditProject, saveProject, openDevicesForProject,
-      goProjects, goDevices, goAepReconcile,
+      goProjects, goDevices, goUnassignedDevices, goAepReconcile,
       deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceSnSearch,
       filteredDevices, deviceStats, currentDevice, openDeviceDetail,
+      unassignedDevices, unassignedCount, selectedDeviceIds,
+      toggleSelectDevice, toggleSelectAllFiltered,
       currentDeviceSlaves, currentDeviceMaster, installParamEntries,
-      deviceForm, deviceFormMode, openEditDevice, saveDevice,
+      deviceForm, deviceFormMode, openEditDevice, saveDevice, showCategoryOverride,
+      categoryMatchLabel, isUnassigned, displayProjectName,
       showDisableConfirm, openDisableDevice, doDisableDevice,
       showImportModal, importMode, openImportModal, openExportModal,
+      showTransferModal, transferForm, transferLogs, currentDeviceTransferLogs,
+      openTransferModal, confirmTransfer,
       aepDiffTab, filteredAepDiffs, aepCounts, resolveAepDiff,
       projectName, categoryName,
       // monitor
@@ -770,7 +968,7 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">物模型 · 品类管理</h1>
-              <p class="page-desc">维护设备品类、按类型绑定 AEP 产品/型号，并配置测点字典 / 安装参数 / 固件基线</p><p class="page-desc">AEP 产品绑定是品类级配置，不选择设备或设备 SN；单台设备在台账由 AEP 绑定自动建档。</p>
+              <p class="page-desc">物模型定义产品类型语义（测点 / 事件 / 阈值 / 安装模板 / 固件）。AEP 完成设备数据解析后，由归属规则自动挂靠品类；未匹配进入「待归属」。</p>
             </div>
             <button class="btn btn-primary" @click="openCreateCategory">＋ 新建品类</button>
           </div>
@@ -780,36 +978,26 @@ createApp({
               <option value="">全部行业</option>
               <option v-for="i in industries" :key="i" :value="i">{{ i }}</option>
             </select>
-            <select class="select" v-model="filterAep">
-              <option value="">AEP 产品绑定状态</option>
-              <option value="bound">已绑定产品</option>
-              <option value="unbound">未绑定产品</option>
-            </select>
-            <button class="btn" @click="searchKeyword=''; filterIndustry=''; filterAep=''">重置</button>
-            <div class="spacer"></div>
-            <button class="btn btn-orange" @click="openBindAep(CATEGORIES[2])">绑定 AEP 产品/型号</button>
+            <button class="btn" @click="searchKeyword=''; filterIndustry=''">重置</button>
           </div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>品类 ID</th><th>品类名称</th><th>编码</th><th>行业</th><th>AEP 产品/型号</th><th>设备数</th><th>物模型版本</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
+              <thead><tr><th>品类 ID</th><th>品类名称</th><th>编码</th><th>行业</th><th>归属规则</th><th>设备数</th><th>物模型版本</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="c in filteredCategories" :key="c.id">
                   <td>{{ c.id }}</td>
                   <td><a class="btn-link btn" style="padding:0" @click="openDetail(c)">{{ c.name }}</a></td>
                   <td><code>{{ c.code }}</code></td>
                   <td>{{ c.industry }}</td>
-                  <td>
-                    <span v-if="c.aepBound" class="badge-aep"><span class="dot-online"></span><span class="tag tag-green">{{ aepProductDisplay(c.aepProductId) }}</span></span>
-                    <span v-else class="badge-aep"><span class="dot-offline"></span><span class="tag tag-gray">未绑定</span></span>
-                  </td>
+                  <td><span class="tag tag-blue">{{ categoryRules.filter(r => r.categoryId===c.id).length }} 条</span></td>
                   <td>{{ c.deviceCount }}</td>
                   <td>{{ c.modelVersion }}</td>
                   <td><span class="tag" :class="c.status==='启用'?'tag-blue':(c.status==='草稿'?'tag-orange':'tag-gray')">{{ c.status }}</span></td>
                   <td>{{ c.updatedAt }}</td>
                   <td class="actions">
                     <button class="btn-link btn" @click="openDetail(c)">物模型</button>
+                    <button class="btn-link btn" @click="openDetail(c); detailTab='rules'">归属规则</button>
                     <button class="btn-link btn" @click="openEditCategory(c)">编辑</button>
-                    <button class="btn-link btn" @click="openBindAep(c)">{{ c.aepBound ? '更换 AEP 产品/型号' : '绑定 AEP 产品/型号' }}</button>
                     <button class="btn-link btn danger" @click="confirmDelete('品类', c.id, c.name)">删除</button>
                   </td>
                 </tr>
@@ -830,23 +1018,25 @@ createApp({
                 <span>编码：<b>{{ currentCategory.code }}</b></span>
                 <span>行业：<b>{{ currentCategory.industry }}</b></span>
                 <span>物模型：<b>{{ currentCategory.modelVersion }}</b></span>
-                <span>AEP 产品：<b v-if="currentCategory.aepBound">{{ aepProductDisplay(currentCategory.aepProductId) }}</b><b v-else style="color:#E78212">未绑定</b></span>
+                <span>归属规则：<b>{{ currentCategoryRules.length }} 条</b></span>
               </div>
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn" @click="openEditCategory(currentCategory)">编辑品类</button>
-              <button class="btn btn-orange" @click="openBindAep(currentCategory)">绑定 AEP 产品/型号</button>
+              <button class="btn btn-primary" @click="detailTab='rules'">归属规则</button>
             </div>
           </div>
+          <div class="banner-tip" style="margin-bottom:12px">AEP 侧已完成设备数据解析；本平台通过归属规则自动挂靠品类。无需维护解析脚本。未匹配设备进入「待归属」。</div>
           <div class="tabs">
             <div class="tab" :class="{active: detailTab==='props'}" @click="detailTab='props'">上报属性</div>
             <div class="tab" :class="{active: detailTab==='events'}" @click="detailTab='events'">异常事件</div>
             <div class="tab" :class="{active: detailTab==='points'}" @click="detailTab='points'">测点字典</div>
             <div class="tab" :class="{active: detailTab==='install'}" @click="detailTab='install'">安装参数模板</div>
             <div class="tab" :class="{active: detailTab==='firmware'}" @click="detailTab='firmware'">固件基线</div>
+            <div class="tab" :class="{active: detailTab==='rules'}" @click="detailTab='rules'">归属规则</div>
           </div>
           <div v-if="detailTab==='props'">
-            <div class="toolbar"><span style="color:#666;font-size:13px">设备按周期上报的属性定义（与 AEP 物模型属性对齐）</span><div class="spacer"></div><button class="btn btn-primary btn-sm">＋ 添加属性</button></div>
+            <div class="toolbar"><span style="color:#666;font-size:13px">设备按周期上报的属性定义（与 AEP 解析后的属性对齐）</span><div class="spacer"></div><button class="btn btn-primary btn-sm">＋ 添加属性</button></div>
             <div class="table-wrap"><table class="data-table"><thead><tr><th>标识符</th><th>名称</th><th>数据类型</th><th>单位</th><th>访问</th><th>上报周期</th><th>必报</th><th>操作</th></tr></thead>
               <tbody><tr v-for="p in PROPERTIES" :key="p.id"><td><code>{{ p.identifier }}</code></td><td>{{ p.name }}</td><td>{{ p.dataType }}</td><td>{{ p.unit }}</td><td>{{ p.access }}</td><td>{{ p.reportCycle }}</td><td><span class="tag" :class="p.required?'tag-blue':'tag-gray'">{{ p.required?'是':'否' }}</span></td><td class="actions"><button class="btn-link btn">编辑</button><button class="btn-link btn danger" @click="confirmDelete('上报属性', p.id, p.name)">删除</button></td></tr></tbody></table></div>
           </div>
@@ -873,6 +1063,50 @@ createApp({
             <div class="toolbar"><span style="color:#666;font-size:13px">固件型号、当前版本、可升级版本登记</span><div class="spacer"></div><button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button></div>
             <div class="table-wrap"><table class="data-table"><thead><tr><th>型号</th><th>当前版本</th><th>可升版</th><th>发布日期</th><th>状态</th><th>变更说明</th><th>操作</th></tr></thead>
               <tbody><tr v-for="f in FIRMWARES" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
+          </div>
+          <div v-else-if="detailTab==='rules'">
+            <div class="toolbar">
+              <span style="color:#666;font-size:13px">通用规则为默认匹配；特殊处理规则优先级更高。匹配条件可用 AEP 产品 ID、协议 ID/名称等自由文本。</span>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm" @click="openCreateRule">＋ 新建规则</button>
+            </div>
+            <div class="stat-row" style="margin-bottom:12px">
+              <div class="stat-chip accent"><div class="sc-label">规则总数</div><div class="sc-value">{{ currentCategoryRules.length }}</div></div>
+              <div class="stat-chip ok"><div class="sc-label">通用规则</div><div class="sc-value">{{ currentCategoryRules.filter(r=>r.type==='通用').length }}</div></div>
+              <div class="stat-chip warn"><div class="sc-label">特殊处理</div><div class="sc-value">{{ currentCategoryRules.filter(r=>r.type==='特殊').length }}</div></div>
+              <div class="stat-chip"><div class="sc-label">已启用</div><div class="sc-value">{{ currentCategoryRules.filter(r=>r.enabled).length }}</div></div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>规则名称</th><th>类型</th><th>匹配 AEP 产品 ID</th><th>协议 ID / 名称</th><th>优先级</th><th>启用</th><th>备注</th><th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="r in currentCategoryRules" :key="r.id">
+                    <td>{{ r.name }}</td>
+                    <td><span class="tag" :class="r.type==='特殊'?'tag-orange':'tag-blue'">{{ r.type }}</span></td>
+                    <td><code>{{ r.matchAepProduct || '—' }}</code></td>
+                    <td>{{ r.matchProtocol || '—' }}</td>
+                    <td>{{ r.priority }}</td>
+                    <td>
+                      <span class="tag" :class="r.enabled?'tag-green':'tag-gray'">{{ r.enabled?'启用':'停用' }}</span>
+                    </td>
+                    <td style="max-width:220px;white-space:normal">{{ r.note || '—' }}</td>
+                    <td class="actions">
+                      <button class="btn-link btn" @click="openEditRule(r)">编辑</button>
+                      <button class="btn-link btn" @click="toggleRuleEnabled(r)">{{ r.enabled?'停用':'启用' }}</button>
+                      <button class="btn-link btn danger" @click="confirmDelete('归属规则', r.id, r.name)">删除</button>
+                    </td>
+                  </tr>
+                  <tr v-if="!currentCategoryRules.length">
+                    <td colspan="8"><div class="empty-hint">暂无归属规则；未匹配设备将进入「待归属」</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-note">执行顺序：特殊处理（优先级数值越小越优先）→ 通用规则。一期为交互示意，无真实匹配引擎。</div>
           </div>
         </div>
 
@@ -921,12 +1155,17 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">设备台账 · 项目列表</h1>
-              <p class="page-desc">按项目组织设备档案；一期轻量字段，不做设施树与地图</p>
+              <p class="page-desc">按项目组织设备档案；AEP 自注册且无项目时进入「未定义项目」池，可转移至正式项目</p>
             </div>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-orange" @click="goUnassignedDevices">未归属设备 <span class="tag tag-orange" style="margin-left:4px">{{ unassignedCount }}</span></button>
               <button class="btn" @click="goDevices">全部设备</button>
               <button class="btn btn-primary" @click="openCreateProject">＋ 新建项目</button>
             </div>
+          </div>
+          <div class="banner-tip" style="margin-bottom:12px" v-if="unassignedCount">
+            未定义项目池现有 <b>{{ unassignedCount }}</b> 台未归属设备（AEP 自注册无项目）。
+            <a class="btn-link btn" style="padding:0;margin-left:8px" @click="goUnassignedDevices">查看并转移 →</a>
           </div>
           <div class="toolbar">
             <input class="input input-lg" v-model="projectSearch" placeholder="搜索项目名称 / 负责人 / ID" />
@@ -976,12 +1215,14 @@ createApp({
           <div class="page-header">
             <div>
               <button class="back-link" @click="goProjects">← 返回项目列表</button>
-              <h1 class="page-title">设备列表</h1>
-              <p class="page-desc">按项目 / 品类 / 生命周期筛选；支持导入导出与 AEP 对账</p>
+              <h1 class="page-title">{{ deviceProjectFilter===UNASSIGNED_PROJECT_ID ? '未归属设备 · 未定义项目' : '设备列表' }}</h1>
+              <p class="page-desc" v-if="deviceProjectFilter===UNASSIGNED_PROJECT_ID">AEP 自注册且尚未归属正式项目的设备池；可批量转移到目标项目</p>
+              <p class="page-desc" v-else>按项目 / 品类 / 生命周期筛选；支持导入导出、未归属池与 AEP 对账</p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" @click="openImportModal">导入</button>
               <button class="btn" @click="openExportModal">导出</button>
+              <button class="btn btn-primary" :disabled="!selectedDeviceIds.length" @click="openTransferModal(null)">设备转移{{ selectedDeviceIds.length ? ' ('+selectedDeviceIds.length+')' : '' }}</button>
               <button class="btn btn-orange" @click="goAepReconcile">AEP 对账</button>
             </div>
           </div>
@@ -991,10 +1232,12 @@ createApp({
             <div class="stat-chip"><div class="sc-label">离线</div><div class="sc-value">{{ deviceStats.offline }}</div></div>
             <div class="stat-chip warn"><div class="sc-label">待接入</div><div class="sc-value">{{ deviceStats.pending }}</div></div>
             <div class="stat-chip danger"><div class="sc-label">停用/报废</div><div class="sc-value">{{ deviceStats.disabled }}</div></div>
+            <div class="stat-chip warn" style="cursor:pointer" @click="goUnassignedDevices"><div class="sc-label">未归属</div><div class="sc-value">{{ unassignedCount }}</div></div>
           </div>
           <div class="toolbar">
             <select class="select" v-model="deviceProjectFilter">
               <option value="">全部项目</option>
+              <option :value="UNASSIGNED_PROJECT_ID">未定义项目（未归属）</option>
               <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
             <select class="select" v-model="deviceCategoryFilter">
@@ -1006,21 +1249,30 @@ createApp({
               <option v-for="s in LIFECYCLES" :key="s" :value="s">{{ s }}</option>
             </select>
             <input class="input input-md" v-model="deviceSnSearch" placeholder="SN / 名称 / AEP ID" />
-            <button class="btn" @click="deviceProjectFilter=''; deviceCategoryFilter=''; deviceLifecycleFilter=''; deviceSnSearch=''">重置</button>
+            <button class="btn" @click="deviceProjectFilter=''; deviceCategoryFilter=''; deviceLifecycleFilter=''; deviceSnSearch=''; selectedDeviceIds=[]">重置</button>
           </div>
           <div class="table-wrap">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>SN</th><th>设备名称</th><th>项目</th><th>品类</th><th>生命周期</th><th>AEP 设备 ID</th><th>型号</th><th>更新时间</th><th>操作</th>
+                  <th style="width:36px"><input type="checkbox" :checked="filteredDevices.length && filteredDevices.every(d => selectedDeviceIds.includes(d.id))" @change="toggleSelectAllFiltered" /></th>
+                  <th>SN</th><th>设备名称</th><th>项目</th><th>品类</th><th>匹配</th><th>生命周期</th><th>AEP 设备 ID</th><th>型号</th><th>更新时间</th><th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="d in filteredDevices" :key="d.id">
+                  <td><input type="checkbox" :checked="selectedDeviceIds.includes(d.id)" @change="toggleSelectDevice(d.id)" /></td>
                   <td><code>{{ d.sn }}</code></td>
                   <td><a class="btn-link btn" style="padding:0" @click="openDeviceDetail(d)">{{ d.name }}</a></td>
-                  <td>{{ d.projectName }}</td>
-                  <td>{{ d.categoryName }}</td>
+                  <td>
+                    <span v-if="!d.projectId" class="tag tag-orange">未定义项目</span>
+                    <span v-else>{{ d.projectName }}</span>
+                  </td>
+                  <td>
+                    <span v-if="!d.categoryId" class="tag tag-gray">待归属</span>
+                    <span v-else>{{ d.categoryName }}</span>
+                  </td>
+                  <td><span class="tag" :class="d.categoryMatch==='auto'?'tag-blue':(d.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(d.categoryMatch) }}</span></td>
                   <td>
                     <span class="lifecycle-dot">
                       <i :class="LC_CLASS[d.lifecycle]"></i>
@@ -1032,18 +1284,22 @@ createApp({
                   <td>{{ d.updatedAt }}</td>
                   <td class="actions">
                     <button class="btn-link btn" @click="openDeviceDetail(d)">档案</button>
+                    <button class="btn-link btn" @click="openTransferModal(d)">转移</button>
                     <button class="btn-link btn" @click="openEditDevice(d)">编辑</button>
                   </td>
+                </tr>
+                <tr v-if="!filteredDevices.length">
+                  <td colspan="11"><div class="empty-hint">无匹配设备</div></td>
                 </tr>
               </tbody>
             </table>
           </div>
           <div class="pagination">
-            <span>共 {{ filteredDevices.length }} 台</span>
+            <span>共 {{ filteredDevices.length }} 台 · 已选 {{ selectedDeviceIds.length }}</span>
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">一期不做设施树、地图与通用指令；坐标仅作档案字段展示。</div>
+          <div class="table-note">品类默认由归属规则自动匹配（只读展示）；边缘场景可在编辑档案中「改挂」。一期不做设施树、地图与通用指令。</div>
         </div>
 
         <!-- ===== 设备台账：设备档案详情 ===== -->
@@ -1054,8 +1310,15 @@ createApp({
               <h1 class="page-title">{{ currentDevice.name }}</h1>
               <div class="detail-meta">
                 <span>SN：<b>{{ currentDevice.sn }}</b></span>
-                <span>项目：<b>{{ currentDevice.projectName }}</b></span>
-                <span>品类：<b>{{ currentDevice.categoryName }}</b></span>
+                <span>项目：
+                  <b v-if="!currentDevice.projectId" style="color:#E78212">未定义项目 · 未归属</b>
+                  <b v-else>{{ currentDevice.projectName }}</b>
+                </span>
+                <span>品类：
+                  <b v-if="!currentDevice.categoryId" style="color:#8c8c8c">待归属</b>
+                  <b v-else>{{ currentDevice.categoryName }}</b>
+                  <span class="tag" style="margin-left:6px" :class="currentDevice.categoryMatch==='auto'?'tag-blue':(currentDevice.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(currentDevice.categoryMatch) }}</span>
+                </span>
                 <span>生命周期：
                   <span class="lifecycle-dot" style="display:inline-flex">
                     <i :class="LC_CLASS[currentDevice.lifecycle]"></i>
@@ -1064,7 +1327,8 @@ createApp({
                 </span>
               </div>
             </div>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" @click="openTransferModal(currentDevice)">设备转移</button>
               <button class="btn" @click="openEditDevice(currentDevice)">编辑档案</button>
               <button class="btn btn-danger" @click="openDisableDevice" :disabled="currentDevice.lifecycle==='停用'||currentDevice.lifecycle==='报废'">停用</button>
             </div>
@@ -1075,11 +1339,13 @@ createApp({
             <div class="kv-grid">
               <div class="k">设备 ID</div><div class="v">{{ currentDevice.id }}</div>
               <div class="k">AEP 设备 ID</div><div class="v">{{ currentDevice.aepDeviceId || '—' }}</div>
+              <div class="k">物模型品类</div><div class="v">{{ currentDevice.categoryName || '待归属' }} <span class="tag" :class="currentDevice.categoryMatch==='auto'?'tag-blue':(currentDevice.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(currentDevice.categoryMatch) }}</span></div>
+              <div class="k">所属项目</div><div class="v">{{ displayProjectName(currentDevice) }}</div>
               <div class="k">硬件型号</div><div class="v">{{ currentDevice.model }}</div>
               <div class="k">固件版本</div><div class="v">{{ currentDevice.firmware }}</div>
-              <div class="k">安装日期</div><div class="v">{{ currentDevice.installDate }}</div>
-              <div class="k">安装人</div><div class="v">{{ currentDevice.installer }}</div>
-              <div class="k">安装地址</div><div class="v">{{ currentDevice.address }}</div>
+              <div class="k">安装日期</div><div class="v">{{ currentDevice.installDate || '—' }}</div>
+              <div class="k">安装人</div><div class="v">{{ currentDevice.installer || '—' }}</div>
+              <div class="k">安装地址</div><div class="v">{{ currentDevice.address || '—' }}</div>
               <div class="k">最近更新</div><div class="v">{{ currentDevice.updatedAt }}</div>
             </div>
           </div>
@@ -1151,6 +1417,25 @@ createApp({
               <div v-if="!currentDeviceMaster && !currentDeviceSlaves.length" style="font-size:13px;color:#999">无主从关联</div>
             </div>
           </div>
+
+          <div class="info-section">
+            <div class="info-section-title">转移记录 <span class="sub-nav-hint">项目归属变更日志</span></div>
+            <div class="table-wrap" v-if="currentDeviceTransferLogs.length">
+              <table class="data-table">
+                <thead><tr><th>时间</th><th>操作人</th><th>自</th><th>至</th><th>备注</th></tr></thead>
+                <tbody>
+                  <tr v-for="t in currentDeviceTransferLogs" :key="t.id">
+                    <td>{{ t.time }}</td>
+                    <td>{{ t.operator }}</td>
+                    <td>{{ t.fromProjectName }}</td>
+                    <td>{{ t.toProjectName }}</td>
+                    <td>{{ t.note || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="empty-hint">暂无转移记录</div>
+          </div>
         </div>
 
         <!-- ===== 设备台账：编辑设备档案 ===== -->
@@ -1168,15 +1453,28 @@ createApp({
             <div class="form-item"><label><span class="req">*</span>设备名称</label><input class="input input-full" v-model="deviceForm.name" /></div>
           </div>
           <div class="form-row">
-            <div class="form-item"><label><span class="req">*</span>所属项目</label>
+            <div class="form-item"><label>所属项目</label>
               <select class="select input-full" v-model="deviceForm.projectId">
+                <option value="">未定义项目（未归属）</option>
                 <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
               </select>
+              <div class="hint">AEP 自注册无项目时默认为未定义项目；可用「设备转移」批量迁入</div>
             </div>
-            <div class="form-item"><label><span class="req">*</span>品类</label>
-              <select class="select input-full" v-model="deviceForm.categoryId">
-                <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
-              </select>
+            <div class="form-item"><label>品类（自动匹配）</label>
+              <div v-if="!showCategoryOverride">
+                <input class="input input-full" :value="(CATEGORIES.find(c=>c.id===deviceForm.categoryId)||{}).name || '待归属'" disabled />
+                <div class="hint">
+                  由归属规则自动挂靠 · {{ categoryMatchLabel(deviceForm.categoryMatch) }}
+                  <a class="btn-link btn" style="padding:0;margin-left:8px" @click="showCategoryOverride=true">改挂</a>
+                </div>
+              </div>
+              <div v-else>
+                <select class="select input-full" v-model="deviceForm.categoryId">
+                  <option value="">待归属</option>
+                  <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+                <div class="hint">边缘场景人工改挂；保存后标记为「人工改挂」</div>
+              </div>
             </div>
             <div class="form-item"><label>生命周期</label>
               <select class="select input-full" v-model="deviceForm.lifecycle">
@@ -1209,7 +1507,7 @@ createApp({
             <div class="form-item"><label>主机设备 ID</label>
               <select class="select input-full" v-model="deviceForm.masterId">
                 <option value="">无（独立 / 主机）</option>
-                <option v-for="d in DEVICES.filter(x => x.id !== deviceForm.id)" :key="d.id" :value="d.id">{{ d.name }}（{{ d.sn }}）</option>
+                <option v-for="d in deviceList.filter(x => x.id !== deviceForm.id)" :key="d.id" :value="d.id">{{ d.name }}（{{ d.sn }}）</option>
               </select>
             </div>
             <div class="form-item"><label>照片说明</label><input class="input input-full" v-model="deviceForm.photosText" placeholder="用顿号分隔，如 现场全景、井内安装" /></div>
@@ -1226,7 +1524,7 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">AEP 对账</h1>
-              <p class="page-desc">对比本地台账与电信 AEP 设备清单：多出可忽略或接入，缺失可创建接入</p>
+              <p class="page-desc">对比本地台账与电信 AEP 设备清单差异（多出 / 缺失）。品类由归属规则自动匹配，对账不依赖品类绑定 AEP 产品。接入的无项目设备进入未定义项目池。</p>
             </div>
             <button class="btn btn-orange">重新拉取 AEP</button>
           </div>
@@ -1272,7 +1570,7 @@ createApp({
               </tbody>
             </table>
           </div>
-          <div class="table-note">「接入台账」将 AEP 多出设备写入本地；「创建接入」在 AEP 侧创建设备并回填 ID。一期为交互示意。</div>
+          <div class="table-note">「接入台账」将 AEP 多出设备写入本地（无项目则进入未定义项目）；「创建接入」在 AEP 侧创建设备并回填 ID。对账用于发现清单差异，与品类归属规则相互独立。一期为交互示意。</div>
         </div>
 
         <!-- ===== 在线监控：监控列表 ===== -->
@@ -1599,34 +1897,87 @@ createApp({
             <div class="form-item"><label><span class="req">*</span>所属行业</label><select class="select input-full" v-model="categoryForm.industry"><option v-for="i in industries" :key="i" :value="i">{{ i }}</option></select></div>
           </div>
           <div class="form-row">
-            <div class="form-item"><label>绑定 AEP 产品/型号</label>
-              <select class="select input-full" v-model="categoryForm.aepProductId">
-                <option value="">暂不绑定</option>
-                <option v-for="p in AEP_PRODUCTS" :key="p.id" :value="p.id">{{ p.name }}（{{ p.model }}）</option>
-              </select>
-            </div>
             <div class="form-item"><label>状态</label><select class="select input-full" v-model="categoryForm.status"><option>启用</option><option>草稿</option><option>停用</option></select></div>
           </div>
-          <div class="form-item"><label>品类说明</label><textarea class="textarea input-full" v-model="categoryForm.desc"></textarea></div>
+          <div class="form-item"><label>品类说明</label><textarea class="textarea input-full" v-model="categoryForm.desc" placeholder="产品类型语义说明；测点/事件/阈值/安装模板/固件在详情中配置"></textarea></div>
+          <div class="hint">品类不再绑定 AEP 产品。AEP 解析后由「归属规则」自动挂靠；规则在品类详情中维护。</div>
         </div>
         <div class="modal-footer"><button class="btn" @click="showCategoryModal=false">取消</button><button class="btn btn-primary" @click="saveCategory">确定</button></div>
       </div>
     </div>
 
-    <div v-if="showAepModal" class="overlay drawer-mode" @click.self="showAepModal=false">
-      <div class="drawer">
-        <div class="drawer-header"><span>绑定 AEP 产品/型号</span><button class="close-x" @click="showAepModal=false">×</button></div>
-        <div class="drawer-body">
-          <div class="form-item"><label>品类 ID</label><input class="input input-full" :value="aepForm.categoryId" disabled /></div>
-          <div class="form-item"><label><span class="req">*</span>绑定 AEP 产品/型号</label>
-            <select class="select input-full" v-model="aepForm.aepProductId">
-              <option value="">请选择产品</option>
-              <option v-for="p in AEP_PRODUCTS" :key="p.id" :value="p.id">{{ p.name }}（{{ p.model }}）</option>
+    <!-- 物模型：归属规则模态 -->
+    <div v-if="showRuleModal" class="overlay" @click.self="showRuleModal=false">
+      <div class="modal">
+        <div class="modal-header"><span>{{ ruleModalMode==='create'?'新建归属规则':'编辑归属规则' }}</span><button class="close-x" @click="showRuleModal=false">×</button></div>
+        <div class="modal-body">
+          <div class="form-item"><label><span class="req">*</span>规则名称</label><input class="input input-full" v-model="ruleForm.name" placeholder="如 液位井 · 标准产品通用匹配" /></div>
+          <div class="form-row">
+            <div class="form-item"><label><span class="req">*</span>规则类型</label>
+              <select class="select input-full" v-model="ruleForm.type">
+                <option>通用</option>
+                <option>特殊</option>
+              </select>
+              <div class="hint">特殊处理规则优先于通用规则</div>
+            </div>
+            <div class="form-item"><label><span class="req">*</span>优先级</label>
+              <input class="input input-full" v-model.number="ruleForm.priority" type="number" />
+              <div class="hint">数值越小越优先（同类型内）</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label>匹配 AEP 产品 ID</label><input class="input input-full" v-model="ruleForm.matchAepProduct" placeholder="如 AEP-LW-1001" /></div>
+            <div class="form-item"><label>协议 ID / 名称</label><input class="input input-full" v-model="ruleForm.matchProtocol" placeholder="如 MQTT / level-proto-v2" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label>启用</label>
+              <select class="select input-full" v-model="ruleForm.enabled">
+                <option :value="true">启用</option>
+                <option :value="false">停用</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-item"><label>备注</label><textarea class="textarea input-full" v-model="ruleForm.note"></textarea></div>
+        </div>
+        <div class="modal-footer"><button class="btn" @click="showRuleModal=false">取消</button><button class="btn btn-primary" @click="saveRule">确定</button></div>
+      </div>
+    </div>
+
+    <!-- 设备台账：设备转移 -->
+    <div v-if="showTransferModal" class="overlay" data-screen="ledger-device-transfer" @click.self="showTransferModal=false">
+      <div class="modal">
+        <div class="modal-header"><span>设备转移</span><button class="close-x" @click="showTransferModal=false">×</button></div>
+        <div class="modal-body">
+          <div class="form-item">
+            <label>待转移设备（{{ transferForm.deviceIds.length }} 台）</label>
+            <div class="table-wrap" style="max-height:160px;overflow:auto">
+              <table class="data-table">
+                <thead><tr><th>SN</th><th>名称</th><th>当前项目</th></tr></thead>
+                <tbody>
+                  <tr v-for="id in transferForm.deviceIds" :key="id">
+                    <td><code>{{ (deviceList.find(d=>d.id===id)||{}).sn }}</code></td>
+                    <td>{{ (deviceList.find(d=>d.id===id)||{}).name }}</td>
+                    <td>{{ displayProjectName(deviceList.find(d=>d.id===id)) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="form-item"><label><span class="req">*</span>目标项目</label>
+            <select class="select input-full" v-model="transferForm.targetProjectId">
+              <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="hint">按品类绑定产品/型号，不选择设备 SN；单台设备在台账由 AEP 绑定自动建档。</div>
+          <div class="form-row">
+            <div class="form-item"><label>操作人</label><input class="input input-full" v-model="transferForm.operator" /></div>
+          </div>
+          <div class="form-item"><label>备注</label><textarea class="textarea input-full" v-model="transferForm.note" placeholder="转移原因"></textarea></div>
+          <div class="hint">转移后写入操作人 / 时间 / 自 / 至 日志，可在设备档案中查看。</div>
         </div>
-        <div class="drawer-footer"><button class="btn" @click="showAepModal=false">取消</button><button class="btn btn-orange" @click="saveAep">确认绑定产品/型号</button></div>
+        <div class="modal-footer">
+          <button class="btn" @click="showTransferModal=false">取消</button>
+          <button class="btn btn-primary" @click="confirmTransfer">确认转移</button>
+        </div>
       </div>
     </div>
 
@@ -1687,8 +2038,8 @@ createApp({
             <ol class="import-steps">
               <li>下载 Excel 模板，按列填写 SN、名称、项目、品类、经纬度、安装参数等。</li>
               <li>SN 全局唯一；已存在 SN 将更新档案（生命周期为「报废」的跳过）。</li>
-              <li>品类须已在物模型中启用；项目须已创建。</li>
-              <li>一期不校验 AEP 是否已存在，导入后可去「AEP 对账」处理差异。</li>
+              <li>品类可由归属规则自动匹配；项目可留空（进入未定义项目池）。</li>
+              <li>一期不校验 AEP 是否已存在，导入后可去「AEP 对账」处理清单差异。</li>
             </ol>
             <div class="import-box">
               <div style="font-weight:500;margin-bottom:8px">拖拽文件到此处，或点击选择 .xlsx</div>
