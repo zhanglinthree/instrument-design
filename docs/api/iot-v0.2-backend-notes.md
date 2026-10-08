@@ -1,9 +1,11 @@
-# IoT 设备管控平台 v0.2 API 备注（本地）
+# IoT 设备管控平台 v0.2 API 备注（设计仓沉淀 · 与 mfish-nocode 后端对齐）
 
 > 范围：一期物模型 + 设备台账已落地后端接口  
 > 约定：分页 `pageNum`/`pageSize`；返回 `Result` / `PageResult`；字典走 `GET /dictItem/{dictCode}`  
 > 权限：设备 `iot:device:*`；品类及子资源 `iot:category:*`；项目 `iot:project:*`  
-> 设计确认：`priority` 越小越优先；转移目标可为 null（未定义项目）；固件挂品类；`industry`→`iot_industry`；lifecycle ≠ AEP status ≠ 监控 online
+> 设计确认：`priority` 越小越优先；转移目标可为 null（未定义项目）；固件挂品类；`industry`→`iot_industry`；lifecycle ≠ AEP status ≠ 监控 online  
+> 菜单种子：后端仓 `db/iot_menu_permission_v0.2.sql`（品类/项目；执行后角色勾选；**勿把库密码写进文档**）
+> 同源字段清单：`docs/api/iot-v0.2-field-list.md`
 
 ## 1. 品类 Category
 
@@ -12,10 +14,16 @@
 | GET | `/iotCategory` | query | 筛选 keyword/industry/status；回填 deviceCount、ruleCount |
 | POST | `/iotCategory` | insert | body: name*, code*, industry*, description, status*（默认 draft） |
 | PUT | `/iotCategory` | update | |
-| DELETE | `/iotCategory/{id}` | delete | |
-| DELETE | `/iotCategory/batch/{ids}` | delete | |
+| DELETE | `/iotCategory/{id}` | delete | **有设备引用则拒绝**；否则事务内级联删子资源后删品类 |
+| DELETE | `/iotCategory/batch/{ids}` | delete | 同上（任一 id 有设备引用则整批失败） |
 | GET | `/iotCategory/{id}` | query | 含 deviceCount、ruleCount |
 | GET | `/iotCategory/{categoryId}/rules` | query | 嵌套便利：该品类规则列表（完整 CRUD 见下） |
+
+### 删除策略（2026-10-08）
+
+1. **拦截**：`iot_device.category_id` 仍指向该品类时，返回错误（提示设备台数），**不**自动清空设备品类。  
+2. **级联**（同事务）：删除 `iot_category_rule` / `property` / `event` / `point` / `install_field` / `firmware` 中该 `categoryId` 行，再删品类。  
+3. 批量删除：先检查全部 id 的设备引用，再逐个清子表后 `removeByIds`。
 
 ## 2. 品类子资源（扁平路径，均需 categoryId）
 
@@ -65,12 +73,12 @@
 3. `GET /iotCategory/{id}/rules` 与 `GET /iotCategoryRule?categoryId=...` 应一致且 priority 小的在前  
 4. 依次 POST Property / Event / Point / InstallField / Firmware（Firmware 必须带 categoryId）  
 5. `GET /iotCategory/{id}` 看 deviceCount、ruleCount  
-6. 设备转移与 aepDiff 见 phase2
+6. 无设备绑定该品类后 `DELETE /iotCategory/{id}` 应失败；解绑后再删，子资源应一并消失  
+7. 设备转移与 aepDiff 见 phase2  
 
 ## 7. 已知缺口
 
 - AEP 对账差异自动生成 / 远端同步未做  
 - missing 侧 AEP 补建延后  
-- 品类删除未级联清子资源（需业务侧先清或后续补）  
-- deviceCount/ruleCount 为逐品类 count（列表页品类多时可再优化聚合 SQL）  
-- 前端页面与 instrument-design 文档同步仍待  
+- 前端页面仍待  
+- 菜单 SQL 需在目标库手工执行 `db/iot_menu_permission_v0.2.sql` 后角色授权  
