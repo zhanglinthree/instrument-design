@@ -7,6 +7,9 @@
 > 菜单种子：后端仓 `db/iot_menu_permission_v0.2.sql`（品类/项目；执行后角色勾选；**勿把库密码写进文档**）
 > 同源字段清单：`docs/api/iot-v0.2-field-list.md`
 
+
+> **联调路径（单实例）**：`application-gateway.yml` 将 `cn.com.mfish.iot` 挂在网关前缀 `/iot` 下。文档里的 Controller 路径（如 `/iotDevice`）联调时实际请求为 **`/iot` + Controller**（如 `/iot/iotDevice`、`/iot/iotCategory`、`/iot/iotProject`）。字典等非 IoT 包仍按其自身前缀（如 `/sys/dict`）。
+
 ## 1. 品类 Category
 
 | 方法 | 路径 | 权限 | 说明 |

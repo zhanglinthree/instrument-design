@@ -5,6 +5,9 @@
 > 范围：列表 / 详情 / 筛选；在线监控第二批  
 > 仓库沉淀：建议落 `instrument-design/docs/`（与原型同仓）
 
+
+> **联调路径（单实例）**：`application-gateway.yml` 将 `cn.com.mfish.iot` 挂在网关前缀 `/iot` 下。文档里的 Controller 路径（如 `/iotDevice`）联调时实际请求为 **`/iot` + Controller**（如 `/iot/iotDevice`、`/iot/iotCategory`、`/iot/iotProject`）。字典等非 IoT 包仍按其自身前缀（如 `/sys/dict`）。
+
 ---
 
 ## 0. 公共约定（硬约束）
