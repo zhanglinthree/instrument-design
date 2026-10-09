@@ -60,11 +60,11 @@ const FIRMWARES = [
 
 /* ========== 设备台账 Mock ========== */
 const PROJECTS = [
-  { id: 'PJ01', name: '城东排涝一期', status: '进行中', owner: '王建国', deviceCount: 86, region: '城东片区', startedAt: '2026-03-01', desc: '城东易涝点液位与泵站监测' },
-  { id: 'PJ02', name: '南湖水质专项', status: '进行中', owner: '李敏', deviceCount: 42, region: '南湖流域', startedAt: '2026-05-12', desc: '南湖出入湖水质站建设' },
-  { id: 'PJ03', name: '老城供水管网', status: '已完工', owner: '赵强', deviceCount: 118, region: '老城区', startedAt: '2025-11-01', desc: '老城压力表替换与接入' },
-  { id: 'PJ04', name: '滨江泵站改造', status: '筹备中', owner: '陈芳', deviceCount: 0, region: '滨江新区', startedAt: '2026-09-01', desc: '滨江 3 座泵站机组台账预建' },
-  { id: 'PJ05', name: '雨量站扩容', status: '已暂停', owner: '周伟', deviceCount: 12, region: '全市', startedAt: '2026-01-20', desc: '气象雨量计补充部署' },
+  { id: 'PJ01', name: '城东排涝一期', status: '进行中', owner: '王建国', deviceCount: 86, region: '城东片区', startedAt: '2026-03-01', desc: '城东易涝点液位与泵站监测', aepProductId: 'AEP-LW-1001', aepProductName: '液位井标准产品' },
+  { id: 'PJ02', name: '南湖水质专项', status: '进行中', owner: '李敏', deviceCount: 42, region: '南湖流域', startedAt: '2026-05-12', desc: '南湖出入湖水质站建设', aepProductId: 'AEP-WQ-2003', aepProductName: '水质站标准产品' },
+  { id: 'PJ03', name: '老城供水管网', status: '已完工', owner: '赵强', deviceCount: 118, region: '老城区', startedAt: '2025-11-01', desc: '老城压力表替换与接入', aepProductId: 'AEP-PP-4001', aepProductName: '管网压力标准产品' },
+  { id: 'PJ04', name: '滨江泵站改造', status: '筹备中', owner: '陈芳', deviceCount: 0, region: '滨江新区', startedAt: '2026-09-01', desc: '滨江 3 座泵站机组台账预建', aepProductId: 'AEP-PU-3012', aepProductName: '泵站机组标准产品' },
+  { id: 'PJ05', name: '雨量站扩容', status: '已暂停', owner: '周伟', deviceCount: 12, region: '全市', startedAt: '2026-01-20', desc: '气象雨量计补充部署', aepProductId: 'AEP-RG-5001', aepProductName: '雨量计标准产品' },
 ];
 
 const DEVICES = [
@@ -86,16 +86,16 @@ const UNASSIGNED_PROJECT_ID = '__unassigned__';
 const UNASSIGNED_PROJECT_NAME = '未定义项目';
 
 const AEP_DIFFS = [
-  { id: 'AD1', type: 'extra', sn: 'AEP-ONLY-9001', aepDeviceId: 'AEP-DEV-9001', aepName: '未知液位设备-9001', productId: 'AEP-LW-1001', hint: 'AEP 有、台账无：可接入后进入未定义项目池', action: 'pending' },
+  { id: 'AD1', type: 'extra', sn: 'AEP-ONLY-9001', aepDeviceId: 'AEP-DEV-9001', aepName: '未知液位设备-9001', productId: 'AEP-LW-1001', hint: 'AEP 有、台账无：主路径 OpenAPI 绑定自动建档；缺产品时进例外池', action: 'pending' },
   { id: 'AD2', type: 'extra', sn: 'AEP-ONLY-9008', aepDeviceId: 'AEP-DEV-9008', aepName: '测试压力点-9008', productId: 'AEP-PU-3012', hint: '疑似测试设备残留', action: 'pending' },
   { id: 'AD3', type: 'missing', sn: 'MF20260928050', aepDeviceId: '', aepName: '', productId: 'AEP-LW-1001', localName: '望江路井-待接入', localId: 'D007', hint: '本地已建档，AEP 尚未创建设备', action: 'pending' },
   { id: 'AD4', type: 'missing', sn: 'MF20251108088', aepDeviceId: '', aepName: '', productId: 'AEP-PP-4001', localName: '解放路压力-12', localId: 'D004', hint: '本地有、AEP 无：SN 或产品映射不一致，可补建或忽略', action: 'pending' },
-  { id: 'AD5', type: 'extra', sn: 'AEP-ONLY-7712', aepDeviceId: 'AEP-DEV-7712', aepName: '滨江临时终端', productId: 'AEP-LW-1001', hint: '不在本期项目范围', action: 'ignored' },
+  { id: 'AD5', type: 'extra', sn: 'AEP-ONLY-7712', aepDeviceId: 'AEP-DEV-7712', aepName: '滨江临时终端', productId: 'AEP-LW-1001', hint: '例外：不在本期产品范围，可忽略', action: 'ignored' },
 ];
 
 const TRANSFER_LOGS = [
-  { id: 'TL1', deviceId: 'D001', sn: 'MF20260901001', deviceName: '东湖路井-01', fromProjectId: null, fromProjectName: '未定义项目', toProjectId: 'PJ01', toProjectName: '城东排涝一期', operator: '王建国', time: '2026-04-12 10:20', note: '现场确认后转入城东项目' },
-  { id: 'TL2', deviceId: 'D003', sn: 'MF20260520011', deviceName: '南湖入口站', fromProjectId: 'PJ04', fromProjectName: '滨江泵站改造', toProjectId: 'PJ02', toProjectName: '南湖水质专项', operator: '李敏', time: '2026-06-02 15:40', note: '项目范围调整' },
+  { id: 'TL1', deviceId: 'D001', sn: 'MF20260901001', deviceName: '东湖路井-01', fromProjectId: null, fromProjectName: '未定义项目', toProjectId: 'PJ01', toProjectName: '城东排涝一期', operator: '王建国', time: '2026-04-12 10:20', note: '例外处理：现场确认后人工改挂至城东项目' },
+  { id: 'TL2', deviceId: 'D003', sn: 'MF20260520011', deviceName: '南湖入口站', fromProjectId: 'PJ04', fromProjectName: '滨江泵站改造', toProjectId: 'PJ02', toProjectName: '南湖水质专项', operator: '李敏', time: '2026-06-02 15:40', note: '例外处理：项目范围调整，人工改挂' },
 ];
 
 const LIFECYCLES = ['待接入', '在线', '离线', '停用', '报废'];
@@ -216,7 +216,7 @@ createApp({
     const projectStatusFilter = ref('');
     const showProjectModal = ref(false);
     const projectModalMode = ref('create');
-    const projectForm = reactive({ id: '', name: '', status: '筹备中', owner: '', region: '', startedAt: '2026-09-30', desc: '' });
+    const projectForm = reactive({ id: '', name: '', status: '筹备中', owner: '', region: '', startedAt: '2026-09-30', desc: '', aepProductId: '', aepProductName: '' });
 
     const deviceProjectFilter = ref('');
     const deviceCategoryFilter = ref('');
@@ -246,6 +246,7 @@ createApp({
     });
 
     const aepDiffTab = ref('extra'); // extra | missing | ignored
+    const aepLastSyncedAt = ref('2026-10-09 08:00');
     const aepDiffs = ref(AEP_DIFFS.map(d => ({ ...d })));
 
     /* ---- 在线监控 state ---- */
@@ -465,7 +466,7 @@ createApp({
         if (screen.value === 'projects') return { parent: '设备管控', current: '设备台账 · 项目列表' };
         if (screen.value === 'devices') {
           const un = deviceProjectFilter.value === UNASSIGNED_PROJECT_ID;
-          return { parent: '设备台账', current: un ? '未归属设备（未定义项目）' : '设备列表' };
+          return { parent: '设备台账', current: un ? '例外池 · 未定义项目' : '设备列表' };
         }
         if (screen.value === 'deviceDetail') return { parent: '设备台账', current: (currentDevice.value?.name || '设备') + ' · 档案' };
         if (screen.value === 'editDevice') return { parent: currentDevice.value?.name || '设备', current: deviceFormMode.value === 'create' ? '新建设备档案' : '编辑设备档案' };
@@ -613,12 +614,12 @@ createApp({
 
     function openCreateProject() {
       projectModalMode.value = 'create';
-      Object.assign(projectForm, { id: '', name: '', status: '筹备中', owner: '', region: '', startedAt: '2026-09-30', desc: '' });
+      Object.assign(projectForm, { id: '', name: '', status: '筹备中', owner: '', region: '', startedAt: '2026-09-30', desc: '', aepProductId: '', aepProductName: '' });
       showProjectModal.value = true;
     }
     function openEditProject(p) {
       projectModalMode.value = 'edit';
-      Object.assign(projectForm, { id: p.id, name: p.name, status: p.status, owner: p.owner, region: p.region, startedAt: p.startedAt, desc: p.desc || '' });
+      Object.assign(projectForm, { id: p.id, name: p.name, status: p.status, owner: p.owner, region: p.region, startedAt: p.startedAt, desc: p.desc || '', aepProductId: p.aepProductId || '', aepProductName: p.aepProductName || '' });
       showProjectModal.value = true;
     }
     function saveProject() { showProjectModal.value = false; }
@@ -774,6 +775,11 @@ createApp({
         aepDiffs.value.splice(idx, 1, copy);
       }
     }
+    function syncFromAep() {
+      /* 原型：主 CTA「同步自 AEP」→ 拉取产品/设备清单并生成差异；正式实现含周期对账 */
+      aepDiffTab.value = 'extra';
+      aepLastSyncedAt.value = '2026-10-09 17:30';
+    }
 
     function projectName(id) {
       const p = PROJECTS.find(x => x.id === id);
@@ -913,7 +919,7 @@ createApp({
       showImportModal, importMode, openImportModal, openExportModal,
       showTransferModal, transferForm, transferLogs, currentDeviceTransferLogs,
       openTransferModal, confirmTransfer,
-      aepDiffTab, filteredAepDiffs, aepCounts, resolveAepDiff,
+      aepDiffTab, aepLastSyncedAt, filteredAepDiffs, aepCounts, resolveAepDiff, syncFromAep,
       projectName, categoryName,
       // monitor
       MONITOR_ROWS, TRUST_TAG, TRUST_LABEL, ONLINE_TAG,
@@ -1155,17 +1161,20 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">设备台账 · 项目列表</h1>
-              <p class="page-desc">按项目组织设备档案；AEP 自注册且无项目时进入「未定义项目」池，可转移至正式项目</p>
+              <p class="page-desc">本地项目与 AEP 产品 1:1 对齐（SDK 产品列表同步）。设备主路径为 OpenAPI 绑定自动建档；「未定义项目」仅为例外池。</p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-orange" @click="goUnassignedDevices">未归属设备 <span class="tag tag-orange" style="margin-left:4px">{{ unassignedCount }}</span></button>
               <button class="btn" @click="goDevices">全部设备</button>
+              <button class="btn" @click="goUnassignedDevices">例外池 <span class="tag tag-orange" style="margin-left:4px">{{ unassignedCount }}</span></button>
               <button class="btn btn-primary" @click="openCreateProject">＋ 新建项目</button>
             </div>
           </div>
+          <div class="banner-tip" style="margin-bottom:12px">
+            <b>同步为准：</b>项目由 AEP 产品自动同步生成（1:1）。手动新建/编辑仅作补录；OpenAPI 绑定建档时仅在 projectId 为空时写入，不覆盖人工已挂项目。
+          </div>
           <div class="banner-tip" style="margin-bottom:12px" v-if="unassignedCount">
-            未定义项目池现有 <b>{{ unassignedCount }}</b> 台未归属设备（AEP 自注册无项目）。
-            <a class="btn-link btn" style="padding:0;margin-left:8px" @click="goUnassignedDevices">查看并转移 →</a>
+            <b>例外池：</b>「未定义项目」现有 <b>{{ unassignedCount }}</b> 台（SDK 缺产品 / 临时设备等），非主路径。
+            <a class="btn-link btn" style="padding:0;margin-left:8px" @click="goUnassignedDevices">查看例外池 →</a>
           </div>
           <div class="toolbar">
             <input class="input input-lg" v-model="projectSearch" placeholder="搜索项目名称 / 负责人 / ID" />
@@ -1184,13 +1193,17 @@ createApp({
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>项目 ID</th><th>项目名称</th><th>状态</th><th>负责人</th><th>所属区域</th><th>设备数</th><th>启动日期</th><th>操作</th>
+                  <th>项目 ID</th><th>项目名称</th><th>AEP 产品</th><th>状态</th><th>负责人</th><th>所属区域</th><th>设备数</th><th>启动日期</th><th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="p in filteredProjects" :key="p.id">
                   <td>{{ p.id }}</td>
                   <td><a class="btn-link btn" style="padding:0" @click="openDevicesForProject(p)">{{ p.name }}</a></td>
+                  <td>
+                    <div><code>{{ p.aepProductId || '—' }}</code></div>
+                    <div style="font-size:12px;color:#888">{{ p.aepProductName || '' }}</div>
+                  </td>
                   <td><span class="tag" :class="PJ_STATUS_TAG[p.status] || 'tag-gray'">{{ p.status }}</span></td>
                   <td>{{ p.owner }}</td>
                   <td>{{ p.region }}</td>
@@ -1215,14 +1228,14 @@ createApp({
           <div class="page-header">
             <div>
               <button class="back-link" @click="goProjects">← 返回项目列表</button>
-              <h1 class="page-title">{{ deviceProjectFilter===UNASSIGNED_PROJECT_ID ? '未归属设备 · 未定义项目' : '设备列表' }}</h1>
-              <p class="page-desc" v-if="deviceProjectFilter===UNASSIGNED_PROJECT_ID">AEP 自注册且尚未归属正式项目的设备池；可批量转移到目标项目</p>
-              <p class="page-desc" v-else>按项目 / 品类 / 生命周期筛选；支持导入导出、未归属池与 AEP 对账</p>
+              <h1 class="page-title">{{ deviceProjectFilter===UNASSIGNED_PROJECT_ID ? '例外池 · 未定义项目' : '设备列表' }}</h1>
+              <p class="page-desc" v-if="deviceProjectFilter===UNASSIGNED_PROJECT_ID">例外池：SDK 缺产品 / 临时设备等；非主路径。主路径为 OpenAPI 绑定自动创建项目与设备（仅 projectId 为空时写入）。人工改挂为例外处理。</p>
+              <p class="page-desc" v-else>按项目 / 品类 / 生命周期筛选。主路径 OpenAPI 绑定自动建档；例外池与人工改挂仅用于异常场景。支持导入导出与 AEP 对账。</p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" @click="openImportModal">导入</button>
               <button class="btn" @click="openExportModal">导出</button>
-              <button class="btn btn-primary" :disabled="!selectedDeviceIds.length" @click="openTransferModal(null)">设备转移{{ selectedDeviceIds.length ? ' ('+selectedDeviceIds.length+')' : '' }}</button>
+              <button class="btn" :disabled="!selectedDeviceIds.length" @click="openTransferModal(null)">例外处理 · 人工改挂{{ selectedDeviceIds.length ? ' ('+selectedDeviceIds.length+')' : '' }}</button>
               <button class="btn btn-orange" @click="goAepReconcile">AEP 对账</button>
             </div>
           </div>
@@ -1232,12 +1245,12 @@ createApp({
             <div class="stat-chip"><div class="sc-label">离线</div><div class="sc-value">{{ deviceStats.offline }}</div></div>
             <div class="stat-chip warn"><div class="sc-label">待接入</div><div class="sc-value">{{ deviceStats.pending }}</div></div>
             <div class="stat-chip danger"><div class="sc-label">停用/报废</div><div class="sc-value">{{ deviceStats.disabled }}</div></div>
-            <div class="stat-chip warn" style="cursor:pointer" @click="goUnassignedDevices"><div class="sc-label">未归属</div><div class="sc-value">{{ unassignedCount }}</div></div>
+            <div class="stat-chip warn" style="cursor:pointer" @click="goUnassignedDevices" title="例外池，非主入口"><div class="sc-label">例外池</div><div class="sc-value">{{ unassignedCount }}</div></div>
           </div>
           <div class="toolbar">
             <select class="select" v-model="deviceProjectFilter">
               <option value="">全部项目</option>
-              <option :value="UNASSIGNED_PROJECT_ID">未定义项目（未归属）</option>
+              <option :value="UNASSIGNED_PROJECT_ID">未定义项目（例外池）</option>
               <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
             <select class="select" v-model="deviceCategoryFilter">
@@ -1284,7 +1297,7 @@ createApp({
                   <td>{{ d.updatedAt }}</td>
                   <td class="actions">
                     <button class="btn-link btn" @click="openDeviceDetail(d)">档案</button>
-                    <button class="btn-link btn" @click="openTransferModal(d)">转移</button>
+                    <button class="btn-link btn" @click="openTransferModal(d)">改挂</button>
                     <button class="btn-link btn" @click="openEditDevice(d)">编辑</button>
                   </td>
                 </tr>
@@ -1299,7 +1312,7 @@ createApp({
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">品类默认由归属规则自动匹配（只读展示）；边缘场景可在编辑档案中「改挂」。一期不做设施树、地图与通用指令。</div>
+          <div class="table-note">品类默认由归属规则自动匹配（只读展示）；品类「改挂」与项目「人工改挂」均为例外处理。一期不做设施树、地图与通用指令。</div>
         </div>
 
         <!-- ===== 设备台账：设备档案详情 ===== -->
@@ -1311,7 +1324,7 @@ createApp({
               <div class="detail-meta">
                 <span>SN：<b>{{ currentDevice.sn }}</b></span>
                 <span>项目：
-                  <b v-if="!currentDevice.projectId" style="color:#E78212">未定义项目 · 未归属</b>
+                  <b v-if="!currentDevice.projectId" style="color:#E78212">未定义项目 · 例外池</b>
                   <b v-else>{{ currentDevice.projectName }}</b>
                 </span>
                 <span>品类：
@@ -1328,7 +1341,7 @@ createApp({
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-primary" @click="openTransferModal(currentDevice)">设备转移</button>
+              <button class="btn" @click="openTransferModal(currentDevice)">例外处理 · 人工改挂</button>
               <button class="btn" @click="openEditDevice(currentDevice)">编辑档案</button>
               <button class="btn btn-danger" @click="openDisableDevice" :disabled="currentDevice.lifecycle==='停用'||currentDevice.lifecycle==='报废'">停用</button>
             </div>
@@ -1419,7 +1432,7 @@ createApp({
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">转移记录 <span class="sub-nav-hint">项目归属变更日志</span></div>
+            <div class="info-section-title">改挂记录 <span class="sub-nav-hint">例外处理 · 项目归属变更日志</span></div>
             <div class="table-wrap" v-if="currentDeviceTransferLogs.length">
               <table class="data-table">
                 <thead><tr><th>时间</th><th>操作人</th><th>自</th><th>至</th><th>备注</th></tr></thead>
@@ -1434,7 +1447,7 @@ createApp({
                 </tbody>
               </table>
             </div>
-            <div v-else class="empty-hint">暂无转移记录</div>
+            <div v-else class="empty-hint">暂无改挂记录</div>
           </div>
         </div>
 
@@ -1455,10 +1468,10 @@ createApp({
           <div class="form-row">
             <div class="form-item"><label>所属项目</label>
               <select class="select input-full" v-model="deviceForm.projectId">
-                <option value="">未定义项目（未归属）</option>
+                <option value="">未定义项目（例外池）</option>
                 <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
               </select>
-              <div class="hint">AEP 自注册无项目时默认为未定义项目；可用「设备转移」批量迁入</div>
+              <div class="hint">主路径：OpenAPI 绑定自动建档，仅当 projectId 为空时写入，不覆盖人工已挂。例外池 / 人工改挂仅作异常处理。</div>
             </div>
             <div class="form-item"><label>品类（自动匹配）</label>
               <div v-if="!showCategoryOverride">
@@ -1473,7 +1486,7 @@ createApp({
                   <option value="">待归属</option>
                   <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
-                <div class="hint">边缘场景人工改挂；保存后标记为「人工改挂」</div>
+                <div class="hint">例外处理：人工改挂品类；保存后标记为「人工改挂」（非主路径）</div>
               </div>
             </div>
             <div class="form-item"><label>生命周期</label>
@@ -1524,9 +1537,12 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">AEP 对账</h1>
-              <p class="page-desc">对比本地台账与电信 AEP 设备清单差异（多出 / 缺失）。品类由归属规则自动匹配，对账不依赖品类绑定 AEP 产品。接入的无项目设备进入未定义项目池。</p>
+              <p class="page-desc">「同步自 AEP」拉取产品/设备清单并生成差异（多出 / 缺失）。支持周期对账。项目与 AEP 产品 1:1；品类仍由归属规则匹配，对账不依赖品类绑定产品。缺产品或临时设备进入例外池（未定义项目）。</p>
             </div>
-            <button class="btn btn-orange">重新拉取 AEP</button>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+              <button class="btn btn-primary" @click="syncFromAep">同步自 AEP</button>
+              <span style="font-size:12px;color:#888">最近同步：{{ aepLastSyncedAt }} · 支持周期对账</span>
+            </div>
           </div>
           <div class="stat-row">
             <div class="stat-chip warn"><div class="sc-label">AEP 多出</div><div class="sc-value">{{ aepCounts.extra }}</div></div>
@@ -1570,7 +1586,7 @@ createApp({
               </tbody>
             </table>
           </div>
-          <div class="table-note">「接入台账」将 AEP 多出设备写入本地（无项目则进入未定义项目）；「创建接入」在 AEP 侧创建设备并回填 ID。对账用于发现清单差异，与品类归属规则相互独立。一期为交互示意。</div>
+          <div class="table-note">主操作「同步自 AEP」生成差异；行内「接入台账 / 创建接入 / 忽略」为二次处理。OpenAPI 绑定为主建档路径（projectId 仅空时写入）；缺产品进例外池。对账与品类归属规则相互独立。一期为交互示意。</div>
         </div>
 
         <!-- ===== 在线监控：监控列表 ===== -->
@@ -1943,13 +1959,14 @@ createApp({
       </div>
     </div>
 
-    <!-- 设备台账：设备转移 -->
+    <!-- 设备台账：例外处理 · 人工改挂 -->
     <div v-if="showTransferModal" class="overlay" data-screen="ledger-device-transfer" @click.self="showTransferModal=false">
       <div class="modal">
-        <div class="modal-header"><span>设备转移</span><button class="close-x" @click="showTransferModal=false">×</button></div>
+        <div class="modal-header"><span>例外处理 · 人工改挂</span><button class="close-x" @click="showTransferModal=false">×</button></div>
         <div class="modal-body">
+          <div class="banner-tip" style="margin-bottom:12px">非主路径：仅用于例外池清理或纠错。主路径为 OpenAPI 绑定自动建档（空 projectId 才写入，不覆盖已挂项目）。</div>
           <div class="form-item">
-            <label>待转移设备（{{ transferForm.deviceIds.length }} 台）</label>
+            <label>待改挂设备（{{ transferForm.deviceIds.length }} 台）</label>
             <div class="table-wrap" style="max-height:160px;overflow:auto">
               <table class="data-table">
                 <thead><tr><th>SN</th><th>名称</th><th>当前项目</th></tr></thead>
@@ -1971,12 +1988,12 @@ createApp({
           <div class="form-row">
             <div class="form-item"><label>操作人</label><input class="input input-full" v-model="transferForm.operator" /></div>
           </div>
-          <div class="form-item"><label>备注</label><textarea class="textarea input-full" v-model="transferForm.note" placeholder="转移原因"></textarea></div>
-          <div class="hint">转移后写入操作人 / 时间 / 自 / 至 日志，可在设备档案中查看。</div>
+          <div class="form-item"><label>备注</label><textarea class="textarea input-full" v-model="transferForm.note" placeholder="例外改挂原因"></textarea></div>
+          <div class="hint">改挂后写入操作人 / 时间 / 自 / 至 日志，可在设备档案「改挂记录」中查看。</div>
         </div>
         <div class="modal-footer">
           <button class="btn" @click="showTransferModal=false">取消</button>
-          <button class="btn btn-primary" @click="confirmTransfer">确认转移</button>
+          <button class="btn btn-primary" @click="confirmTransfer">确认改挂</button>
         </div>
       </div>
     </div>
@@ -2016,7 +2033,12 @@ createApp({
             <div class="form-item"><label>所属区域</label><input class="input input-full" v-model="projectForm.region" /></div>
             <div class="form-item"><label>启动日期</label><input class="input input-full" v-model="projectForm.startedAt" type="date" /></div>
           </div>
+          <div class="form-row">
+            <div class="form-item"><label>AEP 产品 ID</label><input class="input input-full" v-model="projectForm.aepProductId" :placeholder="projectModalMode==='create'?'同步自 AEP 后自动回填':'AEP 产品 ID'" :disabled="projectModalMode==='edit' && !!projectForm.aepProductId" /></div>
+            <div class="form-item"><label>AEP 产品名称</label><input class="input input-full" v-model="projectForm.aepProductName" placeholder="与产品 1:1" :disabled="projectModalMode==='edit' && !!projectForm.aepProductId" /></div>
+          </div>
           <div class="form-item"><label>项目说明</label><textarea class="textarea input-full" v-model="projectForm.desc" placeholder="建设范围与目标"></textarea></div>
+          <div class="hint">项目与 AEP 产品 1:1；正式环境以「同步自 AEP / SDK 产品列表」为准，手动新建仅作补录。</div>
         </div>
         <div class="modal-footer">
           <button class="btn" @click="showProjectModal=false">取消</button>
@@ -2038,8 +2060,8 @@ createApp({
             <ol class="import-steps">
               <li>下载 Excel 模板，按列填写 SN、名称、项目、品类、经纬度、安装参数等。</li>
               <li>SN 全局唯一；已存在 SN 将更新档案（生命周期为「报废」的跳过）。</li>
-              <li>品类可由归属规则自动匹配；项目可留空（进入未定义项目池）。</li>
-              <li>一期不校验 AEP 是否已存在，导入后可去「AEP 对账」处理清单差异。</li>
+              <li>品类可由归属规则自动匹配；项目可留空（进入例外池「未定义项目」）。主路径仍为 OpenAPI 绑定建档。</li>
+              <li>一期不校验 AEP 是否已存在；导入后可去「AEP 对账」点「同步自 AEP」处理清单差异。</li>
             </ol>
             <div class="import-box">
               <div style="font-weight:500;margin-bottom:8px">拖拽文件到此处，或点击选择 .xlsx</div>
