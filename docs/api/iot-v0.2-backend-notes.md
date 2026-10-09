@@ -51,17 +51,18 @@
 | GET/DELETE | `/iotProject/{id}` | query / delete |
 | DELETE | `/iotProject/batch/{ids}` | delete |
 
-「未定义项目」为虚拟项，**不进**本表 CRUD。筛选：keyword、status（`iot_project_status`）。
+「未定义项目」为虚拟项，**不进**本表 CRUD。筛选：keyword、status（`iot_project_status`）。回填 deviceCount；有设备挂靠时拒绝删除。
 
 ## 4. 设备 Device（扩字段，路径不变）
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
 | GET | `/iotDevice` | query | 筛 status(AEP)/lifecycle/projectId/categoryId/keyword…；回填 projectName（空→未定义项目）、categoryName |
-| POST/PUT | `/iotDevice` | insert/update | body 含 lifecycle、projectId、categoryId、model、lng/lat、address、install*、photos、installParams 等；**勿改坏 AEP 字段语义** |
+| POST/PUT | `/iotDevice` | insert/update | body 含 lifecycle、projectId、categoryId、model、lng/lat、address、install*、photos、installParams、masterId 等；查询回填 masterSn、slaves |
 | POST | `/iotDevice/transfer` | update | `{deviceIds[], targetProjectId(null=未定义), note}`；写 `iot_device_transfer_log` |
 | GET | `/iotDevice/{id}/transferLogs` | query | 转移日志分页 |
 | GET | `/iotDevice/aepDiff` | query | type/action/keyword |
+| POST | `/iotDevice/aepDiff/sync` | update | 自动生成差异：可选 body `remoteDevices` 或 `AepDeviceRemoteClient`；否则本地兜底；pending 幂等 |
 | POST | `/iotDevice/aepDiff/{id}/action` | update | `{action: pending\|ignored\|imported}`；extra+imported→ensureDevice 并落入未定义项目 |
 | GET/DELETE… | 既有 CRUD/export | | |
 
@@ -77,11 +78,11 @@
 4. 依次 POST Property / Event / Point / InstallField / Firmware（Firmware 必须带 categoryId）  
 5. `GET /iotCategory/{id}` 看 deviceCount、ruleCount  
 6. 无设备绑定该品类后 `DELETE /iotCategory/{id}` 应失败；解绑后再删，子资源应一并消失  
-7. 设备转移与 aepDiff 见 phase2  
+7. 设备转移；`POST /iot/iotDevice/aepDiff/sync` 后再 `GET /iot/iotDevice/aepDiff`
 
 ## 7. 已知缺口
 
-- AEP 对账差异自动生成 / 远端同步未做  
+- AEP 对账同步已提供 `POST /iotDevice/aepDiff/sync`；**AEP OpenAPI 真列表客户端未接**（可用 body 快照）  
 - missing 侧 AEP 补建延后  
 - 前端页面仍待  
 - 菜单 SQL 需在目标库手工执行 `db/iot_menu_permission_v0.2.sql` 后角色授权  
