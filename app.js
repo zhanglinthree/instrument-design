@@ -103,6 +103,25 @@ const LC_CLASS = { '待接入': 'lc-pending', '在线': 'lc-online', '离线': '
 const LC_TAG = { '待接入': 'tag-orange', '在线': 'tag-green', '离线': 'tag-gray', '停用': 'tag-gray', '报废': 'tag-red' };
 const PJ_STATUS_TAG = { '进行中': 'tag-blue', '已完工': 'tag-green', '筹备中': 'tag-orange', '已暂停': 'tag-gray' };
 
+/* ========== 驾驶舱 Mock ========== */
+const COCKPIT_TODOS = [
+  { id: 'CT1', type: '未挂项目', title: 'AEP自注册-液位-01', sn: 'MF20261001001', detail: '例外池：SDK 缺产品映射，待人工改挂', severity: 'warn', target: 'unassignedDevices', time: '2026-10-01 09:12' },
+  { id: 'CT2', type: '未挂项目', title: 'AEP自注册-未知协议', sn: 'MF20261001088', detail: '例外池：品类待归属 + 未定义项目', severity: 'danger', target: 'unassignedDevices', time: '2026-10-02 11:05' },
+  { id: 'CT3', type: '未挂项目', title: '临时水质终端-7721', sn: 'AEP-AUTO-7721', detail: '例外池：临时点位，待确认项目', severity: 'warn', target: 'unassignedDevices', time: '2026-10-03 14:30' },
+  { id: 'CT4', type: '对账差异', title: 'AEP 多出 · 未知液位设备-9001', sn: 'AEP-ONLY-9001', detail: 'AEP 有、台账无，待接入或忽略', severity: 'warn', target: 'aepReconcile', time: '2026-10-09 08:00' },
+  { id: 'CT5', type: '对账差异', title: '本地缺失 · 望江路井-待接入', sn: 'MF20260928050', detail: '本地已建档，AEP 尚未创建设备', severity: 'danger', target: 'aepReconcile', time: '2026-10-09 08:00' },
+  { id: 'CT6', type: '对账差异', title: '本地缺失 · 解放路压力-12', sn: 'MF20251108088', detail: 'SN / 产品映射不一致', severity: 'warn', target: 'aepReconcile', time: '2026-10-09 08:00' },
+];
+
+const COCKPIT_ACTIVITIES = [
+  { id: 'CA1', time: '2026-10-09 08:00', actor: '系统', action: '完成周期对账（同步自 AEP）', result: '发现 4 条待处理差异', tone: 'primary' },
+  { id: 'CA2', time: '2026-10-05 08:40', actor: 'OpenAPI', action: 'AEP 自注册设备写入例外池', result: 'AEP自注册-泵站探头（D012）', tone: 'warn' },
+  { id: 'CA3', time: '2026-10-03 14:30', actor: 'OpenAPI', action: '临时设备进入未定义项目', result: '临时水质终端-7721', tone: 'warn' },
+  { id: 'CA4', time: '2026-10-02 15:10', actor: '李敏', action: '例外处理 · 人工改挂', result: '南湖入口站 → 南湖水质专项', tone: 'ok' },
+  { id: 'CA5', time: '2026-10-01 09:12', actor: 'OpenAPI', action: '绑定建档 · projectId 为空写入例外池', result: 'AEP自注册-液位-01', tone: 'warn' },
+  { id: 'CA6', time: '2026-09-30 08:05', actor: '赵强', action: '设备档案更新', result: '城东泵站1#机组 固件/坐标已同步', tone: 'ok' },
+];
+
 /* ========== 在线监控 Mock ========== */
 const TRUST_TAG = { T0: 'tag-red', T1: 'tag-orange', T2: 'tag-blue', T3: 'tag-green' };
 const TRUST_LABEL = { T0: '不可信', T1: '低可信', T2: '中可信', T3: '高可信' };
@@ -172,8 +191,8 @@ function genCurveSeries(point, days) {
 
 createApp({
   setup() {
-    const module = ref('thing'); // thing | ledger | monitor
-    const screen = ref('list');
+    const module = ref('cockpit'); // cockpit | thing | ledger | monitor
+    const screen = ref('cockpit');
     const detailTab = ref('points');
     const searchKeyword = ref('');
     const filterIndustry = ref('');
@@ -455,6 +474,9 @@ createApp({
     });
 
     const breadcrumb = computed(() => {
+      if (module.value === 'cockpit') {
+        return { parent: '设备管控', current: '驾驶舱' };
+      }
       if (module.value === 'monitor') {
         if (screen.value === 'monitorList') return { parent: '设备管控', current: '在线监控 · 监控列表' };
         if (screen.value === 'monitorDetail') return { parent: '在线监控', current: (currentMonitor.value?.name || '设备') + ' · 监控详情' };
@@ -482,9 +504,38 @@ createApp({
     });
 
     const topbarHint = computed(() => {
+      if (module.value === 'cockpit') return '一期原型 · 驾驶舱 / 工作台';
       if (module.value === 'ledger') return '一期原型 · 设备台账';
       if (module.value === 'monitor') return '一期原型 · 在线监控';
       return '一期原型 · 物模型';
+    });
+
+    function goCockpit() { module.value = 'cockpit'; screen.value = 'cockpit'; }
+
+    const cockpitStats = computed(() => {
+      const all = deviceList.value;
+      const online = all.filter(d => d.lifecycle === '在线').length;
+      const offlineAbnormal = all.filter(d => ['离线', '待接入', '停用', '报废'].includes(d.lifecycle)).length;
+      const pendingDiff = aepDiffs.value.filter(d => d.action === 'pending').length;
+      return {
+        deviceTotal: all.length,
+        online,
+        offlineAbnormal,
+        projectCount: PROJECTS.length,
+        unassigned: unassignedCount.value,
+        pendingDiff,
+      };
+    });
+
+    const cockpitSyncStatus = computed(() => {
+      const pending = aepCounts.value.extra + aepCounts.value.missing;
+      return {
+        lastAt: aepLastSyncedAt.value,
+        result: pending ? '有差异待处理' : '一致',
+        ok: pending === 0,
+        pending,
+        summary: `多出 ${aepCounts.value.extra} · 缺失 ${aepCounts.value.missing} · 已忽略 ${aepCounts.value.ignored}`,
+      };
     });
 
     function goList() { module.value = 'thing'; screen.value = 'list'; }
@@ -835,6 +886,9 @@ createApp({
     function jump(hash) {
       resetOverlays();
       const map = {
+        cockpit: () => goCockpit(),
+        workbench: () => goCockpit(),
+        home: () => goCockpit(),
         list: () => { module.value = 'thing'; screen.value = 'list'; },
         createCategory: () => { goList(); openCreateCategory(); },
         editCategory: () => { goList(); openEditCategory(CATEGORIES[0]); },
@@ -874,8 +928,8 @@ createApp({
     }
 
     function applyHash() {
-      const h = (location.hash || '#list').replace('#', '');
-      jump(h || 'list');
+      const h = (location.hash || '#cockpit').replace('#', '');
+      jump(h || 'cockpit');
     }
     window.addEventListener('hashchange', applyHash);
     nextTick(applyHash);
@@ -887,6 +941,7 @@ createApp({
 
     return {
       module, screen, detailTab, searchKeyword, filterIndustry,
+      goCockpit, cockpitStats, cockpitSyncStatus, COCKPIT_TODOS, COCKPIT_ACTIVITIES,
       filteredCategories, industries, breadcrumb, topbarHint, currentCategory,
       CATEGORIES, PROPERTIES, EVENTS, POINTS, INSTALL_FIELDS, FIRMWARES,
       CATEGORY_RULES, categoryRules, currentCategoryRules,
@@ -940,7 +995,8 @@ createApp({
         <span>设备管控平台</span>
       </div>
       <nav class="sidebar-nav">
-        <div class="nav-group-title">设备管理</div>
+        <div class="nav-group-title">设备管控</div>
+        <div class="nav-item" :class="{active: module==='cockpit'}" @click="jump('cockpit')"><span class="dot"></span>驾驶舱 / 工作台</div>
         <div class="nav-item" :class="{active: module==='ledger'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
         <div class="nav-item" :class="{active: module==='monitor'}" @click="jump('monitor')"><span class="dot"></span>在线监控</div>
         <div class="nav-item" :class="{active: module==='thing'}" @click="jump('list')"><span class="dot"></span>物模型</div>
@@ -969,8 +1025,101 @@ createApp({
       </header>
 
       <main class="content">
+        <!-- ===== 驾驶舱 / 工作台 ===== -->
+        <div v-if="module==='cockpit'" class="page-card cockpit-page" data-screen="cockpit">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">驾驶舱</h1>
+              <p class="page-desc">登录后的工作台首页。项目与 AEP 产品 1:1；AEP 同步为主路径；「未定义项目」为例外池。非 GIS 大屏。</p>
+            </div>
+            <button class="btn btn-primary" @click="jump('aepReconcile')">同步自 AEP</button>
+          </div>
+
+          <div class="stat-row cockpit-stats">
+            <div class="stat-chip accent" style="cursor:pointer" @click="jump('devices')"><div class="sc-label">设备总数</div><div class="sc-value">{{ cockpitStats.deviceTotal }}</div></div>
+            <div class="stat-chip ok" style="cursor:pointer" @click="jump('monitor')"><div class="sc-label">在线</div><div class="sc-value">{{ cockpitStats.online }}</div></div>
+            <div class="stat-chip danger" style="cursor:pointer" @click="jump('devices')"><div class="sc-label">离线 / 异常</div><div class="sc-value">{{ cockpitStats.offlineAbnormal }}</div></div>
+            <div class="stat-chip" style="cursor:pointer" @click="jump('projects')"><div class="sc-label">项目数</div><div class="sc-value">{{ cockpitStats.projectCount }}</div></div>
+            <div class="stat-chip warn" style="cursor:pointer" @click="jump('unassignedDevices')" title="例外池，非主路径"><div class="sc-label">例外池（未定义项目）</div><div class="sc-value">{{ cockpitStats.unassigned }}</div></div>
+            <div class="stat-chip warn" style="cursor:pointer" @click="jump('aepReconcile')"><div class="sc-label">待处理对账差异</div><div class="sc-value">{{ cockpitStats.pendingDiff }}</div></div>
+          </div>
+
+          <div class="cockpit-mid">
+            <div class="cockpit-panel">
+              <div class="cockpit-panel-hd">
+                <h3>最近 AEP 同步</h3>
+                <span class="tag" :class="cockpitSyncStatus.ok ? 'tag-green' : 'tag-orange'">{{ cockpitSyncStatus.result }}</span>
+              </div>
+              <div class="cockpit-sync-body">
+                <div class="sync-row"><span class="k">最近同步</span><span class="v">{{ cockpitSyncStatus.lastAt }}</span></div>
+                <div class="sync-row"><span class="k">同步结果</span><span class="v">{{ cockpitSyncStatus.ok ? '清单一致' : cockpitSyncStatus.summary }}</span></div>
+                <div class="sync-row"><span class="k">口径</span><span class="v">周期对账 · OpenAPI 绑定为主 · 例外池不覆盖已挂项目</span></div>
+                <div class="cockpit-sync-actions">
+                  <button class="btn btn-primary" @click="jump('aepReconcile')">查看对账差异</button>
+                  <button class="btn" @click="syncFromAep">立即同步</button>
+                </div>
+              </div>
+            </div>
+            <div class="cockpit-panel">
+              <div class="cockpit-panel-hd">
+                <h3>快捷入口</h3>
+              </div>
+              <div class="quick-chips">
+                <button class="quick-chip" @click="jump('list')">物模型 · 品类</button>
+                <button class="quick-chip" @click="jump('projects')">项目列表</button>
+                <button class="quick-chip" @click="jump('devices')">设备列表</button>
+                <button class="quick-chip accent" @click="jump('aepReconcile')">AEP 对账</button>
+                <button class="quick-chip warn" @click="jump('unassignedDevices')">例外池 · 未定义项目 <span class="tag tag-orange" style="margin-left:4px">{{ cockpitStats.unassigned }}</span></button>
+                <button class="quick-chip" @click="jump('monitor')">在线监控</button>
+                <span class="quick-chip muted" title="一期未开放">告警（未开放）</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cockpit-bottom">
+            <div class="cockpit-panel">
+              <div class="cockpit-panel-hd">
+                <h3>例外待办</h3>
+                <span class="sub-nav-hint">未挂项目设备 · 对账待处理</span>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>类型</th><th>对象</th><th>说明</th><th>时间</th><th>操作</th></tr></thead>
+                  <tbody>
+                    <tr v-for="t in COCKPIT_TODOS" :key="t.id">
+                      <td><span class="tag" :class="t.severity==='danger'?'tag-red':'tag-orange'">{{ t.type }}</span></td>
+                      <td>
+                        <div>{{ t.title }}</div>
+                        <code style="font-size:12px;color:#888">{{ t.sn }}</code>
+                      </td>
+                      <td style="max-width:280px;white-space:normal">{{ t.detail }}</td>
+                      <td>{{ t.time }}</td>
+                      <td class="actions"><button class="btn-link btn" @click="jump(t.target)">处理</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="cockpit-panel">
+              <div class="cockpit-panel-hd">
+                <h3>近期动态</h3>
+              </div>
+              <ul class="cockpit-timeline">
+                <li v-for="a in COCKPIT_ACTIVITIES" :key="a.id" :class="'tone-'+a.tone">
+                  <div class="tl-dot"></div>
+                  <div class="tl-body">
+                    <div class="tl-meta"><span class="tl-time">{{ a.time }}</span><span class="tl-actor">{{ a.actor }}</span></div>
+                    <div class="tl-action">{{ a.action }}</div>
+                    <div class="tl-result">{{ a.result }}</div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         <!-- ===== 物模型：品类列表 ===== -->
-        <div v-if="module==='thing' && screen==='list'" class="page-card" data-screen="category-list">
+        <div v-else-if="module==='thing' && screen==='list'" class="page-card" data-screen="category-list">
           <div class="page-header">
             <div>
               <h1 class="page-title">物模型 · 品类管理</h1>

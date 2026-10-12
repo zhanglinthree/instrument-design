@@ -6,6 +6,8 @@ const OUT = path.join(__dirname, 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 
 const shots = [
+  // cockpit / workbench
+  { hash: 'cockpit', file: 'cockpit-01-home.png' },
   // thing model (existing)
   { hash: 'list', file: '01-category-list.png' },
   { hash: 'createCategory', file: '02-create-category.png' },
