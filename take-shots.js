@@ -21,6 +21,8 @@ const shots = [
   { hash: 'editFirmware', file: '10-edit-firmware.png' },
   { hash: 'props', file: '11-report-props.png' },
   { hash: 'events', file: '12-exception-events.png' },
+  { hash: 'commands', file: 'thing-commands-01.png' },
+  { hash: 'editCommand', file: 'thing-commands-02-edit.png' },
   // device ledger
   { hash: 'projects', file: 'ledger-01-projects.png' },
   { hash: 'createProject', file: 'ledger-02-create-project.png' },

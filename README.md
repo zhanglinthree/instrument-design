@@ -23,7 +23,8 @@ python3 -m http.server 8877
 ## 产品口径（本期）
 
 ### 物模型
-- 物模型定义**产品类型语义**（测点 / 事件 / 阈值 / 安装模板 / 固件）。
+- 物模型定义**产品类型语义**（测点 / 事件 / 阈值 / 安装模板 / 固件 / **指令**）。
+- **指令 Tab** = 配置该品类「能下什么」（标识、是否带参、参数结构、命令位 bit、载荷偏移）；**不是**实时点发。积水仪示意命令包 `FAFA…ADAD` 按位开关；真正下发走 AEP CreateCommand（透传 hex，dataType=2），应答另解析入库。
 - **不再**在品类上直接绑定 AEP 产品/型号；无「绑定 AEP 产品」主流程。
 - **无解析脚本 UI**：AEP 侧已完成设备数据解析。
 - 品类配置 **归属规则**（通用规则默认匹配 + 特殊处理规则更高优先级）。匹配条件含 AEP 产品 ID、协议 ID/名称等自由文本。
@@ -53,7 +54,8 @@ python3 -m http.server 8877
 | 2 | 新建品类（模态） | `#createCategory` |
 | 3 | 编辑品类（模态） | `#editCategory` |
 | 4 | 物模型详情壳 + Tab | `#detail` |
-| 4a–4f | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#rules` / `#categoryRules` |
+| 4a–4g | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **指令** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#commands` `#rules` / `#categoryRules` |
+| 4h | 新建/编辑指令（模态：标识 / 是否带参 / 参数结构 / 命令位 / 载荷偏移） | `#editCommand` |
 | 5–7 | 编辑测点 / 安装字段 / 固件 | `#editPoint` `#editInstall` `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
 
@@ -81,7 +83,7 @@ python3 -m http.server 8877
 | 3b | 长周期曲线（采集周期 >15 分钟 →「历史全量查、不分段」） | `#monitorCurveLong` |
 | 4 | 在线率（该报没报：应报/实报/漏报统计卡片 + 简表） | `#monitorOnlineRate` |
 
-测点时序为 **PostgreSQL 时序示意**，非实时接入。一期不做设施树、地图、通用指令。
+测点时序为 **PostgreSQL 时序示意**，非实时接入。一期不做设施树、地图；**物模型可配置指令模板**，设备运行时下发台后续在设备档案 / 监控中提供。
 
 ## 配色
 
@@ -104,6 +106,8 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - `cockpit-01-home.png` 驾驶舱 / 工作台首页
 
 物模型见 `shots/01`–`12`（历史截图可能仍含旧「绑定 AEP」文案，请以当前页面为准）。
+- `thing-commands-01.png` 物模型详情 · **指令** Tab
+- `thing-commands-02-edit.png` 新建/编辑指令模态
 
 设备台账：
 - `ledger-01-projects.png` 项目列表
