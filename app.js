@@ -59,47 +59,22 @@ const FIRMWARES = [
 ];
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
- * 积水仪 FAFA…ADAD：字节17–24 为 8 字节命令开关位（bit=1 执行）；字节25 起为内容载荷（按 payloadOffset 填参）。
+ * 积水仪 FAFA…ADAD：字节17–24 为命令开关（bitIndex 1-based，bit=1 执行；位 9 空缺）；
+ * payloadOffset 为内容区 1-based 绝对起始字节（内容从该字节起写入）。
+ * 字段对齐后端 kind=service：bitIndex / payloadOffset / hasParam / paramMin / paramMax + identifier·name·dataType·unit·required·access。
  * 真正下发走 AEP CreateCommand（透传 hex，dataType=2） */
 const COMMANDS = [
-  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParams: false, bitIndex: 0, payloadOffset: 0, fixedPayload: 'F0', enabled: true, desc: '开关位 bit0；载荷固定写 F0（或应答 0F）',
-    params: [] },
-  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParams: false, bitIndex: 1, payloadOffset: 1, fixedPayload: '', enabled: true, desc: '开关位 bit1；无可变参',
-    params: [] },
-  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParams: false, bitIndex: 2, payloadOffset: 2, fixedPayload: '', enabled: true, desc: '开关位 bit2；无可变参',
-    params: [] },
-  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParams: true, bitIndex: 3, payloadOffset: 3, fixedPayload: '', enabled: true, desc: '开关位 bit3；载荷写安装高度（mm）',
-    params: [
-      { name: 'height', dataType: 'number', unit: 'mm', required: true, min: '0', max: '10000', defaultVal: '300', desc: '探头安装高度' }
-    ] },
-  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParams: true, bitIndex: 4, payloadOffset: 5, fixedPayload: '', enabled: true, desc: '开关位 bit4；载荷写 unix 时间',
-    params: [
-      { name: 'timestamp', dataType: 'number', unit: 's', required: true, min: '', max: '', defaultVal: '', desc: 'Unix 秒（UTC）' }
-    ] },
-  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParams: true, bitIndex: 5, payloadOffset: 9, fixedPayload: '', enabled: true, desc: '开关位 bit5；工作频率档位',
-    params: [
-      { name: 'freq', dataType: 'enum', unit: '-', required: true, min: '', max: '', defaultVal: '1', desc: '档位：1=低频 / 2=中频 / 3=高频' }
-    ] },
-  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParams: true, bitIndex: 6, payloadOffset: 11, fixedPayload: '', enabled: true, desc: '开关位 bit6；失败重发时间窗',
-    params: [
-      { name: 'interval', dataType: 'number', unit: 's', required: true, min: '1', max: '3600', defaultVal: '60', desc: '重发区间秒数' }
-    ] },
-  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParams: true, bitIndex: 7, payloadOffset: 13, fixedPayload: '', enabled: true, desc: '开关位 bit7；采样周期',
-    params: [
-      { name: 'period', dataType: 'number', unit: 's', required: true, min: '1', max: '86400', defaultVal: '60', desc: '采样间隔秒' }
-    ] },
-  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParams: true, bitIndex: 8, payloadOffset: 15, fixedPayload: '', enabled: true, desc: '开关位 bit8；上凸判定高度',
-    params: [
-      { name: 'height', dataType: 'number', unit: 'mm', required: true, min: '0', max: '5000', defaultVal: '50', desc: '上凸高度阈值' }
-    ] },
-  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParams: true, bitIndex: 9, payloadOffset: 17, fixedPayload: '', enabled: true, desc: '开关位 bit9；下沉判定高度',
-    params: [
-      { name: 'height', dataType: 'number', unit: 'mm', required: true, min: '0', max: '5000', defaultVal: '50', desc: '下沉高度阈值' }
-    ] },
-  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParams: true, bitIndex: 10, payloadOffset: 19, fixedPayload: '', enabled: true, desc: '开关位 bit10；上报/发送周期',
-    params: [
-      { name: 'period', dataType: 'number', unit: 's', required: true, min: '10', max: '86400', defaultVal: '300', desc: '发送间隔秒' }
-    ] },
+  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParam: 0, bitIndex: 1, payloadOffset: 25, dataType: 'bool', unit: 'F0/0F', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 1；内容起始字节 25（F0 重启 / 0F 不重启）' },
+  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParam: 0, bitIndex: 2, payloadOffset: 26, dataType: 'bool', unit: 'F0/0F', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 2；内容起始字节 26（F0/0F）' },
+  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParam: 0, bitIndex: 3, payloadOffset: 27, dataType: 'bool', unit: 'F0/0F', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 3；内容起始字节 27（F0/0F）' },
+  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParam: 1, bitIndex: 4, payloadOffset: 28, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: 0, paramMax: 10000, enabled: true, desc: '命令位 4；内容起始字节 28（2 字节 mm）' },
+  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParam: 1, bitIndex: 5, payloadOffset: 30, dataType: 'int', unit: 's', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 5；内容起始字节 30（4 字节 unix 秒）' },
+  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParam: 1, bitIndex: 6, payloadOffset: 34, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 6；内容起始字节 34（高低切换阈值 4 字节）' },
+  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParam: 1, bitIndex: 7, payloadOffset: 38, dataType: 'int', unit: '-', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 7；内容起始字节 38（起止包序列号 6 字节）' },
+  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParam: 1, bitIndex: 8, payloadOffset: 44, dataType: 'int', unit: 'min', required: true, access: '读写', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 8；内容起始字节 44（长/中/短采样间隔）' },
+  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParam: 1, bitIndex: 10, payloadOffset: 50, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 10（位 9 空缺）；内容起始字节 50（2 字节 mm）' },
+  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParam: 1, bitIndex: 11, payloadOffset: 52, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 11；内容起始字节 52（2 字节 mm）' },
+  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParam: 1, bitIndex: 12, payloadOffset: 54, dataType: 'int', unit: 'min', required: true, access: '读写', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 12；内容起始字节 54（长/中/短发送间隔）' },
 ];
 
 /* ========== 设备台账 Mock ========== */
@@ -256,11 +231,14 @@ createApp({
     const showCommandModal = ref(false);
     const commandModalMode = ref('create');
     const commandForm = reactive({
-      id: '', categoryId: '', name: '', code: '', desc: '', hasParams: false,
-      bitIndex: 0, payloadOffset: 0, fixedPayload: '', enabled: true, params: []
+      id: '', categoryId: '', name: '', code: '', desc: '',
+      hasParam: 0, bitIndex: 1, payloadOffset: 25,
+      dataType: 'bool', unit: '', required: true, access: '读写',
+      paramMin: null, paramMax: null, enabled: true
     });
-    const commandList = ref(COMMANDS.map(c => ({ ...c, params: (c.params || []).map(p => ({ ...p })) })));
-    const COMMAND_PARAM_TYPES = ['string', 'number', 'enum', 'bool'];
+    const commandList = ref(COMMANDS.map(c => ({ ...c })));
+    const COMMAND_DATA_TYPES = ['bool', 'int', 'float', 'string', 'enum'];
+    const COMMAND_ACCESS_OPTS = ['只读', '读写'];
 
     const showDeleteConfirm = ref(false);
     const deleteTarget = reactive({ type: '', id: '', name: '' });
@@ -646,87 +624,86 @@ createApp({
       const idx = categoryRules.value.findIndex(x => x.id === r.id);
       if (idx >= 0) categoryRules.value.splice(idx, 1, { ...r, enabled: !r.enabled });
     }
-    function emptyCommandParam() {
-      return { name: '', dataType: 'number', unit: '', required: true, min: '', max: '', defaultVal: '', desc: '' };
-    }
     function commandParamsSummary(cmd) {
-      if (!cmd.hasParams) {
-        return cmd.fixedPayload ? ('固定 ' + cmd.fixedPayload) : '无参';
+      const hp = Number(cmd.hasParam);
+      const dt = cmd.dataType || '';
+      const u = cmd.unit && cmd.unit !== '-' ? cmd.unit : '';
+      if (!hp) {
+        return (dt ? dt : '无参') + (u ? ' · ' + u : '');
       }
-      const ps = cmd.params || [];
-      if (!ps.length) return '带参（未配）';
-      return ps.map(p => {
-        const dt = p.dataType || p.type || '';
-        const u = p.unit && p.unit !== '-' ? p.unit : '';
-        const req = p.required ? '必填' : '选填';
-        const range = (p.min !== '' && p.min != null) || (p.max !== '' && p.max != null)
-          ? '[' + (p.min !== '' && p.min != null ? p.min : '') + '~' + (p.max !== '' && p.max != null ? p.max : '') + ']'
-          : '';
-        return p.name + (dt ? ':' + dt : '') + (u ? '/' + u : '') + '/' + req + (range ? '/' + range : '');
-      }).join(', ');
+      const req = cmd.required ? '必填' : '选填';
+      const hasMin = cmd.paramMin !== '' && cmd.paramMin != null;
+      const hasMax = cmd.paramMax !== '' && cmd.paramMax != null;
+      const range = (hasMin || hasMax)
+        ? '[' + (hasMin ? cmd.paramMin : '') + '~' + (hasMax ? cmd.paramMax : '') + ']'
+        : '';
+      return (dt || '带参') + (u ? '/' + u : '') + '/' + req + (range ? '/' + range : '');
     }
-    function onCommandHasParamsChange() {
-      if (commandForm.hasParams) {
-        if (!commandForm.params.length) commandForm.params.push(emptyCommandParam());
-        if (commandForm.payloadOffset === null || commandForm.payloadOffset === '') commandForm.payloadOffset = 0;
-      } else {
-        commandForm.params.splice(0, commandForm.params.length);
+    function onCommandHasParamChange() {
+      const hp = Number(commandForm.hasParam);
+      commandForm.hasParam = hp ? 1 : 0;
+      if (!hp) {
+        commandForm.paramMin = null;
+        commandForm.paramMax = null;
+        if (!commandForm.dataType) commandForm.dataType = 'bool';
+        if (!commandForm.unit) commandForm.unit = 'F0/0F';
       }
     }
     function openCreateCommand() {
       commandModalMode.value = 'create';
       Object.assign(commandForm, {
         id: '', categoryId: currentCategory.value.id, name: '', code: '', desc: '',
-        hasParams: false, bitIndex: 0, payloadOffset: 0, fixedPayload: '', enabled: true, params: []
+        hasParam: 0, bitIndex: 1, payloadOffset: 25,
+        dataType: 'bool', unit: 'F0/0F', required: true, access: '读写',
+        paramMin: null, paramMax: null, enabled: true
       });
       showCommandModal.value = true;
     }
     function openEditCommand(c) {
       commandModalMode.value = 'edit';
+      const hp = c.hasParam != null ? Number(c.hasParam) : (c.hasParams ? 1 : 0);
       Object.assign(commandForm, {
-        ...c,
-        hasParams: !!c.hasParams,
-        bitIndex: c.bitIndex != null ? c.bitIndex : (c.cmdBit != null ? c.cmdBit : 0),
-        payloadOffset: c.payloadOffset == null ? 0 : c.payloadOffset,
-        fixedPayload: c.fixedPayload || '',
-        params: (c.hasParams && c.params && c.params.length)
-          ? c.params.map(p => ({ ...p, dataType: p.dataType || p.type || 'number' }))
-          : []
+        id: c.id,
+        categoryId: c.categoryId,
+        name: c.name || '',
+        code: c.code || '',
+        desc: c.desc || '',
+        hasParam: hp ? 1 : 0,
+        bitIndex: c.bitIndex != null ? c.bitIndex : (c.cmdBit != null ? Number(c.cmdBit) + 1 : 1),
+        payloadOffset: c.payloadOffset == null ? 25 : c.payloadOffset,
+        dataType: c.dataType || (hp ? 'int' : 'bool'),
+        unit: c.unit || (hp ? '' : 'F0/0F'),
+        required: c.required != null ? !!c.required : true,
+        access: c.access || '读写',
+        paramMin: c.paramMin != null ? c.paramMin : null,
+        paramMax: c.paramMax != null ? c.paramMax : null,
+        enabled: c.enabled != null ? !!c.enabled : true
       });
       showCommandModal.value = true;
     }
-    function addCommandParam() {
-      if (!commandForm.hasParams) {
-        commandForm.hasParams = true;
-        if (commandForm.payloadOffset === null || commandForm.payloadOffset === '') commandForm.payloadOffset = 0;
-      }
-      commandForm.params.push(emptyCommandParam());
-    }
-    function removeCommandParam(idx) {
-      commandForm.params.splice(idx, 1);
-    }
     function saveCommand() {
-      const hasParams = !!commandForm.hasParams;
+      const hasParam = Number(commandForm.hasParam) ? 1 : 0;
+      const toNumOrNull = (v) => {
+        if (v === '' || v === null || v === undefined) return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
       const payload = {
         id: commandForm.id,
         categoryId: currentCategory.value.id,
         code: (commandForm.code || '').trim(),
         name: (commandForm.name || '').trim(),
         desc: commandForm.desc || '',
-        hasParams,
+        hasParam,
         bitIndex: Number(commandForm.bitIndex),
-        payloadOffset: commandForm.payloadOffset === '' || commandForm.payloadOffset == null ? 0 : Number(commandForm.payloadOffset),
-        fixedPayload: hasParams ? '' : ((commandForm.fixedPayload || '').trim()),
-        enabled: !!commandForm.enabled,
-        params: hasParams
-          ? (commandForm.params || [])
-              .filter(p => (p.name || '').trim())
-              .map(p => ({
-                ...p,
-                name: (p.name || '').trim(),
-                dataType: p.dataType || p.type || 'number'
-              }))
-          : []
+        payloadOffset: commandForm.payloadOffset === '' || commandForm.payloadOffset == null ? 25 : Number(commandForm.payloadOffset),
+        dataType: commandForm.dataType || (hasParam ? 'int' : 'bool'),
+        unit: (commandForm.unit || '').trim(),
+        required: !!commandForm.required,
+        access: commandForm.access || '读写',
+        paramMin: hasParam ? toNumOrNull(commandForm.paramMin) : null,
+        paramMax: hasParam ? toNumOrNull(commandForm.paramMax) : null,
+        enabled: !!commandForm.enabled
       };
       if (commandModalMode.value === 'create') {
         payload.id = 'CMD' + Date.now().toString().slice(-6);
@@ -1055,7 +1032,7 @@ createApp({
         rules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         categoryRules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         commands: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; },
-        editCommand: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; openEditCommand(commandList.value.find(c => c.code === 'installHeightMm') || commandList.value.find(c => c.hasParams) || commandList.value[0]); },
+        editCommand: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; openEditCommand(commandList.value.find(c => c.code === 'installHeightMm') || commandList.value.find(c => Number(c.hasParam) === 1) || commandList.value[0]); },
         editPoint: () => { openDetail(CATEGORIES[0]); openEditPoint(POINTS[0]); },
         editInstall: () => { openDetail(CATEGORIES[0]); openEditInstall(INSTALL_FIELDS[0]); },
         editFirmware: () => { openDetail(CATEGORIES[0]); openCreateFirmware(); },
@@ -1101,14 +1078,14 @@ createApp({
       filteredCategories, industries, breadcrumb, topbarHint, currentCategory,
       CATEGORIES, PROPERTIES, EVENTS, POINTS, INSTALL_FIELDS, FIRMWARES, COMMANDS,
       CATEGORY_RULES, categoryRules, currentCategoryRules,
-      commandList, currentCategoryCommands, COMMAND_PARAM_TYPES,
-      onCommandHasParamsChange,
+      commandList, currentCategoryCommands, COMMAND_DATA_TYPES, COMMAND_ACCESS_OPTS,
+      onCommandHasParamChange,
       showCategoryModal, categoryModalMode, categoryForm,
       showRuleModal, ruleModalMode, ruleForm,
       openCreateRule, openEditRule, saveRule, toggleRuleEnabled,
       showCommandModal, commandModalMode, commandForm,
       openCreateCommand, openEditCommand, saveCommand, toggleCommandEnabled,
-      addCommandParam, removeCommandParam, commandParamsSummary,
+      commandParamsSummary,
       showDeleteConfirm, deleteTarget,
       pointForm, pointFormMode, installForm, installFormMode, firmwareForm, firmwareFormMode,
       goList, openDetail, openCreateCategory, openEditCategory, saveCategory,
@@ -1382,9 +1359,9 @@ createApp({
               <tbody><tr v-for="f in FIRMWARES" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
           </div>
           <div v-else-if="detailTab==='commands'">
-            <div class="banner-muted">命令位只负责置位；内容从字节25起按 payloadOffset 填参；组包时选中指令自动置对应 bit。</div>
+            <div class="banner-muted">字节17–24 为命令开关（bitIndex 1-based，bit=1 执行；积水仪位 9 空缺）；内容从 payloadOffset（1-based 内容起始字节）起写入。组包时选中指令自动置对应位。</div>
             <div class="toolbar">
-              <span style="color:#666;font-size:13px">配置本品类「能下什么」：开关位 vs 内容载荷。本 Tab 只配定义，不是实时点发。</span>
+              <span style="color:#666;font-size:13px">配置本品类「能下什么」：命令位 vs 内容载荷。本 Tab 只配定义，不是实时点发。</span>
               <div class="spacer"></div>
               <button class="btn btn-primary btn-sm" @click="openCreateCommand">＋ 新建指令</button>
             </div>
@@ -1394,8 +1371,8 @@ createApp({
                   <tr>
                     <th rowspan="2">标识</th>
                     <th rowspan="2">名称</th>
-                    <th colspan="2" class="th-group th-group-bit">命令位<span class="th-sub">字节17–24 开关</span></th>
-                    <th colspan="3" class="th-group th-group-payload">内容载荷<span class="th-sub">自字节25</span></th>
+                    <th colspan="2" class="th-group th-group-bit">命令位<span class="th-sub">1-based · 字节17–24</span></th>
+                    <th colspan="4" class="th-group th-group-payload">内容载荷<span class="th-sub">1-based 起始字节</span></th>
                     <th rowspan="2">状态</th>
                     <th rowspan="2">操作</th>
                   </tr>
@@ -1403,8 +1380,9 @@ createApp({
                     <th class="th-subcol">bitIndex</th>
                     <th class="th-subcol">说明</th>
                     <th class="th-subcol">payloadOffset</th>
-                    <th class="th-subcol">是否带参</th>
-                    <th class="th-subcol">参数结构摘要</th>
+                    <th class="th-subcol">hasParam</th>
+                    <th class="th-subcol">dataType / unit</th>
+                    <th class="th-subcol">paramMin～Max</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1412,10 +1390,14 @@ createApp({
                     <td><code>{{ c.code }}</code></td>
                     <td>{{ c.name }}</td>
                     <td><code>{{ c.bitIndex }}</code></td>
-                    <td class="muted-cell">字节17–24 开关</td>
+                    <td class="muted-cell">{{ c.desc || '命令位' }}</td>
                     <td><code>{{ c.payloadOffset != null ? c.payloadOffset : '—' }}</code></td>
-                    <td><span class="tag" :class="c.hasParams?'tag-blue':'tag-gray'">{{ c.hasParams?'带参':'无参' }}</span></td>
-                    <td style="max-width:280px;white-space:normal;font-size:12px">{{ commandParamsSummary(c) }}</td>
+                    <td><span class="tag" :class="Number(c.hasParam)?'tag-blue':'tag-gray'">{{ Number(c.hasParam) ? '1 带参' : '0 无参' }}</span></td>
+                    <td style="font-size:12px"><code>{{ c.dataType || '—' }}</code>{{ c.unit ? ' / ' + c.unit : '' }}</td>
+                    <td style="font-size:12px">
+                      <template v-if="Number(c.hasParam)">{{ c.paramMin != null ? c.paramMin : '—' }}～{{ c.paramMax != null ? c.paramMax : '—' }}</template>
+                      <template v-else>—</template>
+                    </td>
                     <td><span class="tag" :class="c.enabled?'tag-green':'tag-gray'">{{ c.enabled?'启用':'停用' }}</span></td>
                     <td class="actions">
                       <button class="btn-link btn" @click="openEditCommand(c)">编辑</button>
@@ -1424,12 +1406,12 @@ createApp({
                     </td>
                   </tr>
                   <tr v-if="!currentCategoryCommands.length">
-                    <td colspan="9"><div class="empty-hint">暂无指令；点击「新建指令」配置本品类可下发命令</div></td>
+                    <td colspan="10"><div class="empty-hint">暂无指令；点击「新建指令」配置本品类可下发命令</div></td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div class="table-note">积水仪协议示意 FAFA…ADAD：字节17–24 为命令开关（bit=1 执行）；字节25 起按各指令 payloadOffset 写入内容（如 reboot→F0、高度 mm、unix 对时）。真正下发走 AEP CreateCommand（透传 hex，dataType=2）；应答另解析入库。</div>
+            <div class="table-note">积水仪协议示意 FAFA…ADAD：命令位 1–8、10–12（位 9 空）；内容起始字节如 reboot=25、factoryReset=26、clearData=27、installHeightMm=28、syncTime=30、switchThreshold=34、resendRange=38、sampleInterval=44、raiseHeightMm=50、sinkHeightMm=52、sendInterval=54。真正下发走 AEP CreateCommand（透传 hex，dataType=2）；应答另解析入库。</div>
           </div>
           <div v-else-if="detailTab==='rules'">
             <div class="toolbar">
@@ -2320,19 +2302,19 @@ createApp({
       </div>
     </div>
 
-    <!-- 物模型：指令配置模态 — 命令开关 vs 命令内容 -->
+    <!-- 物模型：指令配置模态 — 对齐后端 kind=service -->
     <div v-if="showCommandModal" class="overlay" @click.self="showCommandModal=false">
       <div class="modal modal-lg">
         <div class="modal-header"><span>{{ commandModalMode==='create'?'新建指令':'编辑指令' }}</span><button class="close-x" @click="showCommandModal=false">×</button></div>
         <div class="modal-body">
-          <div class="banner-muted" style="margin-bottom:12px">命令位只负责置位；内容从字节25起按 payloadOffset 填参；组包时选中指令自动置对应 bit。真正下发走 AEP CreateCommand（透传 hex，dataType=2）。</div>
+          <div class="banner-muted" style="margin-bottom:12px">字节17–24 开关（bitIndex 1-based）；内容从 payloadOffset（1-based 内容起始字节）起写入。组包时选中指令自动置对应位。真正下发走 AEP CreateCommand（透传 hex，dataType=2）。</div>
 
           <div class="form-section-title">命令开关</div>
-          <div class="hint" style="margin-top:-6px;margin-bottom:10px">对应协议字节17–24：bit=1 表示该指令执行（仅开关，不带内容）。</div>
+          <div class="hint" style="margin-top:-6px;margin-bottom:10px">对应协议字节17–24：命令位 1-based；bit=1 表示该指令执行（仅开关）。积水仪位 9 空缺。</div>
           <div class="form-row">
-            <div class="form-item"><label><span class="req">*</span>bitIndex</label>
-              <input class="input input-full" v-model.number="commandForm.bitIndex" type="number" min="0" max="10" placeholder="0～10" />
-              <div class="hint">0～10，对应 8 字节开关区中的位</div>
+            <div class="form-item"><label><span class="req">*</span>bitIndex（1-based 命令位）</label>
+              <input class="input input-full" v-model.number="commandForm.bitIndex" type="number" min="1" max="64" placeholder="1～64" />
+              <div class="hint">1-based 命令位；积水仪常用 1–8、10–12</div>
             </div>
             <div class="form-item"><label><span class="req">*</span>标识</label><input class="input input-full" v-model="commandForm.code" placeholder="如 reboot、installHeightMm" /></div>
             <div class="form-item"><label><span class="req">*</span>名称</label><input class="input input-full" v-model="commandForm.name" placeholder="如 重启、安装高度" /></div>
@@ -2344,55 +2326,50 @@ createApp({
                 <option :value="false">停用</option>
               </select>
             </div>
-            <div class="form-item"><label>说明</label><input class="input input-full" v-model="commandForm.desc" placeholder="开关位用途说明" /></div>
+            <div class="form-item"><label>access</label>
+              <select class="select input-full" v-model="commandForm.access">
+                <option v-for="a in COMMAND_ACCESS_OPTS" :key="a" :value="a">{{ a }}</option>
+              </select>
+            </div>
+            <div class="form-item"><label>说明</label><input class="input input-full" v-model="commandForm.desc" placeholder="命令位用途说明" /></div>
           </div>
 
           <div class="form-section-title">命令内容</div>
-          <div class="hint" style="margin-top:-6px;margin-bottom:10px">自字节25起按 payloadOffset 写入；无可变参时可填固定载荷提示（如 reboot → F0）。</div>
+          <div class="hint" style="margin-top:-6px;margin-bottom:10px">payloadOffset 为 1-based 内容起始字节（绝对位置，非相对 25 的偏移）。无参指令如 reboot：dataType=bool、unit=F0/0F。</div>
           <div class="form-row">
-            <div class="form-item"><label><span class="req">*</span>是否带参</label>
-              <select class="select input-full" v-model="commandForm.hasParams" @change="onCommandHasParamsChange">
-                <option :value="false">无参</option>
-                <option :value="true">带参</option>
+            <div class="form-item"><label><span class="req">*</span>hasParam</label>
+              <select class="select input-full" v-model.number="commandForm.hasParam" @change="onCommandHasParamChange">
+                <option :value="0">0 无参</option>
+                <option :value="1">1 带参</option>
               </select>
             </div>
-            <div class="form-item"><label><span class="req">*</span>payloadOffset</label>
-              <input class="input input-full" v-model.number="commandForm.payloadOffset" type="number" min="0" placeholder="相对字节25的偏移" />
-              <div class="hint">内容区起点为字节25；本组包偏移填入此处</div>
+            <div class="form-item"><label><span class="req">*</span>payloadOffset（1-based 内容起始字节）</label>
+              <input class="input input-full" v-model.number="commandForm.payloadOffset" type="number" min="1" placeholder="如 25" />
+              <div class="hint">绝对起始字节；reboot 示例为 25</div>
             </div>
-            <div class="form-item" v-if="!commandForm.hasParams"><label>固定载荷提示</label>
-              <input class="input input-full" v-model="commandForm.fixedPayload" placeholder="如 F0（reboot）" />
-              <div class="hint">无参指令的固定内容示意，可选</div>
+            <div class="form-item"><label><span class="req">*</span>dataType</label>
+              <select class="select input-full" v-model="commandForm.dataType">
+                <option v-for="t in COMMAND_DATA_TYPES" :key="t" :value="t">{{ t }}</option>
+              </select>
             </div>
           </div>
-          <template v-if="commandForm.hasParams">
-            <div class="form-section-title" style="display:flex;align-items:center;justify-content:space-between;border-bottom:none;padding-bottom:0;margin-top:4px">
-              <span style="font-size:13px;font-weight:600">参数字段</span>
-              <button type="button" class="btn btn-sm" @click="addCommandParam">＋ 添加参数</button>
+          <div class="form-row">
+            <div class="form-item"><label>unit</label>
+              <input class="input input-full" v-model="commandForm.unit" placeholder="如 mm / s / F0/0F" />
             </div>
-            <div class="param-list">
-              <div class="param-row param-row-cmd param-row-head">
-                <span>参数名</span><span>dataType</span><span>单位</span><span>必填</span><span>下限</span><span>上限</span><span>默认值</span><span>说明</span><span></span>
-              </div>
-              <div class="param-row param-row-cmd" v-for="(p, idx) in commandForm.params" :key="idx">
-                <input class="input" v-model="p.name" placeholder="name" />
-                <select class="select" v-model="p.dataType">
-                  <option v-for="t in COMMAND_PARAM_TYPES" :key="t" :value="t">{{ t }}</option>
-                </select>
-                <input class="input" v-model="p.unit" placeholder="mm / s" />
-                <select class="select" v-model="p.required">
-                  <option :value="true">是</option>
-                  <option :value="false">否</option>
-                </select>
-                <input class="input" v-model="p.min" placeholder="min" />
-                <input class="input" v-model="p.max" placeholder="max" />
-                <input class="input" v-model="p.defaultVal" placeholder="默认" />
-                <input class="input" v-model="p.desc" placeholder="说明" />
-                <button type="button" class="btn-link btn danger" @click="removeCommandParam(idx)">删除</button>
-              </div>
-              <div v-if="!commandForm.params.length" class="empty-hint" style="padding:8px">尚未添加参数字段</div>
+            <div class="form-item"><label>required</label>
+              <select class="select input-full" v-model="commandForm.required">
+                <option :value="true">是</option>
+                <option :value="false">否</option>
+              </select>
             </div>
-          </template>
+            <div class="form-item" v-if="Number(commandForm.hasParam)"><label>paramMin</label>
+              <input class="input input-full" v-model.number="commandForm.paramMin" type="number" placeholder="可空" />
+            </div>
+            <div class="form-item" v-if="Number(commandForm.hasParam)"><label>paramMax</label>
+              <input class="input input-full" v-model.number="commandForm.paramMax" type="number" placeholder="可空" />
+            </div>
+          </div>
         </div>
         <div class="modal-footer"><button class="btn" @click="showCommandModal=false">取消</button><button class="btn btn-primary" @click="saveCommand">确定</button></div>
       </div>
