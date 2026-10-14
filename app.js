@@ -64,17 +64,17 @@ const FIRMWARES = [
  * 字段对齐后端 kind=service：bitIndex / payloadOffset / hasParam / paramMin / paramMax + identifier·name·dataType·unit·required·access。
  * 真正下发走 AEP CreateCommand（透传 hex，dataType=2） */
 const COMMANDS = [
-  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParam: 0, bitIndex: 1, payloadOffset: 25, dataType: 'bool', unit: 'F0/0F', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 1；内容起始字节 25（F0 重启 / 0F 不重启）' },
-  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParam: 0, bitIndex: 2, payloadOffset: 26, dataType: 'bool', unit: 'F0/0F', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 2；内容起始字节 26（F0/0F）' },
-  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParam: 0, bitIndex: 3, payloadOffset: 27, dataType: 'bool', unit: 'F0/0F', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 3；内容起始字节 27（F0/0F）' },
-  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParam: 1, bitIndex: 4, payloadOffset: 28, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: 0, paramMax: 10000, enabled: true, desc: '命令位 4；内容起始字节 28（2 字节 mm）' },
-  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParam: 1, bitIndex: 5, payloadOffset: 30, dataType: 'int', unit: 's', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 5；内容起始字节 30（4 字节 unix 秒）' },
-  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParam: 1, bitIndex: 6, payloadOffset: 34, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 6；内容起始字节 34（高低切换阈值 4 字节）' },
-  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParam: 1, bitIndex: 7, payloadOffset: 38, dataType: 'int', unit: '-', required: true, access: '读写', paramMin: null, paramMax: null, enabled: true, desc: '命令位 7；内容起始字节 38（起止包序列号 6 字节）' },
-  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParam: 1, bitIndex: 8, payloadOffset: 44, dataType: 'int', unit: 'min', required: true, access: '读写', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 8；内容起始字节 44（长/中/短采样间隔）' },
-  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParam: 1, bitIndex: 10, payloadOffset: 50, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 10（位 9 空缺）；内容起始字节 50（2 字节 mm）' },
-  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParam: 1, bitIndex: 11, payloadOffset: 52, dataType: 'int', unit: 'mm', required: true, access: '读写', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 11；内容起始字节 52（2 字节 mm）' },
-  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParam: 1, bitIndex: 12, payloadOffset: 54, dataType: 'int', unit: 'min', required: true, access: '读写', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 12；内容起始字节 54（长/中/短发送间隔）' },
+  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParam: 0, bitIndex: 1, payloadOffset: 25, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 1；内容起始字节 25（F0 重启 / 0F 不重启）' },
+  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParam: 0, bitIndex: 2, payloadOffset: 26, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 2；内容起始字节 26（F0/0F）' },
+  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParam: 0, bitIndex: 3, payloadOffset: 27, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 3；内容起始字节 27（F0/0F）' },
+  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParam: 1, bitIndex: 4, payloadOffset: 28, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 10000, enabled: true, desc: '命令位 4；内容起始字节 28（2 字节 mm）' },
+  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParam: 1, bitIndex: 5, payloadOffset: 30, dataType: 'int', unit: 's', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 5；内容起始字节 30（4 字节 unix 秒）' },
+  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParam: 1, bitIndex: 6, payloadOffset: 34, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 6；内容起始字节 34（高低切换阈值 4 字节）' },
+  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParam: 1, bitIndex: 7, payloadOffset: 38, dataType: 'int', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 7；内容起始字节 38（起止包序列号 6 字节）' },
+  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParam: 1, bitIndex: 8, payloadOffset: 44, dataType: 'int', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 8；内容起始字节 44（长/中/短采样间隔）' },
+  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParam: 1, bitIndex: 10, payloadOffset: 50, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 10（位 9 空缺）；内容起始字节 50（2 字节 mm）' },
+  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParam: 1, bitIndex: 11, payloadOffset: 52, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 11；内容起始字节 52（2 字节 mm）' },
+  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParam: 1, bitIndex: 12, payloadOffset: 54, dataType: 'int', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 12；内容起始字节 54（长/中/短发送间隔）' },
 ];
 
 /* ========== 设备台账 Mock ========== */
@@ -233,12 +233,12 @@ createApp({
     const commandForm = reactive({
       id: '', categoryId: '', name: '', code: '', desc: '',
       hasParam: 0, bitIndex: 1, payloadOffset: 25,
-      dataType: 'bool', unit: '', required: true, access: '读写',
+      dataType: 'bool', unit: '', required: true, access: 'w',
       paramMin: null, paramMax: null, enabled: true
     });
     const commandList = ref(COMMANDS.map(c => ({ ...c })));
     const COMMAND_DATA_TYPES = ['bool', 'int', 'float', 'string', 'enum'];
-    const COMMAND_ACCESS_OPTS = ['只读', '读写'];
+    const COMMAND_ACCESS_OPTS = ['r', 'w'];
 
     const showDeleteConfirm = ref(false);
     const deleteTarget = reactive({ type: '', id: '', name: '' });
@@ -654,7 +654,7 @@ createApp({
       Object.assign(commandForm, {
         id: '', categoryId: currentCategory.value.id, name: '', code: '', desc: '',
         hasParam: 0, bitIndex: 1, payloadOffset: 25,
-        dataType: 'bool', unit: 'F0/0F', required: true, access: '读写',
+        dataType: 'bool', unit: 'F0/0F', required: true, access: 'w',
         paramMin: null, paramMax: null, enabled: true
       });
       showCommandModal.value = true;
@@ -674,7 +674,7 @@ createApp({
         dataType: c.dataType || (hp ? 'int' : 'bool'),
         unit: c.unit || (hp ? '' : 'F0/0F'),
         required: c.required != null ? !!c.required : true,
-        access: c.access || '读写',
+        access: c.access || 'w',
         paramMin: c.paramMin != null ? c.paramMin : null,
         paramMax: c.paramMax != null ? c.paramMax : null,
         enabled: c.enabled != null ? !!c.enabled : true
@@ -700,7 +700,7 @@ createApp({
         dataType: commandForm.dataType || (hasParam ? 'int' : 'bool'),
         unit: (commandForm.unit || '').trim(),
         required: !!commandForm.required,
-        access: commandForm.access || '读写',
+        access: commandForm.access || 'w',
         paramMin: hasParam ? toNumOrNull(commandForm.paramMin) : null,
         paramMax: hasParam ? toNumOrNull(commandForm.paramMax) : null,
         enabled: !!commandForm.enabled
@@ -2326,7 +2326,7 @@ createApp({
                 <option :value="false">停用</option>
               </select>
             </div>
-            <div class="form-item"><label>access</label>
+            <div class="form-item"><label>读写方向（r/w）</label>
               <select class="select input-full" v-model="commandForm.access">
                 <option v-for="a in COMMAND_ACCESS_OPTS" :key="a" :value="a">{{ a }}</option>
               </select>
