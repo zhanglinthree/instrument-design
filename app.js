@@ -2,7 +2,8 @@ const { createApp, ref, computed, reactive, watch, nextTick } = Vue;
 
 /* ========== 物模型 Mock ========== */
 const CATEGORIES = [
-  { id: 'C001', name: '液位监测井', code: 'level_well', industry: '市政排水', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用', ruleCount: 3 },
+  { id: 'C001', name: '积水仪地埋', code: 'flood_buried', industry: '市政排水', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用', ruleCount: 3 },
+  { id: 'C006', name: '积水仪侧壁', code: 'flood_sidewall', industry: '市政排水', deviceCount: 64, modelVersion: 'v1.0.0', updatedAt: '2026-10-08 10:15', status: '启用', ruleCount: 1 },
   { id: 'C002', name: '水质监测站', code: 'water_quality', industry: '环保监测', deviceCount: 56, modelVersion: 'v2.0.1', updatedAt: '2026-09-26 09:10', status: '启用', ruleCount: 2 },
   { id: 'C003', name: '管网压力表', code: 'pipe_pressure', industry: '供水', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿', ruleCount: 2 },
   { id: 'C004', name: '泵站机组', code: 'pump_unit', industry: '市政排水', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用', ruleCount: 2 },
@@ -11,9 +12,10 @@ const CATEGORIES = [
 
 /* 归属规则：通用规则默认匹配；特殊处理规则优先级更高。AEP 侧已完成解析，本侧只做品类自动挂靠。 */
 const CATEGORY_RULES = [
-  { id: 'R101', categoryId: 'C001', name: '液位井 · 标准产品通用匹配', type: '通用', matchAepProduct: 'AEP-LW-1001', matchProtocol: 'MQTT / level-proto-v2', priority: 100, enabled: true, note: '默认：AEP 解析后按产品 ID 挂靠本品类' },
+  { id: 'R101', categoryId: 'C001', name: '积水仪地埋 · 标准产品通用匹配', type: '通用', matchAepProduct: 'AEP-LW-1001', matchProtocol: 'MQTT / level-proto-v2', priority: 100, enabled: true, note: '默认：AEP 解析后按产品 ID 挂靠本品类' },
   { id: 'R102', categoryId: 'C001', name: '旧 CoAP 协议例外', type: '特殊', matchAepProduct: 'AEP-LW-1001', matchProtocol: 'CoAP / legacy-level', priority: 10, enabled: true, note: '特殊协议优先于通用规则' },
-  { id: 'R103', categoryId: 'C001', name: '双探头定制型号', type: '特殊', matchAepProduct: 'AEP-LW-1001-D', matchProtocol: 'MQTT / dual-probe', priority: 20, enabled: true, note: '双探头设备强制挂靠液位井' },
+  { id: 'R103', categoryId: 'C001', name: '双探头定制型号', type: '特殊', matchAepProduct: 'AEP-LW-1001-D', matchProtocol: 'MQTT / dual-probe', priority: 20, enabled: true, note: '双探头设备强制挂靠积水仪地埋' },
+  { id: 'R601', categoryId: 'C006', name: '积水仪侧壁 · 标准产品通用匹配', type: '通用', matchAepProduct: 'AEP-FS-6001', matchProtocol: 'MQTT / flood-sidewall-v1', priority: 100, enabled: true, note: '默认：AEP 解析后按产品 ID 挂靠积水仪侧壁' },
   { id: 'R201', categoryId: 'C002', name: '水质站通用匹配', type: '通用', matchAepProduct: 'AEP-WQ-2003', matchProtocol: 'MQTT / wq-proto-v1', priority: 100, enabled: true, note: '默认匹配水质 AEP 产品' },
   { id: 'R202', categoryId: 'C002', name: '临时测试产品例外', type: '特殊', matchAepProduct: 'AEP-WQ-TEST', matchProtocol: '任意', priority: 5, enabled: false, note: '已停用：测试产品不再自动归属' },
   { id: 'R301', categoryId: 'C003', name: '管网压力通用匹配', type: '通用', matchAepProduct: 'AEP-PP-4001', matchProtocol: 'MQTT / pressure-v1', priority: 100, enabled: true, note: '草稿品类规则，启用后生效' },
@@ -87,18 +89,20 @@ const PROJECTS = [
 ];
 
 const DEVICES = [
-  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153576, lat: 30.287459, address: '杭州市上城区东湖路与环城东路交叉口东南侧检查井', installDate: '2026-04-12', installer: '张伟', masterId: '', masterSn: '', slaves: ['D002'], photos: ['现场全景', '井内安装', '铭牌特写'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.3', well_no: 'JW-2026-001', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
-  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10002', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153610, lat: 30.287480, address: '杭州市上城区东湖路检查井（从机）', installDate: '2026-04-12', installer: '张伟', masterId: 'D001', masterSn: 'MF20260901001', slaves: [], photos: ['从机安装'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.5', well_no: 'JW-2026-001-S', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
+  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153576, lat: 30.287459, address: '杭州市上城区东湖路与环城东路交叉口东南侧检查井', installDate: '2026-04-12', installer: '张伟', masterId: '', masterSn: '', slaves: ['D002'], photos: ['现场全景', '井内安装', '铭牌特写'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.3', well_no: 'JW-2026-001', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
+  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10002', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153610, lat: 30.287480, address: '杭州市上城区东湖路检查井（从机）', installDate: '2026-04-12', installer: '张伟', masterId: 'D001', masterSn: 'MF20260901001', slaves: [], photos: ['从机安装'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.5', well_no: 'JW-2026-001-S', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
   { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', lifecycle: '离线', aepDeviceId: 'AEP-DEV-20011', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.148220, lat: 30.265110, address: '南湖公园北门入湖口', installDate: '2026-06-01', installer: '刘洋', masterId: '', masterSn: '', slaves: [], photos: ['站房外观', '采水口'], installParams: { sample_depth: '1.2', station_code: 'NH-IN-01' }, updatedAt: '2026-09-28 09:11' },
   { id: 'D004', sn: 'MF20251108088', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', categoryMatch: 'manual', lifecycle: '停用', aepDeviceId: '', model: 'MF-PP-50', firmware: '0.9.0', lng: 120.165001, lat: 30.274880, address: '解放路 88 号门前阀门井', installDate: '2025-12-05', installer: '孙磊', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { pipe_diameter: '300', install_depth: '1.5' }, updatedAt: '2026-08-10 14:00' },
   { id: 'D005', sn: 'MF20260915030', name: '城东泵站1#机组', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C004', categoryName: '泵站机组', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-30120', model: 'MF-PU-300', firmware: '1.0.3', lng: 120.160100, lat: 30.291200, address: '城东排涝泵站泵房', installDate: '2026-05-20', installer: '赵强', masterId: '', masterSn: '', slaves: [], photos: ['机组铭牌', '控制柜'], installParams: { rated_power: '75', pump_no: '1#' }, updatedAt: '2026-09-30 08:05' },
   { id: 'D006', sn: 'MF20260120001', name: '气象局雨量-03', projectId: 'PJ05', projectName: '雨量站扩容', categoryId: 'C005', categoryName: '雨量计', categoryMatch: 'auto', lifecycle: '报废', aepDeviceId: 'AEP-DEV-RG-03', model: 'MF-RG-10', firmware: '1.0.0', lng: 120.172000, lat: 30.300000, address: '市气象局观测场', installDate: '2024-03-01', installer: '周伟', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { mount_height: '1.2' }, updatedAt: '2026-07-01 10:00' },
-  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '待接入', aepDeviceId: '', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.155800, lat: 30.282100, address: '望江路与秋涛路交叉口', installDate: '2026-09-28', installer: '张伟', masterId: '', masterSn: '', slaves: [], photos: ['待装现场'], installParams: { well_depth: '7.2', pipe_diameter: '800', install_height: '0.3', well_no: 'JW-2026-050', cover_type: '复合材料' }, updatedAt: '2026-09-28 16:40' },
+  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', lifecycle: '待接入', aepDeviceId: '', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.155800, lat: 30.282100, address: '望江路与秋涛路交叉口', installDate: '2026-09-28', installer: '张伟', masterId: '', masterSn: '', slaves: [], photos: ['待装现场'], installParams: { well_depth: '7.2', pipe_diameter: '800', install_height: '0.3', well_no: 'JW-2026-050', cover_type: '复合材料' }, updatedAt: '2026-09-28 16:40' },
   { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-20022', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.151100, lat: 30.258900, address: '南湖出水闸附近', installDate: '2026-06-08', installer: '刘洋', masterId: '', masterSn: '', slaves: [], photos: ['站房', '仪表盘'], installParams: { sample_depth: '0.8', station_code: 'NH-OUT-01' }, updatedAt: '2026-09-29 21:00' },
-  { id: 'D009', sn: 'MF20261001001', name: 'AEP自注册-液位-01', projectId: null, projectName: '未定义项目', categoryId: 'C001', categoryName: '液位监测井', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-91001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.158200, lat: 30.289100, address: '待现场补录', installDate: '2026-10-01', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-01 09:12' },
+  { id: 'D009', sn: 'MF20261001001', name: 'AEP自注册-液位-01', projectId: null, projectName: '未定义项目', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-91001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.158200, lat: 30.289100, address: '待现场补录', installDate: '2026-10-01', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-01 09:12' },
   { id: 'D010', sn: 'MF20261001088', name: 'AEP自注册-未知协议', projectId: null, projectName: '未定义项目', categoryId: '', categoryName: '待归属', categoryMatch: 'none', lifecycle: '待接入', aepDeviceId: 'AEP-DEV-91088', model: 'UNKNOWN', firmware: '', lng: null, lat: null, address: '', installDate: '', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-02 11:05' },
   { id: 'D011', sn: 'AEP-AUTO-7721', name: '临时水质终端-7721', projectId: null, projectName: '未定义项目', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-7721', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.149500, lat: 30.261000, address: '滨江临时点位', installDate: '2026-10-03', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: { sample_depth: '1.0' }, updatedAt: '2026-10-03 14:30' },
   { id: 'D012', sn: 'MF20261005012', name: 'AEP自注册-泵站探头', projectId: null, projectName: '未定义项目', categoryId: 'C004', categoryName: '泵站机组', categoryMatch: 'auto', lifecycle: '离线', aepDeviceId: 'AEP-DEV-91200', model: 'MF-PU-300', firmware: '1.0.3', lng: 120.161000, lat: 30.292000, address: '', installDate: '2026-10-05', installer: '', masterId: '', masterSn: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-05 08:40' },
+  { id: 'D013', sn: 'MF20261008013', name: '庆春路侧壁-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C006', categoryName: '积水仪侧壁', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-60013', model: 'MF-FS-60', firmware: '1.0.0', lng: 120.168200, lat: 30.278500, address: '庆春路与环城东路交叉口侧壁', installDate: '2026-08-18', installer: '张伟', masterId: '', masterSn: '', slaves: [], photos: ['侧壁安装'], installParams: { install_height: '0.2' }, updatedAt: '2026-10-08 11:20' },
+  { id: 'D014', sn: 'MF20261008014', name: '艮山路侧壁-02', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C006', categoryName: '积水仪侧壁', categoryMatch: 'auto', lifecycle: '在线', aepDeviceId: 'AEP-DEV-60014', model: 'MF-FS-60', firmware: '1.0.0', lng: 120.170100, lat: 30.281200, address: '艮山路立交侧壁', installDate: '2026-08-20', installer: '赵强', masterId: '', masterSn: '', slaves: [], photos: ['侧壁铭牌'], installParams: { install_height: '0.25' }, updatedAt: '2026-10-08 11:22' },
 ];
 
 const UNASSIGNED_PROJECT_ID = '__unassigned__';
@@ -147,13 +151,13 @@ const TRUST_LABEL = { T0: '不可信', T1: '低可信', T2: '中可信', T3: '�
 const ONLINE_TAG = { '在线': 'tag-green', '离线': 'tag-gray', '未知': 'tag-orange' };
 
 const MONITOR_ROWS = [
-  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', online: '在线', lastReportAt: '2026-09-30 16:42:18', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 96, warn: 1, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 1440, actual24h: 1438 },
-  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', online: '在线', lastReportAt: '2026-09-30 16:41:50', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 94, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 2, expected24h: 1440, actual24h: 1438 },
+  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:42:18', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 96, warn: 1, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 1440, actual24h: 1438 },
+  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:41:50', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 94, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 2, expected24h: 1440, actual24h: 1438 },
   { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '离线', lastReportAt: '2026-09-28 09:11:02', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T1', trustScore: 42, warn: 0, alarm: 2, fault: 1, cycleSec: 300, missed24h: 48, expected24h: 288, actual24h: 240 },
   { id: 'D005', sn: 'MF20260915030', name: '城东泵站1#机组', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C004', categoryName: '泵站机组', online: '在线', lastReportAt: '2026-09-30 16:40:05', firmware: '1.0.3', model: 'MF-PU-300', trustLevel: 'T2', trustScore: 78, warn: 2, alarm: 1, fault: 0, cycleSec: 120, missed24h: 6, expected24h: 720, actual24h: 714 },
   { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '在线', lastReportAt: '2026-09-30 16:35:40', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T3', trustScore: 91, warn: 0, alarm: 0, fault: 0, cycleSec: 300, missed24h: 1, expected24h: 288, actual24h: 287 },
   { id: 'D006', sn: 'MF20260120001', name: '气象局雨量-03', projectId: 'PJ05', projectName: '雨量站扩容', categoryId: 'C005', categoryName: '雨量计', online: '离线', lastReportAt: '2026-07-01 10:00:00', firmware: '1.0.0', model: 'MF-RG-10', trustLevel: 'T0', trustScore: 12, warn: 0, alarm: 0, fault: 1, cycleSec: 1800, missed24h: 48, expected24h: 48, actual24h: 0 },
-  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '液位监测井', online: '未知', lastReportAt: '—', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T0', trustScore: 0, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 0, actual24h: 0 },
+  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '未知', lastReportAt: '—', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T0', trustScore: 0, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 0, actual24h: 0 },
   { id: 'D004', sn: 'MF20251108088', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', online: '离线', lastReportAt: '2026-08-10 14:00:00', firmware: '0.9.0', model: 'MF-PP-50', trustLevel: 'T1', trustScore: 35, warn: 1, alarm: 0, fault: 0, cycleSec: 900, missed24h: 12, expected24h: 96, actual24h: 84 },
 ];
 
@@ -807,6 +811,21 @@ createApp({
 
     function openDevicesForProject(p) {
       deviceProjectFilter.value = p.id;
+      deviceCategoryFilter.value = '';
+      deviceLifecycleFilter.value = '';
+      deviceSnSearch.value = '';
+      selectedDeviceIds.value = [];
+      goDevices();
+    }
+
+    /** 品类侧双向挂靠：从设备数跳转台账设备列表并按品类筛选 */
+    function openDevicesForCategory(c) {
+      const id = typeof c === 'string' ? c : (c && c.id);
+      deviceCategoryFilter.value = id || '';
+      deviceProjectFilter.value = '';
+      deviceLifecycleFilter.value = '';
+      deviceSnSearch.value = '';
+      selectedDeviceIds.value = [];
       goDevices();
     }
 
@@ -1041,7 +1060,7 @@ createApp({
         projects: () => goProjects(),
         createProject: () => { goProjects(); openCreateProject(); },
         editProject: () => { goProjects(); openEditProject(PROJECTS[0]); },
-        devices: () => { deviceProjectFilter.value = ''; goDevices(); },
+        devices: () => { deviceProjectFilter.value = ''; deviceCategoryFilter.value = ''; goDevices(); },
         unassignedDevices: () => goUnassignedDevices(),
         deviceDetail: () => openDeviceDetail(deviceList.value[0]),
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
@@ -1099,7 +1118,7 @@ createApp({
       UNASSIGNED_PROJECT_ID, UNASSIGNED_PROJECT_NAME,
       projectSearch, projectStatusFilter, filteredProjects,
       showProjectModal, projectModalMode, projectForm,
-      openCreateProject, openEditProject, saveProject, openDevicesForProject,
+      openCreateProject, openEditProject, saveProject, openDevicesForProject, openDevicesForCategory,
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
       deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceSnSearch,
       filteredDevices, deviceStats, currentDevice, openDeviceDetail,
@@ -1283,13 +1302,16 @@ createApp({
                   <td><code>{{ c.code }}</code></td>
                   <td>{{ c.industry }}</td>
                   <td><span class="tag tag-blue">{{ categoryRules.filter(r => r.categoryId===c.id).length }} 条</span></td>
-                  <td>{{ c.deviceCount }}</td>
+                  <td>
+                    <a class="btn-link btn" style="padding:0" @click="openDevicesForCategory(c)" :title="'查看挂靠「'+c.name+'」的设备'">{{ c.deviceCount }}</a>
+                  </td>
                   <td>{{ c.modelVersion }}</td>
                   <td><span class="tag" :class="c.status==='启用'?'tag-blue':(c.status==='草稿'?'tag-orange':'tag-gray')">{{ c.status }}</span></td>
                   <td>{{ c.updatedAt }}</td>
                   <td class="actions">
                     <button class="btn-link btn" @click="openDetail(c)">物模型</button>
                     <button class="btn-link btn" @click="openDetail(c); detailTab='rules'">归属规则</button>
+                    <button class="btn-link btn" @click="openDevicesForCategory(c)">查看设备</button>
                     <button class="btn-link btn" @click="openEditCategory(c)">编辑</button>
                     <button class="btn-link btn danger" @click="confirmDelete('品类', c.id, c.name)">删除</button>
                   </td>
@@ -1312,9 +1334,13 @@ createApp({
                 <span>行业：<b>{{ currentCategory.industry }}</b></span>
                 <span>物模型：<b>{{ currentCategory.modelVersion }}</b></span>
                 <span>归属规则：<b>{{ currentCategoryRules.length }} 条</b></span>
+                <span>设备数：<b><a class="btn-link btn" style="padding:0" @click="openDevicesForCategory(currentCategory)">{{ currentCategory.deviceCount }}</a></b>
+                  <a class="btn-link btn" style="padding:0;margin-left:6px" @click="openDevicesForCategory(currentCategory)">查看设备</a>
+                </span>
               </div>
             </div>
             <div style="display:flex;gap:8px">
+              <button class="btn" @click="openDevicesForCategory(currentCategory)">查看设备</button>
               <button class="btn" @click="openEditCategory(currentCategory)">编辑品类</button>
               <button class="btn btn-primary" @click="detailTab='rules'">归属规则</button>
             </div>
@@ -1571,8 +1597,9 @@ createApp({
           <div class="page-header">
             <div>
               <button class="back-link" @click="goProjects">← 返回项目列表</button>
-              <h1 class="page-title">{{ deviceProjectFilter===UNASSIGNED_PROJECT_ID ? '例外池 · 未定义项目' : '设备列表' }}</h1>
+              <h1 class="page-title">{{ deviceProjectFilter===UNASSIGNED_PROJECT_ID ? '例外池 · 未定义项目' : (deviceCategoryFilter ? ('设备列表 · ' + categoryName(deviceCategoryFilter)) : '设备列表') }}</h1>
               <p class="page-desc" v-if="deviceProjectFilter===UNASSIGNED_PROJECT_ID">例外池：SDK 缺产品 / 临时设备等；非主路径。主路径为 OpenAPI 绑定自动创建项目与设备（仅 projectId 为空时写入）。人工改挂为例外处理。</p>
+              <p class="page-desc" v-else-if="deviceCategoryFilter">已按物模型品类「{{ categoryName(deviceCategoryFilter) }}」筛选（双向挂靠）。品类匹配标签见「匹配」列；多数为自动匹配。</p>
               <p class="page-desc" v-else>按项目 / 品类 / 生命周期筛选。主路径 OpenAPI 绑定自动建档；例外池与人工改挂仅用于异常场景。支持导入导出与 AEP 对账。</p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2270,7 +2297,7 @@ createApp({
       <div class="modal">
         <div class="modal-header"><span>{{ ruleModalMode==='create'?'新建归属规则':'编辑归属规则' }}</span><button class="close-x" @click="showRuleModal=false">×</button></div>
         <div class="modal-body">
-          <div class="form-item"><label><span class="req">*</span>规则名称</label><input class="input input-full" v-model="ruleForm.name" placeholder="如 液位井 · 标准产品通用匹配" /></div>
+          <div class="form-item"><label><span class="req">*</span>规则名称</label><input class="input input-full" v-model="ruleForm.name" placeholder="如 积水仪地埋 · 标准产品通用匹配" /></div>
           <div class="form-row">
             <div class="form-item"><label><span class="req">*</span>规则类型</label>
               <select class="select input-full" v-model="ruleForm.type">
