@@ -1057,3 +1057,48 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   padding: 4px 8px;
   height: 32px;
 }
+
+/* 物模型 · 指令 Tab：开关位 vs 内容载荷 */
+.banner-muted {
+  background: #f5f6f8;
+  border: 1px solid #e4e7ec;
+  color: #667085;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.cmd-table thead th.th-group {
+  text-align: center;
+  font-weight: 600;
+  background: #f8fafc;
+}
+.cmd-table thead th.th-group-bit {
+  background: #eef4ff;
+  color: #1a3a6b;
+  border-bottom: 1px solid #d0defe;
+}
+.cmd-table thead th.th-group-payload {
+  background: #f3faf3;
+  color: #1a4d2e;
+  border-bottom: 1px solid #cde8d2;
+}
+.cmd-table .th-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #888;
+  margin-top: 2px;
+}
+.cmd-table thead th.th-subcol {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  background: #fafbfc;
+}
+.cmd-table .muted-cell {
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+}

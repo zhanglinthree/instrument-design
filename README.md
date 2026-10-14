@@ -24,7 +24,7 @@ python3 -m http.server 8877
 
 ### 物模型
 - 物模型定义**产品类型语义**（测点 / 事件 / 阈值 / 安装模板 / 固件 / **指令**）。
-- **指令 Tab** = 配置该品类「能下什么」（标识、是否带参、参数结构、命令位 bit、载荷偏移）；**不是**实时点发。积水仪示意命令包 `FAFA…ADAD` 按位开关；真正下发走 AEP CreateCommand（透传 hex，dataType=2），应答另解析入库。
+- **指令 Tab** = 配置该品类「能下什么」：**命令位（开关）** vs **内容载荷**；**不是**实时点发。积水仪 `FAFA…ADAD`：字节17–24 为 8 字节开关（bit=1 执行）；字节25 起按 `payloadOffset` 填参（如 reboot→F0、高度 mm、unix 对时）。组包时选中指令自动置对应 bit。真正下发走 AEP CreateCommand（透传 hex，dataType=2），应答另解析入库。
 - **不再**在品类上直接绑定 AEP 产品/型号；无「绑定 AEP 产品」主流程。
 - **无解析脚本 UI**：AEP 侧已完成设备数据解析。
 - 品类配置 **归属规则**（通用规则默认匹配 + 特殊处理规则更高优先级）。匹配条件含 AEP 产品 ID、协议 ID/名称等自由文本。
@@ -55,7 +55,7 @@ python3 -m http.server 8877
 | 3 | 编辑品类（模态） | `#editCategory` |
 | 4 | 物模型详情壳 + Tab | `#detail` |
 | 4a–4g | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **指令** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#commands` `#rules` / `#categoryRules` |
-| 4h | 新建/编辑指令（模态：标识 / 是否带参 / 参数结构 / 命令位 / 载荷偏移） | `#editCommand` |
+| 4h | 新建/编辑指令（模态：命令开关 bitIndex / 命令内容 hasParam·payloadOffset·参数） | `#editCommand` |
 | 5–7 | 编辑测点 / 安装字段 / 固件 | `#editPoint` `#editInstall` `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
 
