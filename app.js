@@ -63,39 +63,39 @@ const FIRMWARES = [
 const COMMANDS = [
   { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParams: false, cmdBit: 0, payloadOffset: null, enabled: true, desc: '积水仪命令包 bit0：远程重启',
     params: [] },
-  { id: 'CMD02', categoryId: 'C001', code: 'factory_reset', name: '恢复出厂', hasParams: false, cmdBit: 1, payloadOffset: null, enabled: true, desc: '积水仪命令包 bit1：恢复出厂设置',
+  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParams: false, cmdBit: 1, payloadOffset: null, enabled: true, desc: '积水仪命令包 bit1：恢复出厂设置',
     params: [] },
-  { id: 'CMD03', categoryId: 'C001', code: 'clear', name: '清零', hasParams: false, cmdBit: 2, payloadOffset: null, enabled: true, desc: '积水仪命令包 bit2：累计/计数清零',
+  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParams: false, cmdBit: 2, payloadOffset: null, enabled: true, desc: '积水仪命令包 bit2：累计/计数清零',
     params: [] },
-  { id: 'CMD04', categoryId: 'C001', code: 'install_height', name: '安装高度', hasParams: true, cmdBit: 3, payloadOffset: 0, enabled: true, desc: '积水仪命令包 bit3：下发安装高度（mm）',
+  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParams: true, cmdBit: 3, payloadOffset: 0, enabled: true, desc: '积水仪命令包 bit3：下发安装高度（mm）',
     params: [
       { name: 'height', type: 'number', unit: 'mm', required: true, min: '0', max: '10000', defaultVal: '300', desc: '探头安装高度' }
     ] },
-  { id: 'CMD05', categoryId: 'C001', code: 'sync_time', name: '对时', hasParams: true, cmdBit: 4, payloadOffset: 2, enabled: true, desc: '积水仪命令包 bit4：设备时钟对时',
+  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParams: true, cmdBit: 4, payloadOffset: 2, enabled: true, desc: '积水仪命令包 bit4：设备时钟对时',
     params: [
       { name: 'timestamp', type: 'string', unit: '-', required: true, min: '', max: '', defaultVal: '', desc: 'UTC 秒或 yyyyMMddHHmmss' }
     ] },
-  { id: 'CMD06', categoryId: 'C001', code: 'switch_freq', name: '切换频率', hasParams: true, cmdBit: 5, payloadOffset: 8, enabled: true, desc: '积水仪命令包 bit5：工作频率档位切换',
+  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParams: true, cmdBit: 5, payloadOffset: 8, enabled: true, desc: '积水仪命令包 bit5：工作频率档位切换',
     params: [
       { name: 'freq', type: 'enum', unit: '-', required: true, min: '', max: '', defaultVal: '1', desc: '档位：1=低频 / 2=中频 / 3=高频' }
     ] },
-  { id: 'CMD07', categoryId: 'C001', code: 'resend_interval', name: '重发区间', hasParams: true, cmdBit: 6, payloadOffset: 10, enabled: true, desc: '积水仪命令包 bit6：失败重发时间窗',
+  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParams: true, cmdBit: 6, payloadOffset: 10, enabled: true, desc: '积水仪命令包 bit6：失败重发时间窗',
     params: [
       { name: 'interval', type: 'number', unit: 's', required: true, min: '1', max: '3600', defaultVal: '60', desc: '重发区间秒数' }
     ] },
-  { id: 'CMD08', categoryId: 'C001', code: 'sample_freq', name: '采样频率', hasParams: true, cmdBit: 7, payloadOffset: 12, enabled: true, desc: '积水仪命令包 bit7：采样周期',
+  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParams: true, cmdBit: 7, payloadOffset: 12, enabled: true, desc: '积水仪命令包 bit7：采样周期',
     params: [
       { name: 'period', type: 'number', unit: 's', required: true, min: '1', max: '86400', defaultVal: '60', desc: '采样间隔秒' }
     ] },
-  { id: 'CMD09', categoryId: 'C001', code: 'bump_height', name: '上凸高度', hasParams: true, cmdBit: 8, payloadOffset: 14, enabled: true, desc: '积水仪命令包 bit8：上凸判定高度',
+  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParams: true, cmdBit: 8, payloadOffset: 14, enabled: true, desc: '积水仪命令包 bit8：上凸判定高度',
     params: [
       { name: 'height', type: 'number', unit: 'mm', required: true, min: '0', max: '5000', defaultVal: '50', desc: '上凸高度阈值' }
     ] },
-  { id: 'CMD10', categoryId: 'C001', code: 'sink_height', name: '下沉高度', hasParams: true, cmdBit: 9, payloadOffset: 16, enabled: true, desc: '积水仪命令包 bit9：下沉判定高度',
+  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParams: true, cmdBit: 9, payloadOffset: 16, enabled: true, desc: '积水仪命令包 bit9：下沉判定高度',
     params: [
       { name: 'height', type: 'number', unit: 'mm', required: true, min: '0', max: '5000', defaultVal: '50', desc: '下沉高度阈值' }
     ] },
-  { id: 'CMD11', categoryId: 'C001', code: 'send_freq', name: '发送频率', hasParams: true, cmdBit: 10, payloadOffset: 18, enabled: true, desc: '积水仪命令包 bit10：上报/发送周期',
+  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParams: true, cmdBit: 10, payloadOffset: 18, enabled: true, desc: '积水仪命令包 bit10：上报/发送周期',
     params: [
       { name: 'period', type: 'number', unit: 's', required: true, min: '10', max: '86400', defaultVal: '300', desc: '发送间隔秒' }
     ] },
@@ -1042,7 +1042,7 @@ createApp({
         rules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         categoryRules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         commands: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; },
-        editCommand: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; openEditCommand(commandList.value.find(c => c.code === 'install_height') || commandList.value.find(c => c.hasParams) || commandList.value[0]); },
+        editCommand: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; openEditCommand(commandList.value.find(c => c.code === 'installHeightMm') || commandList.value.find(c => c.hasParams) || commandList.value[0]); },
         editPoint: () => { openDetail(CATEGORIES[0]); openEditPoint(POINTS[0]); },
         editInstall: () => { openDetail(CATEGORIES[0]); openEditInstall(INSTALL_FIELDS[0]); },
         editFirmware: () => { openDetail(CATEGORIES[0]); openCreateFirmware(); },
@@ -2300,7 +2300,7 @@ createApp({
         <div class="modal-body">
           <div class="banner-tip" style="margin-bottom:12px;font-size:12px;color:#666">真正下发走 AEP CreateCommand（透传 hex，dataType=2）；设备应答另解析入库。本弹窗只配物模型定义。</div>
           <div class="form-row">
-            <div class="form-item"><label><span class="req">*</span>标识</label><input class="input input-full" v-model="commandForm.code" placeholder="如 reboot、install_height" /></div>
+            <div class="form-item"><label><span class="req">*</span>标识</label><input class="input input-full" v-model="commandForm.code" placeholder="如 reboot、installHeightMm" /></div>
             <div class="form-item"><label><span class="req">*</span>名称</label><input class="input input-full" v-model="commandForm.name" placeholder="如 重启、安装高度" /></div>
           </div>
           <div class="form-row">
