@@ -83,17 +83,39 @@ const FIRMWARES = [
  * 字段对齐后端 kind=service：bitIndex / payloadOffset / hasParam / paramMin / paramMax + identifier·name·dataType·unit·required·access。
  * 真正下发走 AEP CreateCommand（透传 hex，dataType=2） */
 const COMMANDS = [
-  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParam: 0, bitIndex: 1, payloadOffset: 25, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 1；内容起始字节 25（F0 重启 / 0F 不重启）' },
-  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParam: 0, bitIndex: 2, payloadOffset: 26, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 2；内容起始字节 26（F0/0F）' },
-  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParam: 0, bitIndex: 3, payloadOffset: 27, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 3；内容起始字节 27（F0/0F）' },
-  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParam: 1, bitIndex: 4, payloadOffset: 28, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 10000, enabled: true, desc: '命令位 4；内容起始字节 28（2 字节 mm）' },
-  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParam: 1, bitIndex: 5, payloadOffset: 30, dataType: 'int', unit: 's', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 5；内容起始字节 30（4 字节 unix 秒）' },
-  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParam: 1, bitIndex: 6, payloadOffset: 34, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 6；内容起始字节 34（高低切换阈值 4 字节）' },
-  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParam: 1, bitIndex: 7, payloadOffset: 38, dataType: 'int', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 7；内容起始字节 38（起止包序列号 6 字节）' },
-  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParam: 1, bitIndex: 8, payloadOffset: 44, dataType: 'int', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 8；内容起始字节 44（长/中/短采样间隔）' },
-  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParam: 1, bitIndex: 10, payloadOffset: 50, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 10（位 9 空缺）；内容起始字节 50（2 字节 mm）' },
-  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParam: 1, bitIndex: 11, payloadOffset: 52, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 11；内容起始字节 52（2 字节 mm）' },
-  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParam: 1, bitIndex: 12, payloadOffset: 54, dataType: 'int', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 12；内容起始字节 54（长/中/短发送间隔）' },
+  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParam: 0, bitIndex: 1, payloadOffset: 25, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 1；内容起始字节 25（F0 重启 / 0F 不重启）', params: null },
+  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParam: 0, bitIndex: 2, payloadOffset: 26, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 2；内容起始字节 26（F0/0F）', params: null },
+  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParam: 0, bitIndex: 3, payloadOffset: 27, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 3；内容起始字节 27（F0/0F）', params: null },
+  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParam: 1, bitIndex: 4, payloadOffset: 28, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 10000, enabled: true, desc: '命令位 4；内容起始字节 28（2 字节 mm）；params.value',
+    params: { value: { label: '安装高度', min: 0, max: 10000, unit: 'mm' } } },
+  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParam: 1, bitIndex: 5, payloadOffset: 30, dataType: 'int', unit: 's', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 5；内容起始字节 30（4 字节 unix 秒）；params.value',
+    params: { value: { label: 'unix 秒', min: null, max: null, unit: 's' } } },
+  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParam: 1, bitIndex: 6, payloadOffset: 34, dataType: 'object', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 65535, enabled: true, desc: '命令位 6；内容起始字节 34（高低水位 4 字节）；params.high / params.low，high＞low',
+    params: {
+      high: { label: '高水位', min: 0, max: 65535, unit: 'mm' },
+      low: { label: '低水位', min: 0, max: 65535, unit: 'mm' }
+    } },
+  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParam: 1, bitIndex: 7, payloadOffset: 38, dataType: 'object', unit: '-', required: true, access: 'w', paramMin: 0, paramMax: 16777215, enabled: true, desc: '命令位 7；内容起始字节 38（起止包序列号 6 字节）；params.start / params.end，start≤end',
+    params: {
+      start: { label: '起始包序列号', min: 0, max: 16777215 },
+      end: { label: '结束包序列号', min: 0, max: 16777215 }
+    } },
+  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParam: 1, bitIndex: 8, payloadOffset: 44, dataType: 'object', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 8；内容起始字节 44（长/中/短采样间隔）；params.longMin / midMin / shortMin',
+    params: {
+      longMin: { label: '长(无水)分钟', min: 1, max: 65535, unit: 'min' },
+      midMin: { label: '中', min: 1, max: 255, unit: 'min' },
+      shortMin: { label: '短', min: 1, max: 255, unit: 'min' }
+    } },
+  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParam: 1, bitIndex: 10, payloadOffset: 50, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 10（位 9 空缺）；内容起始字节 50（2 字节 mm）；params.value',
+    params: { value: { label: '上凸高度', min: 0, max: 5000, unit: 'mm' } } },
+  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParam: 1, bitIndex: 11, payloadOffset: 52, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 11；内容起始字节 52（2 字节 mm）；params.value',
+    params: { value: { label: '下沉高度', min: 0, max: 5000, unit: 'mm' } } },
+  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParam: 1, bitIndex: 12, payloadOffset: 54, dataType: 'object', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 12；内容起始字节 54（长/中/短发送间隔）；params.longMin / midMin / shortMin',
+    params: {
+      longMin: { label: '长(无水)分钟', min: 1, max: 65535, unit: 'min' },
+      midMin: { label: '中', min: 1, max: 255, unit: 'min' },
+      shortMin: { label: '短', min: 1, max: 255, unit: 'min' }
+    } },
 ];
 
 /* ========== 设备台账 Mock ========== */
@@ -279,7 +301,7 @@ createApp({
       paramMin: null, paramMax: null, enabled: true
     });
     const commandList = ref(COMMANDS.map(c => ({ ...c })));
-    const COMMAND_DATA_TYPES = ['bool', 'int', 'float', 'string', 'enum'];
+    const COMMAND_DATA_TYPES = ['bool', 'int', 'float', 'string', 'enum', 'object'];
     const COMMAND_ACCESS_OPTS = ['r', 'w'];
 
     const showDeleteConfirm = ref(false);
@@ -332,7 +354,7 @@ createApp({
     /* ---- 设备档案 · 指令点发 ---- */
     const deviceDetailTab = ref('profile'); // profile | dispatch
     const dispatchSelected = ref([]); // command ids
-    const dispatchParams = reactive({}); // code -> value
+    const dispatchParams = reactive({}); // code -> params object（如 { value } / { start, end }）
     const dispatchPreviewHex = ref('');
     const dispatchPreviewOk = ref(false);
     const toast = reactive({ show: false, type: 'ok', text: '' });
@@ -748,8 +770,13 @@ createApp({
       const hp = Number(cmd.hasParam);
       const dt = cmd.dataType || '';
       const u = cmd.unit && cmd.unit !== '-' ? cmd.unit : '';
-      if (!hp) {
-        return (dt ? dt : '无参') + (u ? ' · ' + u : '');
+      if (!hp || dt === 'bool') {
+        return (dt ? dt : '无参') + (u ? ' · ' + u : '') + ' · 无 params';
+      }
+      const fields = getCommandParamFields(cmd);
+      if (fields.length) {
+        const keys = fields.map(f => f.key).join(', ');
+        return (dt || '带参') + '{ ' + keys + ' }' + (u ? ' / ' + u : '');
       }
       const req = cmd.required ? '必填' : '选填';
       const hasMin = cmd.paramMin !== '' && cmd.paramMin != null;
@@ -827,10 +854,15 @@ createApp({
       };
       if (commandModalMode.value === 'create') {
         payload.id = 'CMD' + Date.now().toString().slice(-6);
+        payload.params = hasParam && payload.dataType !== 'bool' ? { value: { label: payload.name || 'value', min: payload.paramMin, max: payload.paramMax, unit: payload.unit } } : null;
         commandList.value.push(payload);
       } else {
         const idx = commandList.value.findIndex(x => x.id === commandForm.id);
-        if (idx >= 0) commandList.value.splice(idx, 1, payload);
+        if (idx >= 0) {
+          const prev = commandList.value[idx];
+          payload.params = prev.params != null ? prev.params : (hasParam && payload.dataType !== 'bool' ? { value: { label: payload.name || 'value', min: payload.paramMin, max: payload.paramMax, unit: payload.unit } } : null);
+          commandList.value.splice(idx, 1, payload);
+        }
       }
       showCommandModal.value = false;
     }
@@ -960,6 +992,94 @@ createApp({
       dispatchPreviewOk.value = false;
     }
 
+    /** 点发表单字段：对齐后端 commands[].params 键 */
+    function getCommandParamFields(cmd) {
+      const code = cmd.code || '';
+      if (!Number(cmd.hasParam) || cmd.dataType === 'bool') return [];
+      if (cmd.params && typeof cmd.params === 'object' && !Array.isArray(cmd.params)) {
+        return Object.keys(cmd.params).map(key => {
+          const meta = cmd.params[key] || {};
+          return {
+            key,
+            label: meta.label || key,
+            min: meta.min != null ? meta.min : null,
+            max: meta.max != null ? meta.max : null,
+            unit: meta.unit || ''
+          };
+        });
+      }
+      if (code === 'resendRange') {
+        return [
+          { key: 'start', label: '起始包序列号', min: 0, max: 16777215, unit: '' },
+          { key: 'end', label: '结束包序列号', min: 0, max: 16777215, unit: '' }
+        ];
+      }
+      if (code === 'sampleInterval' || code === 'sendInterval') {
+        return [
+          { key: 'longMin', label: '长(无水)分钟', min: 1, max: 65535, unit: 'min' },
+          { key: 'midMin', label: '中', min: 1, max: 255, unit: 'min' },
+          { key: 'shortMin', label: '短', min: 1, max: 255, unit: 'min' }
+        ];
+      }
+      if (code === 'switchThreshold') {
+        return [
+          { key: 'high', label: '高水位', min: 0, max: 65535, unit: 'mm' },
+          { key: 'low', label: '低水位', min: 0, max: 65535, unit: 'mm' }
+        ];
+      }
+      // 单值：params.value
+      return [{
+        key: 'value',
+        label: code === 'syncTime' ? 'unix 秒' : (cmd.name || 'value'),
+        min: cmd.paramMin != null ? cmd.paramMin : null,
+        max: cmd.paramMax != null ? cmd.paramMax : null,
+        unit: cmd.unit && cmd.unit !== '-' ? cmd.unit : (code === 'syncTime' ? 's' : '')
+      }];
+    }
+
+    function defaultParamsForCommand(cmd) {
+      const fields = getCommandParamFields(cmd);
+      const out = {};
+      for (const f of fields) {
+        if (cmd.code === 'syncTime' && f.key === 'value') {
+          out[f.key] = Math.floor(Date.now() / 1000);
+        } else if (f.min != null) {
+          out[f.key] = Number(f.min);
+        } else {
+          out[f.key] = 0;
+        }
+      }
+      // switchThreshold 默认 high＞low
+      if (cmd.code === 'switchThreshold') {
+        if (out.high == null) out.high = 1;
+        if (out.low == null) out.low = 0;
+        if (!(Number(out.high) > Number(out.low))) {
+          out.high = Number(out.low) + 1;
+        }
+      }
+      return out;
+    }
+
+    function ensureDispatchParamsObject(cmd) {
+      const cur = dispatchParams[cmd.code];
+      if (!cur || typeof cur !== 'object' || Array.isArray(cur)) {
+        dispatchParams[cmd.code] = defaultParamsForCommand(cmd);
+      } else {
+        const fields = getCommandParamFields(cmd);
+        const next = { ...cur };
+        let changed = false;
+        for (const f of fields) {
+          if (next[f.key] === undefined || next[f.key] === '') {
+            const def = defaultParamsForCommand(cmd);
+            next[f.key] = def[f.key];
+            changed = true;
+          }
+        }
+        if (changed) dispatchParams[cmd.code] = next;
+      }
+      return dispatchParams[cmd.code];
+    }
+
     function guessPayloadBytes(cmd) {
       const code = cmd.code || '';
       if (!Number(cmd.hasParam)) return 1;
@@ -970,6 +1090,7 @@ createApp({
       if (code === 'sampleInterval' || code === 'sendInterval') return 6;
       if (cmd.dataType === 'int') return 4;
       if (cmd.dataType === 'float') return 4;
+      if (cmd.dataType === 'object') return 6;
       return 2;
     }
 
@@ -981,8 +1102,33 @@ createApp({
       }
     }
 
+    /** 将 commands[].params 写入内容区（示意组包） */
+    function writeCommandParams(buf, i, cmd, paramsObj) {
+      const code = cmd.code || '';
+      const p = paramsObj && typeof paramsObj === 'object' ? paramsObj : {};
+      if (code === 'resendRange') {
+        writeUintBE(buf, i, p.start, 3);
+        writeUintBE(buf, i + 3, p.end, 3);
+        return;
+      }
+      if (code === 'sampleInterval' || code === 'sendInterval') {
+        writeUintBE(buf, i, p.longMin, 2);
+        writeUintBE(buf, i + 2, p.midMin, 2);
+        writeUintBE(buf, i + 4, p.shortMin, 2);
+        return;
+      }
+      if (code === 'switchThreshold') {
+        writeUintBE(buf, i, p.high, 2);
+        writeUintBE(buf, i + 2, p.low, 2);
+        return;
+      }
+      const n = guessPayloadBytes(cmd);
+      const v = p.value != null ? p.value : p;
+      writeUintBE(buf, i, v, n);
+    }
+
     /** 示意组包：FAFA…ADAD；字节17–24 命令位；内容自 payloadOffset 写入 */
-    function packContentHex(cmds, params) {
+    function packContentHex(cmds, paramsMap) {
       let maxEnd = 56;
       for (const c of cmds) {
         const off = Number(c.payloadOffset) || 25;
@@ -1002,12 +1148,10 @@ createApp({
         const off = Number(c.payloadOffset);
         if (!off || off < 1) continue;
         const i = off - 1;
-        if (!Number(c.hasParam)) {
+        if (!Number(c.hasParam) || c.dataType === 'bool') {
           if (i < frameLen) buf[i] = 0xf0;
         } else {
-          const raw = params[c.code];
-          const n = guessPayloadBytes(c);
-          writeUintBE(buf, i, raw, n);
+          writeCommandParams(buf, i, c, paramsMap[c.code]);
         }
       }
       return Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -1024,10 +1168,8 @@ createApp({
         dispatchSelected.value = dispatchSelected.value.filter(x => x !== id);
       } else {
         dispatchSelected.value = [...dispatchSelected.value, id];
-        if (Number(cmd.hasParam) && (dispatchParams[cmd.code] === undefined || dispatchParams[cmd.code] === '')) {
-          if (cmd.code === 'syncTime') dispatchParams[cmd.code] = Math.floor(Date.now() / 1000);
-          else if (cmd.paramMin != null) dispatchParams[cmd.code] = cmd.paramMin;
-          else dispatchParams[cmd.code] = 0;
+        if (Number(cmd.hasParam) && cmd.dataType !== 'bool') {
+          ensureDispatchParamsObject(cmd);
         }
       }
       dispatchPreviewOk.value = false;
@@ -1037,15 +1179,44 @@ createApp({
       const cmds = dispatchSelectedCmds.value;
       if (!cmds.length) return '请至少勾选一条指令';
       for (const c of cmds) {
-        if (!Number(c.hasParam)) continue;
-        const v = dispatchParams[c.code];
-        if (v === '' || v === null || v === undefined) return '「' + c.name + '」需要填写参数';
-        const n = Number(v);
-        if (!Number.isFinite(n)) return '「' + c.name + '」参数须为数字';
-        if (c.paramMin != null && n < Number(c.paramMin)) return '「' + c.name + '」小于 paramMin';
-        if (c.paramMax != null && n > Number(c.paramMax)) return '「' + c.name + '」大于 paramMax';
+        if (!Number(c.hasParam) || c.dataType === 'bool') continue;
+        const fields = getCommandParamFields(c);
+        const p = dispatchParams[c.code];
+        if (!p || typeof p !== 'object') return '「' + c.name + '」需要填写 params';
+        for (const f of fields) {
+          const v = p[f.key];
+          if (v === '' || v === null || v === undefined) {
+            return '「' + c.name + '」.' + f.key + '（' + f.label + '）需要填写';
+          }
+          const n = Number(v);
+          if (!Number.isFinite(n) || !Number.isInteger(n)) {
+            return '「' + c.name + '」.' + f.key + ' 须为整数';
+          }
+          if (f.min != null && n < Number(f.min)) {
+            return '「' + c.name + '」.' + f.key + ' 不能小于 ' + f.min;
+          }
+          if (f.max != null && n > Number(f.max)) {
+            return '「' + c.name + '」.' + f.key + ' 不能大于 ' + f.max;
+          }
+        }
+        if (c.code === 'resendRange') {
+          if (Number(p.start) > Number(p.end)) return '「重发区间」start 须 ≤ end';
+        }
+        if (c.code === 'switchThreshold') {
+          if (!(Number(p.high) > Number(p.low))) return '「切换频率」high 须 ＞ low';
+        }
       }
       return '';
+    }
+
+    function buildDispatchPayload() {
+      return dispatchSelectedCmds.value.map(c => {
+        const item = { identifier: c.code, name: c.name, bitIndex: c.bitIndex };
+        if (Number(c.hasParam) && c.dataType !== 'bool') {
+          item.params = { ...(dispatchParams[c.code] || {}) };
+        }
+        return item;
+      });
     }
 
     function dryRunDispatch() {
@@ -1067,7 +1238,9 @@ createApp({
       }
       const d = currentDevice.value;
       const n = dispatchSelectedCmds.value.length;
-      // mock POST /iot/devices/{id}/commands/send
+      // mock POST /iot/devices/{id}/commands/send  body: { commands:[{identifier,params}], contentHex }
+      const _payload = { commands: buildDispatchPayload(), contentHex: dispatchPreviewHex.value };
+      void _payload;
       showToast('已下发 ' + n + ' 条指令 → ' + (d?.name || d?.sn || '设备') + '（mock POST send）', 'ok');
     }
 
@@ -1462,6 +1635,7 @@ createApp({
       deviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
       dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
       isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
+      getCommandParamFields,
       unassignedDevices, unassignedCount, selectedDeviceIds,
       toggleSelectDevice, toggleSelectAllFiltered,
       currentDeviceSlaves, currentDeviceMaster, installParamEntries,
@@ -1753,7 +1927,7 @@ createApp({
                     <th class="th-subcol">payloadOffset</th>
                     <th class="th-subcol">hasParam</th>
                     <th class="th-subcol">dataType / unit</th>
-                    <th class="th-subcol">paramMin～Max</th>
+                    <th class="th-subcol">params 键 / 范围</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1766,7 +1940,14 @@ createApp({
                     <td><span class="tag" :class="Number(c.hasParam)?'tag-blue':'tag-gray'">{{ Number(c.hasParam) ? '1 带参' : '0 无参' }}</span></td>
                     <td style="font-size:12px"><code>{{ c.dataType || '—' }}</code>{{ c.unit ? ' / ' + c.unit : '' }}</td>
                     <td style="font-size:12px">
-                      <template v-if="Number(c.hasParam)">{{ c.paramMin != null ? c.paramMin : '—' }}～{{ c.paramMax != null ? c.paramMax : '—' }}</template>
+                      <template v-if="Number(c.hasParam) && c.dataType === 'object' && c.params">
+                        <code>{{ Object.keys(c.params).join(', ') }}</code>
+                      </template>
+                      <template v-else-if="Number(c.hasParam) && c.params && c.params.value">
+                        <code>value</code>
+                        <span v-if="c.paramMin != null || c.paramMax != null"> {{ c.paramMin != null ? c.paramMin : '—' }}～{{ c.paramMax != null ? c.paramMax : '—' }}</span>
+                      </template>
+                      <template v-else-if="Number(c.hasParam)">{{ c.paramMin != null ? c.paramMin : '—' }}～{{ c.paramMax != null ? c.paramMax : '—' }}</template>
                       <template v-else>—</template>
                     </td>
                     <td><span class="tag" :class="c.enabled?'tag-green':'tag-gray'">{{ c.enabled?'启用':'停用' }}</span></td>
@@ -2181,7 +2362,7 @@ createApp({
             <div v-else-if="!deviceDispatchCommands.length" class="empty-hint">本品类暂无启用指令；请先在物模型「指令」Tab 配置</div>
             <template v-else>
               <div class="toolbar" style="margin-bottom:8px">
-                <span style="color:#666;font-size:13px">已选 <b>{{ dispatchSelected.length }}</b> 条 · 可多选；带参指令需填写参数后再 dryRun / 下发</span>
+                <span style="color:#666;font-size:13px">已选 <b>{{ dispatchSelected.length }}</b> 条 · 可多选；object/单值指令按 <code>params</code> 键填表后再 dryRun / 下发</span>
                 <div class="spacer"></div>
                 <button class="btn" @click="dryRunDispatch" :disabled="!dispatchSelected.length">dryRun 预览</button>
                 <button class="btn btn-primary" @click="sendDispatch" :disabled="!dispatchSelected.length">真正下发</button>
@@ -2206,17 +2387,24 @@ createApp({
                       <td><code>{{ c.bitIndex }}</code></td>
                       <td><span class="tag" :class="Number(c.hasParam)?'tag-blue':'tag-gray'">{{ Number(c.hasParam) ? '1 带参' : '0 无参' }}</span></td>
                       <td>
-                        <template v-if="Number(c.hasParam)">
-                          <div class="dispatch-param" v-show="isDispatchSelected(c.id)">
-                            <input class="input" type="number" v-model.number="dispatchParams[c.code]"
-                              :min="c.paramMin != null ? c.paramMin : undefined"
-                              :max="c.paramMax != null ? c.paramMax : undefined"
-                              :placeholder="(c.dataType||'int') + (c.unit ? ' / '+c.unit : '')" />
-                            <span class="dispatch-param-hint" v-if="c.paramMin != null || c.paramMax != null">
-                              {{ c.paramMin != null ? c.paramMin : '—' }}～{{ c.paramMax != null ? c.paramMax : '—' }}{{ c.unit && c.unit !== '-' ? ' '+c.unit : '' }}
-                            </span>
+                        <template v-if="Number(c.hasParam) && c.dataType !== 'bool'">
+                          <div class="dispatch-param-fields" v-if="isDispatchSelected(c.id)">
+                            <div class="dispatch-param-row" v-for="f in getCommandParamFields(c)" :key="f.key">
+                              <label class="dispatch-param-label"><code>{{ f.key }}</code><span>{{ f.label }}</span></label>
+                              <input class="input" type="number" step="1"
+                                v-model.number="dispatchParams[c.code][f.key]"
+                                :min="f.min != null ? f.min : undefined"
+                                :max="f.max != null ? f.max : undefined"
+                                :placeholder="f.key" />
+                              <span class="dispatch-param-hint">
+                                <template v-if="f.min != null || f.max != null">{{ f.min != null ? f.min : '—' }}～{{ f.max != null ? f.max : '—' }}</template>
+                                <template v-if="f.unit"> {{ f.unit }}</template>
+                              </span>
+                            </div>
+                            <div class="dispatch-param-meta" v-if="c.dataType === 'object'">params · dataType=object</div>
+                            <div class="dispatch-param-meta" v-else>params.value</div>
                           </div>
-                          <span v-show="!isDispatchSelected(c.id)" class="muted-cell">勾选后填写</span>
+                          <span v-else class="muted-cell">勾选后按 params 键填写</span>
                         </template>
                         <span v-else class="muted-cell">无参 · 选中写 F0</span>
                       </td>
@@ -2228,7 +2416,7 @@ createApp({
                 <div class="info-section-title">dryRun · contentHex <span class="sub-nav-hint">示意组包 FAFA…ADAD</span></div>
                 <pre class="hex-preview">{{ dispatchPreviewHex }}</pre>
               </div>
-              <div class="table-note">AEP CreateCommand 透传 hex dataType=2；应答另解析入库。本页 mock：dryRun 仅预览 contentHex，真正下发弹出 toast。</div>
+              <div class="table-note">请求体对齐后端：commands[].params 为对象键（如 resendRange→start/end；sampleInterval→longMin/midMin/shortMin；高度类→value）。dryRun 仍预览 contentHex；真正下发 mock toast。AEP CreateCommand 透传 hex dataType=2。</div>
             </template>
           </template>
         </div>

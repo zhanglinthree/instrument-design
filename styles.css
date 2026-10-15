@@ -1344,15 +1344,47 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   gap: 8px;
   flex-wrap: wrap;
 }
-.dispatch-param .input {
-  width: 140px;
+.dispatch-param .input,
+.dispatch-param-row .input {
+  width: 120px;
   height: 32px;
   padding: 4px 8px;
   font-size: 13px;
 }
+.dispatch-param-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 280px;
+}
+.dispatch-param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dispatch-param-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 118px;
+  font-size: 12px;
+  color: #4a5568;
+}
+.dispatch-param-label code {
+  font-size: 11px;
+  color: #0d6efd;
+  background: #eef4ff;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
 .dispatch-param-hint {
   font-size: 12px;
   color: #8c8c8c;
+}
+.dispatch-param-meta {
+  font-size: 11px;
+  color: #a0aec0;
 }
 .hex-preview {
   margin: 0;

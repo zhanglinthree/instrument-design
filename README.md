@@ -33,7 +33,7 @@ python3 -m http.server 8877
 - **双向挂靠**：品类列表/详情展示 **设备数**（`deviceCount`），可点击或「查看设备」跳转台账 `#devices` 并按该品类筛选；设备列表「匹配」列展示 `categoryMatch`（如自动匹配）。
 
 ### 设备台账
-- **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；多选、带参填写后可 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
+- **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
 - **未定义项目** = **例外池**（SDK 缺产品 / 临时设备等），**不是**主路径。
