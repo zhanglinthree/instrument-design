@@ -1206,7 +1206,7 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   color: #8c8c8c;
 }
 
-/* 在线监控：按品类动态测点列 */
+/* 在线监控：按品类动态测点列 + 数据向视觉（与台账区分） */
 .metric-col {
   white-space: nowrap;
   min-width: 88px;
@@ -1214,11 +1214,14 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .metric-cell {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
 }
 .metric-cell .metric-val {
   color: #0D6EFD;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .metric-cell .metric-unit {
   margin-left: 2px;
@@ -1226,16 +1229,109 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   font-size: 11px;
 }
 .latest-summary-cell {
-  max-width: 320px;
+  max-width: 360px;
 }
 .latest-summary {
   font-size: 12px;
   color: #3a4a66;
   white-space: normal;
   word-break: break-all;
-  background: #f5f8fc;
+  background: #f0f5ff;
   padding: 4px 8px;
   border-radius: 4px;
   display: inline-block;
   line-height: 1.45;
+  border: 1px solid #e0eaf8;
 }
+
+.mon-page .mon-stat-row {
+  margin-bottom: 10px;
+}
+.mon-toolbar {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mon-toolbar .select-sm {
+  min-width: 100px;
+}
+.mon-hint {
+  margin-bottom: 10px;
+}
+.mon-table {
+  font-size: 13px;
+}
+.mon-table thead th {
+  background: #f4f7fc;
+  font-size: 12px;
+  color: #4a5a78;
+}
+.mon-table tbody td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  vertical-align: middle;
+}
+.mon-device-cell .cell-title {
+  font-size: 13px;
+  line-height: 1.3;
+}
+.mon-device-cell .cell-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #8c8c8c;
+  line-height: 1.35;
+}
+.mon-meta {
+  color: #8c8c8c;
+}
+.mon-meta-sep {
+  margin: 0 4px;
+  color: #c0c6d0;
+}
+.mon-time-cell {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: #4a5a78;
+  white-space: nowrap;
+}
+.mon-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+.mon-st-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.mon-st-online {
+  background: rgba(13, 110, 253, 0.06);
+  border-color: rgba(13, 110, 253, 0.18);
+  color: #0a58ca;
+}
+.mon-st-online .mon-st-dot { background: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,.2); }
+.mon-st-offline {
+  background: #f5f5f5;
+  border-color: #e5e5e5;
+  color: #666;
+}
+.mon-st-offline .mon-st-dot { background: #9ca3af; }
+.mon-st-unknown {
+  background: rgba(231, 130, 18, 0.08);
+  border-color: rgba(231, 130, 18, 0.25);
+  color: #b5650e;
+}
+.mon-st-unknown .mon-st-dot { background: var(--orange); }
+.mon-col-device { min-width: 180px; }
+.mon-col-status { width: 88px; }
+.mon-col-time { width: 148px; }
+.mon-col-alarm { min-width: 96px; }
+.mon-col-ops { width: 120px; }
+.mon-col-summary { min-width: 200px; }

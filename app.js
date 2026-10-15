@@ -2150,27 +2150,26 @@ createApp({
           <div class="table-note">主操作「同步自 AEP」生成差异；行内「接入台账 / 创建接入 / 忽略」为二次处理。OpenAPI 绑定为主建档路径（projectId 仅空时写入）；缺产品进例外池。对账与品类归属规则相互独立。一期为交互示意。</div>
         </div>
 
-        <!-- ===== 在线监控：设备数据列表（集中入口） ===== -->
-        <div v-else-if="module==='monitor' && screen==='monitorList'" class="page-card" data-screen="monitor-list">
+        <!-- ===== 在线监控：设备数据列表（数据向，与台账区分） ===== -->
+        <div v-else-if="module==='monitor' && screen==='monitorList'" class="page-card mon-page" data-screen="monitor-list">
           <div class="page-header">
             <div>
               <h1 class="page-title">在线监控 · 设备数据</h1>
-              <p class="page-desc">设备数据的集中入口：筛选<strong>品类</strong>后，表格测点列由该品类物模型 <code>kind=property</code> 动态生成；未选品类时仅展示公共列 +「最新数据」摘要。单元格取值 <code>latest_json[identifier]</code>。</p>
+              <p class="page-desc">看测点最新值与上报状态——按<strong>项目</strong> / <strong>品类</strong>筛选；选品类后展开该品类物模型测点列。档案、生命周期、AEP 绑定、型号请到<strong>设备台账</strong>。</p>
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn" @click="goMonitorOnlineRate">在线率统计</button>
             </div>
           </div>
-          <div class="stat-row">
+          <div class="stat-row mon-stat-row">
             <div class="stat-chip accent"><div class="sc-label">监控设备</div><div class="sc-value">{{ monListStats.total }}</div></div>
             <div class="stat-chip ok"><div class="sc-label">在线</div><div class="sc-value">{{ monListStats.online }}</div></div>
             <div class="stat-chip"><div class="sc-label">离线</div><div class="sc-value">{{ monListStats.offline }}</div></div>
             <div class="stat-chip warn"><div class="sc-label">有告警</div><div class="sc-value">{{ monListStats.alarming }}</div></div>
             <div class="stat-chip danger"><div class="sc-label">低可信 (T0/T1)</div><div class="sc-value">{{ monListStats.lowTrust }}</div></div>
           </div>
-          <div class="toolbar">
-            <input class="input input-lg" v-model="monSearch" placeholder="搜索设备名称 / SN" />
-            <select class="select" v-model="monProjectFilter">
+          <div class="toolbar mon-toolbar">
+            <select class="select" v-model="monProjectFilter" data-testid="mon-project-filter">
               <option value="">全部项目</option>
               <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
@@ -2178,14 +2177,15 @@ createApp({
               <option value="">全部品类</option>
               <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
-            <select class="select" v-model="monOnlineFilter">
+            <input class="input input-md" v-model="monSearch" placeholder="设备名 / SN" />
+            <select class="select select-sm" v-model="monOnlineFilter">
               <option value="">在线态</option>
               <option value="在线">在线</option>
               <option value="离线">离线</option>
               <option value="未知">未知</option>
             </select>
-            <select class="select" v-model="monAlarmFilter">
-              <option value="">告警筛选</option>
+            <select class="select select-sm" v-model="monAlarmFilter">
+              <option value="">告警</option>
               <option value="any">有告警</option>
               <option value="warn">有预警</option>
               <option value="alarm">有报警</option>
@@ -2194,20 +2194,18 @@ createApp({
             </select>
             <button class="btn" @click="monSearch=''; monProjectFilter=''; monCategoryFilter=''; monOnlineFilter=''; monAlarmFilter=''">重置</button>
           </div>
-          <div class="banner-tip" v-if="monHasCategoryFilter" style="margin-bottom:10px">
-            已选品类「{{ monSelectedCategoryName }}」· 测点列 {{ monMetricColumns.length }} 个（来自物模型 property：
+          <div class="banner-tip mon-hint" v-if="monHasCategoryFilter">
+            已选品类「{{ monSelectedCategoryName }}」· 测点列 {{ monMetricColumns.length }} 个（
             <template v-for="(col, idx) in monMetricColumns" :key="col.id"><code>{{ col.identifier }}</code><span v-if="idx < monMetricColumns.length - 1"> · </span></template>）
           </div>
-          <div class="banner-muted" v-else style="margin-bottom:10px">跨品类总览：测点列不展开。请在上方选择品类以查看该品类专属测点列（如积水仪 yewei/wendu/yaqiang，水质站 ph/do/turb）。</div>
+          <div class="banner-muted mon-hint" v-else>选择品类以展开测点列</div>
           <div class="table-wrap">
-            <table class="data-table" data-testid="mon-list-table">
+            <table class="data-table mon-table" data-testid="mon-list-table">
               <thead>
                 <tr>
-                  <th>设备</th>
-                  <th>项目</th>
-                  <th>品类</th>
-                  <th>在线态</th>
-                  <th>最近上报</th>
+                  <th class="mon-col-device">设备</th>
+                  <th class="mon-col-status">在线态</th>
+                  <th class="mon-col-time">最近上报</th>
                   <template v-if="monHasCategoryFilter">
                     <th v-for="col in monMetricColumns" :key="col.identifier" class="metric-col">
                       {{ col.name }}
@@ -2215,26 +2213,28 @@ createApp({
                       <span class="th-sub"><code>{{ col.identifier }}</code></span>
                     </th>
                   </template>
-                  <th v-else>最新数据 <span class="th-sub">摘要</span></th>
-                  <th>告警</th>
-                  <th>操作</th>
+                  <th v-else class="mon-col-summary">最新数据 <span class="th-sub">摘要</span></th>
+                  <th class="mon-col-alarm">告警</th>
+                  <th class="mon-col-ops">操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="d in filteredMonitorRows" :key="d.id" class="row-clickable" @click="openMonitorDetail(d)">
-                  <td>
+                  <td class="mon-device-cell">
                     <div class="cell-title">{{ d.name }}</div>
-                    <div class="cell-sub"><code>{{ d.sn }}</code></div>
+                    <div class="cell-sub"><code>{{ d.sn }}</code>
+                      <span class="mon-meta-sep">·</span>
+                      <span class="mon-meta">{{ d.projectName }}</span>
+                      <span class="mon-meta-sep">·</span>
+                      <span class="mon-meta">{{ d.categoryName }}</span>
+                    </div>
                   </td>
-                  <td>{{ d.projectName }}</td>
-                  <td>{{ d.categoryName }}</td>
                   <td>
-                    <span class="lifecycle-dot">
-                      <i :class="d.online==='在线'?'lc-online':(d.online==='离线'?'lc-offline':'lc-pending')"></i>
-                      <span class="tag" :class="ONLINE_TAG[d.online]">{{ d.online }}</span>
+                    <span class="mon-status-chip" :class="'mon-st-' + (d.online==='在线'?'online':(d.online==='离线'?'offline':'unknown'))">
+                      <i class="mon-st-dot"></i>{{ d.online }}
                     </span>
                   </td>
-                  <td>{{ d.lastReportAt }}</td>
+                  <td class="mon-time-cell">{{ d.lastReportAt }}</td>
                   <template v-if="monHasCategoryFilter">
                     <td v-for="col in monMetricColumns" :key="col.identifier" class="metric-cell">
                       <b class="metric-val">{{ latestMetricValue(d, col.identifier) == null ? '—' : latestMetricValue(d, col.identifier) }}</b>
@@ -2253,12 +2253,12 @@ createApp({
                     </span>
                   </td>
                   <td class="actions" @click.stop>
-                    <button class="btn-link btn" @click="openMonitorDetail(d)">数据</button>
+                    <button class="btn-link btn" @click="openMonitorDetail(d)">查看数据</button>
                     <button class="btn-link btn" @click="openMonitorCurve(d)">曲线</button>
                   </td>
                 </tr>
                 <tr v-if="!filteredMonitorRows.length">
-                  <td :colspan="monHasCategoryFilter ? (7 + monMetricColumns.length) : 8"><div class="empty-hint">无匹配监控设备</div></td>
+                  <td :colspan="monHasCategoryFilter ? (5 + monMetricColumns.length) : 6"><div class="empty-hint">无匹配监控设备</div></td>
                 </tr>
               </tbody>
             </table>
@@ -2268,7 +2268,7 @@ createApp({
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">产品口径：测点列随品类切换；跨品类总览只用「最新数据」摘要，避免混列。字段名与物模型 property.identifier / latest_json 对齐。一期不做设施树、地图。</div>
+          <div class="table-note">与台账分工：本页只看测点与在线态；生命周期 / AEP / 匹配 / 型号等档案字段在设备台账。测点列随品类切换，跨品类总览用「最新数据」摘要。一期不做设施树、地图。</div>
         </div>
 
         <!-- ===== 在线监控：设备数据详情（最新值卡片 + 历史曲线） ===== -->
