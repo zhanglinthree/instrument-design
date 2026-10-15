@@ -1429,3 +1429,40 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   color: #842029;
   border: 1px solid #f1b0b7;
 }
+
+/* ---- 设备档案 · 报文列表 ---- */
+.packet-table .packet-summary {
+  font-size: 13px;
+  color: #1f1f1f;
+  margin-bottom: 4px;
+}
+.packet-table .packet-parsed {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+.packet-table .packet-parsed code {
+  font-size: 11px;
+  background: #f5f7fb;
+  padding: 1px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+.packet-table .packet-hex-row td {
+  background: #fafcff;
+  padding-top: 4px;
+  padding-bottom: 12px;
+}
+.seg-btn .seg-cnt {
+  display: inline-block;
+  margin-left: 4px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(13, 110, 253, 0.08);
+  color: #0D6EFD;
+}
+.seg-btn.active .seg-cnt {
+  background: rgba(255, 255, 255, 0.25);
+  color: inherit;
+}
