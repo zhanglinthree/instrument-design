@@ -69,22 +69,29 @@ python3 -m http.server 8877
 | 3 | 设备列表 | `#devices` |
 | 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
 | 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
-| 4 | 设备档案详情（含改挂记录） | `#deviceDetail` |
+| 4 | 设备档案详情（含改挂记录；「数据」→ 在线监控详情） | `#deviceDetail` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
+
+### 在线监控（设备数据集中入口）
+
+- **列表即设备数据枢纽**：侧栏「在线监控」进入；按 **项目 / 品类**（及在线态 / 告警）筛选。
+- 列：设备、**在线态**、**最新测点**（来自 `latest_json`；积水仪：液位 `yewei`、温度 `wendu`、压强 `yaqiang`）、最近上报、品类、项目、告警。
+- 点击行 → **设备数据详情**：最新数据 **卡片**（字段名与物模型测点一致）+ **历史曲线**（7 天 / 30 天，含预警 / 报警 / 故障参考线）。
+- 台账设备列表 / 档案「**数据**」按钮可跳入同一详情（不另造平行屏）。
 
 ## 在线监控屏幕
 
 | # | 屏幕 | Hash 直达 |
 |---|------|-----------|
-| 1 | 监控列表（在线态 / 告警摘要 / 可信 T0～T3+分数；筛项目/品类/在线/告警） | `#monitor` |
-| 2 | 设备监控详情（最新测点、固件、近 24h 可信分；入口曲线） | `#monitorDetail` |
-| 3 | 历史曲线（7 天 / 30 天；预警 orange / 报警 error / 故障 primary 参考线） | `#monitorCurve` |
+| 1 | 设备数据列表（在线态 / latest_json 最新测点 / 品类·项目；筛项目/品类/在线/告警） | `#monitor` / `#monitorList` |
+| 2 | 设备数据详情（最新值卡片 + 内嵌 7d/30d 曲线；全屏曲线入口） | `#monitorDetail` |
+| 3 | 历史曲线全屏（7 天 / 30 天；预警 orange / 报警 error / 故障 primary 参考线） | `#monitorCurve` |
 | 3b | 长周期曲线（采集周期 >15 分钟 →「历史全量查、不分段」） | `#monitorCurveLong` |
 | 4 | 在线率（该报没报：应报/实报/漏报统计卡片 + 简表） | `#monitorOnlineRate` |
 
-测点时序为 **PostgreSQL 时序示意**，非实时接入。一期不做设施树、地图；**物模型可配置指令模板**，设备运行时下发台后续在设备档案 / 监控中提供。
+测点时序为 **PostgreSQL 时序示意**，非实时接入。积水仪 mock 字段与物模型测点字典统一为 `yewei` / `wendu` / `yaqiang`。一期不做设施树、地图；**物模型可配置指令模板**，设备运行时下发台后续在设备档案 / 监控中提供。
 
 ## 配色
 
@@ -119,9 +126,9 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - `ledger-06-aep-reconcile.png` AEP 对账
 - `ledger-07-import.png` 导入说明
 
-在线监控：
-- `monitor-01-list.png` 监控列表
-- `monitor-02-detail.png` 设备监控详情
-- `monitor-03-curve.png` 历史曲线
+在线监控（设备数据）：
+- `monitor-01-list.png` 设备数据列表（latest_json 测点列）
+- `monitor-02-detail.png` 设备数据详情（最新值卡片 + 曲线）
+- `monitor-03-curve.png` 历史曲线全屏
 - `monitor-04-online-rate.png` 在线率
 - `monitor-05-curve-long-cycle.png` 长周期全量查提示

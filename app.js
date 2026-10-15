@@ -27,10 +27,10 @@ const CATEGORY_RULES = [
 ];
 
 const PROPERTIES = [
-  { id: 'P1', identifier: 'liquid_level', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true },
-  { id: 'P2', identifier: 'battery_voltage', name: '电池电压', dataType: 'float', unit: 'V', access: '只读', reportCycle: '300s', required: true },
-  { id: 'P3', identifier: 'signal_rssi', name: '信号强度', dataType: 'int', unit: 'dBm', access: '只读', reportCycle: '300s', required: false },
-  { id: 'P4', identifier: 'device_temp', name: '设备温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: false },
+  { id: 'P1', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true },
+  { id: 'P2', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true },
+  { id: 'P3', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true },
+  { id: 'P4', identifier: 'dianya', name: '电池电压', dataType: 'float', unit: 'V', access: '只读', reportCycle: '300s', required: false },
 ];
 
 const EVENTS = [
@@ -40,10 +40,10 @@ const EVENTS = [
 ];
 
 const POINTS = [
-  { id: 'M1', code: 'LL', name: '液位', unit: 'm', dataType: 'float', min: 0, max: 10, cycle: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: '', faultHigh: 9.5, desc: '井内水位高度' },
-  { id: 'M2', code: 'BV', name: '电池电压', unit: 'V', dataType: 'float', min: 0, max: 5, cycle: 300, warnLow: 3.5, warnHigh: '', alarmLow: 3.3, alarmHigh: '', faultLow: 3.0, faultHigh: '', desc: '设备供电电压' },
-  { id: 'M3', code: 'RSSI', name: '信号强度', unit: 'dBm', dataType: 'int', min: -120, max: 0, cycle: 300, warnLow: -100, warnHigh: '', alarmLow: -110, alarmHigh: '', faultLow: '', faultHigh: '', desc: '无线通信信号' },
-  { id: 'M4', code: 'DT', name: '设备温度', unit: '℃', dataType: 'float', min: -40, max: 85, cycle: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: '', faultHigh: 80, desc: '主板温度' },
+  { id: 'M1', code: 'yewei', name: '液位', unit: 'm', dataType: 'float', min: 0, max: 10, cycle: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: '', faultHigh: 9.5, desc: '井内水位高度 · latest_json.yewei' },
+  { id: 'M2', code: 'wendu', name: '温度', unit: '℃', dataType: 'float', min: -40, max: 85, cycle: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: '', faultHigh: 80, desc: '设备/井内温度 · latest_json.wendu' },
+  { id: 'M3', code: 'yaqiang', name: '压强', unit: 'kPa', dataType: 'float', min: 0, max: 200, cycle: 60, warnLow: 80, warnHigh: 120, alarmLow: 70, alarmHigh: 130, faultLow: '', faultHigh: 150, desc: '气压/液压 · latest_json.yaqiang' },
+  { id: 'M4', code: 'dianya', name: '电池电压', unit: 'V', dataType: 'float', min: 0, max: 5, cycle: 300, warnLow: 3.5, warnHigh: '', alarmLow: 3.3, alarmHigh: '', faultLow: 3.0, faultHigh: '', desc: '设备供电电压' },
 ];
 
 const INSTALL_FIELDS = [
@@ -145,52 +145,65 @@ const COCKPIT_ACTIVITIES = [
   { id: 'CA6', time: '2026-09-30 08:05', actor: '赵强', action: '设备档案更新', result: '城东泵站1#机组 固件/坐标已同步', tone: 'ok' },
 ];
 
-/* ========== 在线监控 Mock ========== */
+/* ========== 在线监控 Mock（设备数据集中入口） ========== */
 const TRUST_TAG = { T0: 'tag-red', T1: 'tag-orange', T2: 'tag-blue', T3: 'tag-green' };
 const TRUST_LABEL = { T0: '不可信', T1: '低可信', T2: '中可信', T3: '高可信' };
 const ONLINE_TAG = { '在线': 'tag-green', '离线': 'tag-gray', '未知': 'tag-orange' };
 
+/** 积水仪主测点：与物模型 / latest_json 字段名对齐 */
+const FLOOD_POINT_KEYS = ['yewei', 'wendu', 'yaqiang'];
+
 const MONITOR_ROWS = [
-  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:42:18', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 96, warn: 1, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 1440, actual24h: 1438 },
-  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:41:50', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 94, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 2, expected24h: 1440, actual24h: 1438 },
-  { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '离线', lastReportAt: '2026-09-28 09:11:02', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T1', trustScore: 42, warn: 0, alarm: 2, fault: 1, cycleSec: 300, missed24h: 48, expected24h: 288, actual24h: 240 },
-  { id: 'D005', sn: 'MF20260915030', name: '城东泵站1#机组', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C004', categoryName: '泵站机组', online: '在线', lastReportAt: '2026-09-30 16:40:05', firmware: '1.0.3', model: 'MF-PU-300', trustLevel: 'T2', trustScore: 78, warn: 2, alarm: 1, fault: 0, cycleSec: 120, missed24h: 6, expected24h: 720, actual24h: 714 },
-  { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '在线', lastReportAt: '2026-09-30 16:35:40', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T3', trustScore: 91, warn: 0, alarm: 0, fault: 0, cycleSec: 300, missed24h: 1, expected24h: 288, actual24h: 287 },
-  { id: 'D006', sn: 'MF20260120001', name: '气象局雨量-03', projectId: 'PJ05', projectName: '雨量站扩容', categoryId: 'C005', categoryName: '雨量计', online: '离线', lastReportAt: '2026-07-01 10:00:00', firmware: '1.0.0', model: 'MF-RG-10', trustLevel: 'T0', trustScore: 12, warn: 0, alarm: 0, fault: 1, cycleSec: 1800, missed24h: 48, expected24h: 48, actual24h: 0 },
-  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '未知', lastReportAt: '—', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T0', trustScore: 0, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 0, actual24h: 0 },
-  { id: 'D004', sn: 'MF20251108088', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', online: '离线', lastReportAt: '2026-08-10 14:00:00', firmware: '0.9.0', model: 'MF-PP-50', trustLevel: 'T1', trustScore: 35, warn: 1, alarm: 0, fault: 0, cycleSec: 900, missed24h: 12, expected24h: 96, actual24h: 84 },
+  { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:42:18', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 96, warn: 1, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 1440, actual24h: 1438, latest_json: { yewei: 3.42, wendu: 28.6, yaqiang: 101.3 } },
+  { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:41:50', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 94, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 2, expected24h: 1440, actual24h: 1438, latest_json: { yewei: 3.38, wendu: 27.9, yaqiang: 100.8 } },
+  { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '离线', lastReportAt: '2026-09-28 09:11:02', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T1', trustScore: 42, warn: 0, alarm: 2, fault: 1, cycleSec: 300, missed24h: 48, expected24h: 288, actual24h: 240, latest_json: { ph: 8.9, do: 2.1 } },
+  { id: 'D005', sn: 'MF20260915030', name: '城东泵站1#机组', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C004', categoryName: '泵站机组', online: '在线', lastReportAt: '2026-09-30 16:40:05', firmware: '1.0.3', model: 'MF-PU-300', trustLevel: 'T2', trustScore: 78, warn: 2, alarm: 1, fault: 0, cycleSec: 120, missed24h: 6, expected24h: 720, actual24h: 714, latest_json: { cur: 118, vib: 4.8 } },
+  { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '在线', lastReportAt: '2026-09-30 16:35:40', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T3', trustScore: 91, warn: 0, alarm: 0, fault: 0, cycleSec: 300, missed24h: 1, expected24h: 288, actual24h: 287, latest_json: { ph: 7.2, do: 6.4 } },
+  { id: 'D006', sn: 'MF20260120001', name: '气象局雨量-03', projectId: 'PJ05', projectName: '雨量站扩容', categoryId: 'C005', categoryName: '雨量计', online: '离线', lastReportAt: '2026-07-01 10:00:00', firmware: '1.0.0', model: 'MF-RG-10', trustLevel: 'T0', trustScore: 12, warn: 0, alarm: 0, fault: 1, cycleSec: 1800, missed24h: 48, expected24h: 48, actual24h: 0, latest_json: { rain: null } },
+  { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '未知', lastReportAt: '—', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T0', trustScore: 0, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 0, actual24h: 0, latest_json: { yewei: null, wendu: null, yaqiang: null } },
+  { id: 'D004', sn: 'MF20251108088', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', online: '离线', lastReportAt: '2026-08-10 14:00:00', firmware: '0.9.0', model: 'MF-PP-50', trustLevel: 'T1', trustScore: 35, warn: 1, alarm: 0, fault: 0, cycleSec: 900, missed24h: 12, expected24h: 96, actual24h: 84, latest_json: { yaqiang: 280 } },
+  { id: 'D010', sn: 'MF20261008018', name: '望江路井-侧壁-02', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C006', categoryName: '积水仪侧壁', online: '在线', lastReportAt: '2026-10-14 09:18:33', firmware: '1.0.0', model: 'MF-FS-60', trustLevel: 'T3', trustScore: 93, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 1, expected24h: 1440, actual24h: 1439, latest_json: { yewei: 1.86, wendu: 26.2, yaqiang: 99.4 } },
 ];
 
 const MONITOR_POINTS = {
   D001: [
-    { code: 'LL', name: '液位', unit: 'm', value: 3.42, trustLevel: 'T3', trustScore: 98, ts: '2026-09-30 16:42:18', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
-    { code: 'BV', name: '电池电压', unit: 'V', value: 3.78, trustLevel: 'T3', trustScore: 95, ts: '2026-09-30 16:40:00', cycleSec: 300, warnLow: 3.5, warnHigh: null, alarmLow: 3.3, alarmHigh: null, faultLow: 3.0, faultHigh: null, ymin: 2.5, ymax: 5 },
-    { code: 'RSSI', name: '信号强度', unit: 'dBm', value: -72, trustLevel: 'T2', trustScore: 82, ts: '2026-09-30 16:40:00', cycleSec: 300, warnLow: -100, warnHigh: null, alarmLow: -110, alarmHigh: null, faultLow: null, faultHigh: null, ymin: -120, ymax: 0 },
-    { code: 'DT', name: '设备温度', unit: '℃', value: 28.6, trustLevel: 'T3', trustScore: 97, ts: '2026-09-30 16:41:00', cycleSec: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: null, faultHigh: 80, ymin: -40, ymax: 85 },
-  ],
-  D003: [
-    { code: 'PH', name: 'pH', unit: '', value: 8.9, trustLevel: 'T1', trustScore: 40, ts: '2026-09-28 09:11:02', cycleSec: 300, warnLow: 6.5, warnHigh: 8.5, alarmLow: 6.0, alarmHigh: 9.0, faultLow: 5.0, faultHigh: 10.0, ymin: 0, ymax: 14 },
-    { code: 'DO', name: '溶解氧', unit: 'mg/L', value: 2.1, trustLevel: 'T1', trustScore: 38, ts: '2026-09-28 09:11:02', cycleSec: 300, warnLow: 3.0, warnHigh: null, alarmLow: 2.0, alarmHigh: null, faultLow: 1.0, faultHigh: null, ymin: 0, ymax: 15 },
-  ],
-  D005: [
-    { code: 'CUR', name: '运行电流', unit: 'A', value: 118, trustLevel: 'T2', trustScore: 76, ts: '2026-09-30 16:40:05', cycleSec: 120, warnLow: null, warnHigh: 130, alarmLow: null, alarmHigh: 145, faultLow: null, faultHigh: 160, ymin: 0, ymax: 200 },
-    { code: 'VIB', name: '振动', unit: 'mm/s', value: 4.8, trustLevel: 'T2', trustScore: 80, ts: '2026-09-30 16:40:05', cycleSec: 120, warnLow: null, warnHigh: 4.5, alarmLow: null, alarmHigh: 7.0, faultLow: null, faultHigh: 10.0, ymin: 0, ymax: 15 },
-  ],
-  D006: [
-    { code: 'RAIN', name: '雨量', unit: 'mm', value: null, trustLevel: 'T0', trustScore: 0, ts: '—', cycleSec: 1800, warnLow: null, warnHigh: 50, alarmLow: null, alarmHigh: 80, faultLow: null, faultHigh: null, ymin: 0, ymax: 100 },
-  ],
-  D004: [
-    { code: 'P', name: '管网压力', unit: 'MPa', value: 0.28, trustLevel: 'T1', trustScore: 35, ts: '2026-08-10 14:00:00', cycleSec: 900, warnLow: 0.15, warnHigh: 0.45, alarmLow: 0.10, alarmHigh: 0.55, faultLow: null, faultHigh: 0.70, ymin: 0, ymax: 1 },
-  ],
-  D008: [
-    { code: 'PH', name: 'pH', unit: '', value: 7.2, trustLevel: 'T3', trustScore: 93, ts: '2026-09-30 16:35:40', cycleSec: 300, warnLow: 6.5, warnHigh: 8.5, alarmLow: 6.0, alarmHigh: 9.0, faultLow: 5.0, faultHigh: 10.0, ymin: 0, ymax: 14 },
-    { code: 'DO', name: '溶解氧', unit: 'mg/L', value: 6.4, trustLevel: 'T3', trustScore: 90, ts: '2026-09-30 16:35:40', cycleSec: 300, warnLow: 3.0, warnHigh: null, alarmLow: 2.0, alarmHigh: null, faultLow: 1.0, faultHigh: null, ymin: 0, ymax: 15 },
+    { code: 'yewei', name: '液位', unit: 'm', value: 3.42, trustLevel: 'T3', trustScore: 98, ts: '2026-09-30 16:42:18', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
+    { code: 'wendu', name: '温度', unit: '℃', value: 28.6, trustLevel: 'T3', trustScore: 97, ts: '2026-09-30 16:41:00', cycleSec: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: null, faultHigh: 80, ymin: -40, ymax: 85 },
+    { code: 'yaqiang', name: '压强', unit: 'kPa', value: 101.3, trustLevel: 'T3', trustScore: 96, ts: '2026-09-30 16:42:18', cycleSec: 60, warnLow: 80, warnHigh: 120, alarmLow: 70, alarmHigh: 130, faultLow: null, faultHigh: 150, ymin: 0, ymax: 200 },
+    { code: 'dianya', name: '电池电压', unit: 'V', value: 3.78, trustLevel: 'T3', trustScore: 95, ts: '2026-09-30 16:40:00', cycleSec: 300, warnLow: 3.5, warnHigh: null, alarmLow: 3.3, alarmHigh: null, faultLow: 3.0, faultHigh: null, ymin: 2.5, ymax: 5 },
   ],
   D002: [
-    { code: 'LL', name: '液位', unit: 'm', value: 3.38, trustLevel: 'T3', trustScore: 94, ts: '2026-09-30 16:41:50', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
+    { code: 'yewei', name: '液位', unit: 'm', value: 3.38, trustLevel: 'T3', trustScore: 94, ts: '2026-09-30 16:41:50', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
+    { code: 'wendu', name: '温度', unit: '℃', value: 27.9, trustLevel: 'T3', trustScore: 93, ts: '2026-09-30 16:41:50', cycleSec: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: null, faultHigh: 80, ymin: -40, ymax: 85 },
+    { code: 'yaqiang', name: '压强', unit: 'kPa', value: 100.8, trustLevel: 'T3', trustScore: 94, ts: '2026-09-30 16:41:50', cycleSec: 60, warnLow: 80, warnHigh: 120, alarmLow: 70, alarmHigh: 130, faultLow: null, faultHigh: 150, ymin: 0, ymax: 200 },
   ],
   D007: [
-    { code: 'LL', name: '液位', unit: 'm', value: null, trustLevel: 'T0', trustScore: 0, ts: '—', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
+    { code: 'yewei', name: '液位', unit: 'm', value: null, trustLevel: 'T0', trustScore: 0, ts: '—', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
+    { code: 'wendu', name: '温度', unit: '℃', value: null, trustLevel: 'T0', trustScore: 0, ts: '—', cycleSec: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: null, faultHigh: 80, ymin: -40, ymax: 85 },
+    { code: 'yaqiang', name: '压强', unit: 'kPa', value: null, trustLevel: 'T0', trustScore: 0, ts: '—', cycleSec: 60, warnLow: 80, warnHigh: 120, alarmLow: 70, alarmHigh: 130, faultLow: null, faultHigh: 150, ymin: 0, ymax: 200 },
+  ],
+  D010: [
+    { code: 'yewei', name: '液位', unit: 'm', value: 1.86, trustLevel: 'T3', trustScore: 95, ts: '2026-10-14 09:18:33', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
+    { code: 'wendu', name: '温度', unit: '℃', value: 26.2, trustLevel: 'T3', trustScore: 94, ts: '2026-10-14 09:18:33', cycleSec: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: null, faultHigh: 80, ymin: -40, ymax: 85 },
+    { code: 'yaqiang', name: '压强', unit: 'kPa', value: 99.4, trustLevel: 'T3', trustScore: 92, ts: '2026-10-14 09:18:33', cycleSec: 60, warnLow: 80, warnHigh: 120, alarmLow: 70, alarmHigh: 130, faultLow: null, faultHigh: 150, ymin: 0, ymax: 200 },
+  ],
+  D003: [
+    { code: 'ph', name: 'pH', unit: '', value: 8.9, trustLevel: 'T1', trustScore: 40, ts: '2026-09-28 09:11:02', cycleSec: 300, warnLow: 6.5, warnHigh: 8.5, alarmLow: 6.0, alarmHigh: 9.0, faultLow: 5.0, faultHigh: 10.0, ymin: 0, ymax: 14 },
+    { code: 'do', name: '溶解氧', unit: 'mg/L', value: 2.1, trustLevel: 'T1', trustScore: 38, ts: '2026-09-28 09:11:02', cycleSec: 300, warnLow: 3.0, warnHigh: null, alarmLow: 2.0, alarmHigh: null, faultLow: 1.0, faultHigh: null, ymin: 0, ymax: 15 },
+  ],
+  D005: [
+    { code: 'cur', name: '运行电流', unit: 'A', value: 118, trustLevel: 'T2', trustScore: 76, ts: '2026-09-30 16:40:05', cycleSec: 120, warnLow: null, warnHigh: 130, alarmLow: null, alarmHigh: 145, faultLow: null, faultHigh: 160, ymin: 0, ymax: 200 },
+    { code: 'vib', name: '振动', unit: 'mm/s', value: 4.8, trustLevel: 'T2', trustScore: 80, ts: '2026-09-30 16:40:05', cycleSec: 120, warnLow: null, warnHigh: 4.5, alarmLow: null, alarmHigh: 7.0, faultLow: null, faultHigh: 10.0, ymin: 0, ymax: 15 },
+  ],
+  D006: [
+    { code: 'rain', name: '雨量', unit: 'mm', value: null, trustLevel: 'T0', trustScore: 0, ts: '—', cycleSec: 1800, warnLow: null, warnHigh: 50, alarmLow: null, alarmHigh: 80, faultLow: null, faultHigh: null, ymin: 0, ymax: 100 },
+  ],
+  D004: [
+    { code: 'yaqiang', name: '压强', unit: 'kPa', value: 280, trustLevel: 'T1', trustScore: 35, ts: '2026-08-10 14:00:00', cycleSec: 900, warnLow: 150, warnHigh: 450, alarmLow: 100, alarmHigh: 550, faultLow: null, faultHigh: 700, ymin: 0, ymax: 1000 },
+  ],
+  D008: [
+    { code: 'ph', name: 'pH', unit: '', value: 7.2, trustLevel: 'T3', trustScore: 93, ts: '2026-09-30 16:35:40', cycleSec: 300, warnLow: 6.5, warnHigh: 8.5, alarmLow: 6.0, alarmHigh: 9.0, faultLow: 5.0, faultHigh: 10.0, ymin: 0, ymax: 14 },
+    { code: 'do', name: '溶解氧', unit: 'mg/L', value: 6.4, trustLevel: 'T3', trustScore: 90, ts: '2026-09-30 16:35:40', cycleSec: 300, warnLow: 3.0, warnHigh: null, alarmLow: 2.0, alarmHigh: null, faultLow: 1.0, faultHigh: null, ymin: 0, ymax: 15 },
   ],
 };
 
@@ -311,7 +324,7 @@ createApp({
     const monSearch = ref('');
     const currentMonitor = ref(MONITOR_ROWS[0]);
     const monCurveRange = ref(7); // 7 | 30
-    const monCurvePointCode = ref('LL');
+    const monCurvePointCode = ref('yewei');
 
     const filteredCategories = computed(() => {
       return CATEGORIES.filter(c => {
@@ -518,8 +531,8 @@ createApp({
         return { parent: '设备管控', current: '驾驶舱' };
       }
       if (module.value === 'monitor') {
-        if (screen.value === 'monitorList') return { parent: '设备管控', current: '在线监控 · 监控列表' };
-        if (screen.value === 'monitorDetail') return { parent: '在线监控', current: (currentMonitor.value?.name || '设备') + ' · 监控详情' };
+        if (screen.value === 'monitorList') return { parent: '设备管控', current: '在线监控 · 设备数据' };
+        if (screen.value === 'monitorDetail') return { parent: '在线监控', current: (currentMonitor.value?.name || '设备') + ' · 设备数据' };
         if (screen.value === 'monitorCurve') return { parent: currentMonitor.value?.name || '设备', current: '历史曲线' };
         if (screen.value === 'monitorOnlineRate') return { parent: '在线监控', current: '在线率统计' };
         return { parent: '设备管控', current: '在线监控' };
@@ -997,6 +1010,7 @@ createApp({
       currentMonitor.value = row;
       const pts = MONITOR_POINTS[row.id] || [];
       monCurvePointCode.value = pts.length ? pts[0].code : '';
+      monCurveRange.value = 7;
       module.value = 'monitor';
       screen.value = 'monitorDetail';
     }
@@ -1007,6 +1021,67 @@ createApp({
       monCurveRange.value = 7;
       module.value = 'monitor';
       screen.value = 'monitorCurve';
+    }
+    /** 台账「数据」入口：按设备 id/sn 跳转在线监控详情 */
+    function openMonitorForDevice(device) {
+      if (!device) return;
+      const row = MONITOR_ROWS.find(r => r.id === device.id || r.sn === device.sn);
+      if (row) {
+        openMonitorDetail(row);
+        return;
+      }
+      // 台账有、监控无：用档案拼一条只读示意行
+      openMonitorDetail({
+        id: device.id,
+        sn: device.sn,
+        name: device.name,
+        projectId: device.projectId,
+        projectName: device.projectName || '未定义项目',
+        categoryId: device.categoryId,
+        categoryName: device.categoryName || '待归属',
+        online: device.lifecycle === '在线' ? '在线' : (device.lifecycle === '离线' ? '离线' : '未知'),
+        lastReportAt: device.updatedAt || '—',
+        firmware: device.firmware || '—',
+        model: device.model || '—',
+        trustLevel: 'T0',
+        trustScore: 0,
+        warn: 0, alarm: 0, fault: 0,
+        cycleSec: 60,
+        missed24h: 0, expected24h: 0, actual24h: 0,
+        latest_json: {},
+      });
+    }
+    function latestPointEntries(row) {
+      if (!row) return [];
+      const pts = MONITOR_POINTS[row.id];
+      if (pts && pts.length) {
+        return pts.map(p => ({
+          code: p.code,
+          name: p.name,
+          unit: p.unit || '',
+          value: p.value,
+        }));
+      }
+      const lj = row.latest_json || {};
+      const nameMap = { yewei: '液位', wendu: '温度', yaqiang: '压强', ph: 'pH', do: '溶解氧', cur: '运行电流', vib: '振动', rain: '雨量', dianya: '电池电压' };
+      const unitMap = { yewei: 'm', wendu: '℃', yaqiang: 'kPa', ph: '', do: 'mg/L', cur: 'A', vib: 'mm/s', rain: 'mm', dianya: 'V' };
+      return Object.keys(lj).map(code => ({
+        code,
+        name: nameMap[code] || code,
+        unit: unitMap[code] || '',
+        value: lj[code],
+      }));
+    }
+    function latestSummaryText(row) {
+      const entries = latestPointEntries(row);
+      if (!entries.length) return '—';
+      return entries.slice(0, 4).map(e => {
+        const v = e.value == null || e.value === '' ? '—' : e.value;
+        return e.name + ' ' + v + (e.unit && v !== '—' ? e.unit : '');
+      }).join(' · ');
+    }
+    function selectCurvePoint(code) {
+      monCurvePointCode.value = code;
     }
     function alarmSummaryText(d) {
       if (!d.warn && !d.alarm && !d.fault) return '无告警';
@@ -1072,9 +1147,9 @@ createApp({
         monitor: () => goMonitorList(),
         monitorList: () => goMonitorList(),
         monitorDetail: () => openMonitorDetail(MONITOR_ROWS[0]),
-        monitorCurve: () => openMonitorCurve(MONITOR_ROWS[0], 'LL'),
+        monitorCurve: () => openMonitorCurve(MONITOR_ROWS[0], 'yewei'),
         monitorOnlineRate: () => goMonitorOnlineRate(),
-        monitorCurveLong: () => openMonitorCurve(MONITOR_ROWS.find(r => r.id === 'D006') || MONITOR_ROWS[0], 'RAIN'),
+        monitorCurveLong: () => openMonitorCurve(MONITOR_ROWS.find(r => r.id === 'D006') || MONITOR_ROWS[0], 'rain'),
       };
       if (map[hash]) map[hash]();
     }
@@ -1140,7 +1215,8 @@ createApp({
       monLatestPoints, monSelectedPoint, monCurveRange, monCurvePointCode,
       monCurveSeries, monCurveSvg, monCycleFullQueryTip,
       monOnlineRateSummary, monOnlineRateRows,
-      goMonitorList, goMonitorOnlineRate, openMonitorDetail, openMonitorCurve,
+      goMonitorList, goMonitorOnlineRate, openMonitorDetail, openMonitorCurve, openMonitorForDevice,
+      latestPointEntries, latestSummaryText, selectCurvePoint, FLOOD_POINT_KEYS,
       alarmSummaryText, formatCycle,
     };
   },
@@ -1667,6 +1743,7 @@ createApp({
                   <td>{{ d.updatedAt }}</td>
                   <td class="actions">
                     <button class="btn-link btn" @click="openDeviceDetail(d)">档案</button>
+                    <button class="btn-link btn" @click="openMonitorForDevice(d)">数据</button>
                     <button class="btn-link btn" @click="openTransferModal(d)">改挂</button>
                     <button class="btn-link btn" @click="openEditDevice(d)">编辑</button>
                   </td>
@@ -1711,6 +1788,7 @@ createApp({
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" @click="openMonitorForDevice(currentDevice)">数据</button>
               <button class="btn" @click="openTransferModal(currentDevice)">例外处理 · 人工改挂</button>
               <button class="btn" @click="openEditDevice(currentDevice)">编辑档案</button>
               <button class="btn btn-danger" @click="openDisableDevice" :disabled="currentDevice.lifecycle==='停用'||currentDevice.lifecycle==='报废'">停用</button>
@@ -1959,12 +2037,12 @@ createApp({
           <div class="table-note">主操作「同步自 AEP」生成差异；行内「接入台账 / 创建接入 / 忽略」为二次处理。OpenAPI 绑定为主建档路径（projectId 仅空时写入）；缺产品进例外池。对账与品类归属规则相互独立。一期为交互示意。</div>
         </div>
 
-        <!-- ===== 在线监控：监控列表 ===== -->
+        <!-- ===== 在线监控：设备数据列表（集中入口） ===== -->
         <div v-else-if="module==='monitor' && screen==='monitorList'" class="page-card" data-screen="monitor-list">
           <div class="page-header">
             <div>
-              <h1 class="page-title">在线监控 · 设备列表</h1>
-              <p class="page-desc">查看设备在线态、告警摘要与数据可信度（T0～T3 / 分数）；测点时序为 PostgreSQL 示意数据</p>
+              <h1 class="page-title">在线监控 · 设备数据</h1>
+              <p class="page-desc">设备数据的集中入口：按项目 / 品类筛选，查看在线态与 <code>latest_json</code> 最新测点（积水仪：液位 yewei · 温度 wendu · 压强 yaqiang）；点击行进入详情</p>
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn" @click="goMonitorOnlineRate">在线率统计</button>
@@ -2007,7 +2085,14 @@ createApp({
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>设备</th><th>项目</th><th>品类</th><th>在线态</th><th>告警摘要</th><th>可信度</th><th>最近上报</th><th>操作</th>
+                  <th>设备</th>
+                  <th>在线态</th>
+                  <th>最新测点 <span class="th-sub">latest_json</span></th>
+                  <th>最近上报</th>
+                  <th>品类</th>
+                  <th>项目</th>
+                  <th>告警</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -2016,8 +2101,6 @@ createApp({
                     <div class="cell-title">{{ d.name }}</div>
                     <div class="cell-sub"><code>{{ d.sn }}</code></div>
                   </td>
-                  <td>{{ d.projectName }}</td>
-                  <td>{{ d.categoryName }}</td>
                   <td>
                     <span class="lifecycle-dot">
                       <i :class="d.online==='在线'?'lc-online':(d.online==='离线'?'lc-offline':'lc-pending')"></i>
@@ -2025,23 +2108,29 @@ createApp({
                     </span>
                   </td>
                   <td>
-                    <span v-if="!d.warn && !d.alarm && !d.fault" class="tag tag-gray">无告警</span>
+                    <div class="latest-pills" v-if="latestPointEntries(d).length">
+                      <span class="latest-pill" v-for="e in latestPointEntries(d).slice(0, 4)" :key="e.code">
+                        <span class="lp-name">{{ e.name }}</span>
+                        <b class="lp-val">{{ e.value == null ? '—' : e.value }}</b>
+                        <span class="lp-unit" v-if="e.unit">{{ e.unit }}</span>
+                        <code class="lp-code">{{ e.code }}</code>
+                      </span>
+                    </div>
+                    <span v-else class="tag tag-gray">暂无</span>
+                  </td>
+                  <td>{{ d.lastReportAt }}</td>
+                  <td>{{ d.categoryName }}</td>
+                  <td>{{ d.projectName }}</td>
+                  <td>
+                    <span v-if="!d.warn && !d.alarm && !d.fault" class="tag tag-gray">无</span>
                     <span v-else class="alarm-pills">
                       <span v-if="d.warn" class="pill pill-warn">预警 {{ d.warn }}</span>
                       <span v-if="d.alarm" class="pill pill-alarm">报警 {{ d.alarm }}</span>
                       <span v-if="d.fault" class="pill pill-fault">故障 {{ d.fault }}</span>
                     </span>
                   </td>
-                  <td>
-                    <span class="trust-cell">
-                      <span class="tag" :class="TRUST_TAG[d.trustLevel]">{{ d.trustLevel }}</span>
-                      <span class="trust-score">{{ d.trustScore }}</span>
-                      <span class="trust-label">{{ TRUST_LABEL[d.trustLevel] }}</span>
-                    </span>
-                  </td>
-                  <td>{{ d.lastReportAt }}</td>
                   <td class="actions" @click.stop>
-                    <button class="btn-link btn" @click="openMonitorDetail(d)">详情</button>
+                    <button class="btn-link btn" @click="openMonitorDetail(d)">数据</button>
                     <button class="btn-link btn" @click="openMonitorCurve(d)">曲线</button>
                   </td>
                 </tr>
@@ -2056,15 +2145,15 @@ createApp({
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">一期不做设施树、地图；运行时指令下发后续提供。可信度 T0～T3 及分数为示意规则。</div>
+          <div class="table-note">产品口径：设备数据以本列表为集中入口（侧栏「在线监控」）；台账「数据」亦可跳入。测点字段名与物模型 / latest_json 对齐。一期不做设施树、地图。</div>
         </div>
 
-        <!-- ===== 在线监控：设备监控详情 ===== -->
+        <!-- ===== 在线监控：设备数据详情（最新值卡片 + 历史曲线） ===== -->
         <div v-else-if="module==='monitor' && screen==='monitorDetail'" class="page-card detail-shell" data-screen="monitor-detail">
-          <button class="back-link" @click="goMonitorList">← 返回监控列表</button>
+          <button class="back-link" @click="goMonitorList">← 返回在线监控列表</button>
           <div class="detail-top">
             <div>
-              <h1 class="page-title">{{ currentMonitor.name }}</h1>
+              <h1 class="page-title">{{ currentMonitor.name }} · 设备数据</h1>
               <div class="detail-meta">
                 <span>SN：<b>{{ currentMonitor.sn }}</b></span>
                 <span>项目：<b>{{ currentMonitor.projectName }}</b></span>
@@ -2075,10 +2164,11 @@ createApp({
                     <b>{{ currentMonitor.online }}</b>
                   </span>
                 </span>
+                <span>最近上报：<b>{{ currentMonitor.lastReportAt }}</b></span>
               </div>
             </div>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-primary" @click="openMonitorCurve(currentMonitor)">历史曲线</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" @click="openMonitorCurve(currentMonitor, monCurvePointCode)">全屏曲线</button>
               <button class="btn" @click="goMonitorOnlineRate">在线率</button>
             </div>
           </div>
@@ -2095,48 +2185,89 @@ createApp({
           </div>
 
           <div class="info-section">
+            <div class="info-section-title">最新数据 <span class="sub-nav-hint">物模型测点 · 字段名对齐 latest_json · 点击卡片切换曲线</span></div>
+            <div class="point-card-grid" v-if="monLatestPoints.length">
+              <div
+                class="point-card"
+                v-for="p in monLatestPoints"
+                :key="p.code"
+                :class="{ active: monCurvePointCode === p.code }"
+                @click="selectCurvePoint(p.code)"
+              >
+                <div class="pc-head">
+                  <span class="pc-name">{{ p.name }}</span>
+                  <code class="pc-code">{{ p.code }}</code>
+                </div>
+                <div class="pc-value">
+                  <b>{{ p.value == null ? '—' : p.value }}</b>
+                  <span class="pc-unit" v-if="p.unit">{{ p.unit }}</span>
+                </div>
+                <div class="pc-meta">
+                  <span class="tag" :class="TRUST_TAG[p.trustLevel]">{{ p.trustLevel }}</span>
+                  <span>{{ p.ts }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="empty-hint">暂无测点数据</div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-title">历史曲线 <span class="sub-nav-hint">7 天 / 30 天 · 预警 orange / 报警 error / 故障 primary 参考线</span></div>
+            <div class="toolbar" style="margin-bottom:10px">
+              <select class="select" v-model="monCurvePointCode">
+                <option v-for="p in monLatestPoints" :key="p.code" :value="p.code">{{ p.name }}（{{ p.code }}）</option>
+              </select>
+              <div class="seg-group">
+                <button class="seg-btn" :class="{active: monCurveRange===7}" @click="monCurveRange=7">近 7 天</button>
+                <button class="seg-btn" :class="{active: monCurveRange===30}" @click="monCurveRange=30">近 30 天</button>
+              </div>
+              <div class="spacer"></div>
+              <span class="tag tag-gray" v-if="monSelectedPoint">周期 {{ formatCycle(monSelectedPoint.cycleSec) }}</span>
+              <button class="btn" @click="openMonitorCurve(currentMonitor, monCurvePointCode)">全屏</button>
+            </div>
+            <div v-if="monCycleFullQueryTip" class="banner-tip">采集周期 &gt; 15 分钟：历史全量查、不分段</div>
+            <div class="chart-card" v-if="monSelectedPoint">
+              <div class="chart-legend">
+                <span class="leg"><i class="lg-line" style="background:#0D6EFD"></i>{{ monSelectedPoint.name }}（{{ monSelectedPoint.code }}）</span>
+                <span class="leg"><i class="lg-dash" style="border-color:#E78212"></i>预警</span>
+                <span class="leg"><i class="lg-dash" style="border-color:#DC3545"></i>报警</span>
+                <span class="leg"><i class="lg-dash" style="border-color:#0D6EFD"></i>故障</span>
+                <span class="leg muted">示意 · {{ monCurveRange }} 天</span>
+              </div>
+              <svg class="curve-svg" :viewBox="'0 0 ' + monCurveSvg.w + ' ' + monCurveSvg.h" preserveAspectRatio="none">
+                <rect :x="monCurveSvg.padL" :y="monCurveSvg.padT" :width="monCurveSvg.w - monCurveSvg.padL - monCurveSvg.padR" :height="monCurveSvg.h - monCurveSvg.padT - monCurveSvg.padB" fill="#fafcff" stroke="#eef2f8" />
+                <g v-for="(tk, i) in monCurveSvg.yTicks" :key="'dyt'+i">
+                  <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="tk.y" :y2="tk.y" stroke="#edf0f5" />
+                  <text :x="monCurveSvg.padL - 8" :y="tk.y + 4" text-anchor="end" font-size="11" fill="#8c8c8c">{{ tk.v }}</text>
+                </g>
+                <g v-for="(ln, i) in monCurveSvg.lines" :key="'dln'+i">
+                  <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="ln.y" :y2="ln.y" :stroke="ln.color" stroke-width="1.5" stroke-dasharray="6 4" />
+                  <text :x="monCurveSvg.w - monCurveSvg.padR - 4" :y="ln.y - 4" text-anchor="end" font-size="10" :fill="ln.color">{{ ln.label }} {{ ln.val }}</text>
+                </g>
+                <path :d="monCurveSvg.path" fill="none" stroke="#0D6EFD" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
+                <text :x="(monCurveSvg.padL + monCurveSvg.w - monCurveSvg.padR)/2" :y="monCurveSvg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">时间 →（{{ monCurveRange }} 天 · PG 时序示意）</text>
+              </svg>
+              <div class="chart-meta" v-if="monSelectedPoint">
+                <span>当前测点：<b>{{ monSelectedPoint.name }}</b>（{{ monSelectedPoint.code }}）</span>
+                <span>最新值：<b>{{ monSelectedPoint.value == null ? '—' : monSelectedPoint.value }}</b> {{ monSelectedPoint.unit }}</span>
+                <span>量程：{{ monSelectedPoint.ymin }} ~ {{ monSelectedPoint.ymax }}</span>
+              </div>
+            </div>
+            <div v-else class="empty-hint">请选择测点</div>
+          </div>
+
+          <div class="info-section">
             <div class="info-section-title">设备与固件</div>
             <div class="kv-grid">
               <div class="k">设备 ID</div><div class="v">{{ currentMonitor.id }}</div>
               <div class="k">硬件型号</div><div class="v">{{ currentMonitor.model }}</div>
               <div class="k">固件版本</div><div class="v">{{ currentMonitor.firmware }}</div>
-              <div class="k">最近上报</div><div class="v">{{ currentMonitor.lastReportAt }}</div>
               <div class="k">告警摘要</div><div class="v">{{ alarmSummaryText(currentMonitor) }}</div>
               <div class="k">可信说明</div><div class="v">{{ TRUST_LABEL[currentMonitor.trustLevel] }}（{{ currentMonitor.trustLevel }} / {{ currentMonitor.trustScore }} 分）</div>
+              <div class="k">latest_json</div><div class="v"><code style="font-size:12px">{{ latestSummaryText(currentMonitor) }}</code></div>
             </div>
           </div>
-
-          <div class="info-section">
-            <div class="info-section-title">最新测点 <span class="sub-nav-hint">PG 时序示意 · 点击行可进曲线</span></div>
-            <div class="table-wrap" v-if="monLatestPoints.length">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>编码</th><th>名称</th><th>最新值</th><th>单位</th><th>可信</th><th>采集时间</th><th>周期</th><th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="p in monLatestPoints" :key="p.code" class="row-clickable" @click="openMonitorCurve(currentMonitor, p.code)">
-                    <td><code>{{ p.code }}</code></td>
-                    <td>{{ p.name }}</td>
-                    <td><b>{{ p.value == null ? '—' : p.value }}</b></td>
-                    <td>{{ p.unit || '—' }}</td>
-                    <td>
-                      <span class="tag" :class="TRUST_TAG[p.trustLevel]">{{ p.trustLevel }}</span>
-                      <span class="trust-score">{{ p.trustScore }}</span>
-                    </td>
-                    <td>{{ p.ts }}</td>
-                    <td>{{ formatCycle(p.cycleSec) }}</td>
-                    <td class="actions" @click.stop>
-                      <button class="btn-link btn" @click="openMonitorCurve(currentMonitor, p.code)">曲线</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-else class="empty-hint">暂无测点数据</div>
-          </div>
-          <div class="table-note">测点数值与可信分为 PostgreSQL 时序库示意，非实时接入。</div>
+          <div class="table-note">测点数值与曲线为 PostgreSQL 时序库示意，非实时接入；字段名与物模型测点字典一致。</div>
         </div>
 
         <!-- ===== 在线监控：历史曲线 ===== -->

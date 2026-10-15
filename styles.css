@@ -1102,3 +1102,106 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   color: #999;
   white-space: nowrap;
 }
+
+
+/* ========== 在线监控 · 最新测点 / 设备数据卡片 ========== */
+.th-sub {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #8c8c8c;
+}
+.latest-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 420px;
+}
+.latest-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #f5f9ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.latest-pill .lp-name { color: #5a6a85; }
+.latest-pill .lp-val { color: #0D6EFD; font-size: 13px; font-weight: 600; }
+.latest-pill .lp-unit { color: #8c8c8c; font-size: 11px; }
+.latest-pill .lp-code {
+  margin-left: 2px;
+  font-size: 10px;
+  color: #a0a8b8;
+  background: transparent;
+  padding: 0;
+}
+
+.point-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.point-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.point-card:hover {
+  border-color: #91b9ff;
+  background: #f8fbff;
+}
+.point-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(13,110,253,.15);
+  background: #f0f6ff;
+}
+.point-card .pc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.point-card .pc-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2744;
+}
+.point-card .pc-code {
+  font-size: 11px;
+  color: #8c8c8c;
+  background: #f5f6f8;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.point-card .pc-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.point-card .pc-value b {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0D6EFD;
+  line-height: 1.1;
+}
+.point-card .pc-unit {
+  font-size: 13px;
+  color: #8c8c8c;
+}
+.point-card .pc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
