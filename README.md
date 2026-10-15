@@ -33,7 +33,7 @@ python3 -m http.server 8877
 - **双向挂靠**：品类列表/详情展示 **设备数**（`deviceCount`），可点击或「查看设备」跳转台账 `#devices` 并按该品类筛选；设备列表「匹配」列展示 `categoryMatch`（如自动匹配）。
 
 ### 设备台账
-- **本机数据 / 报文**：挂在设备档案 `#deviceDetail` Tab「本机数据」「报文列表」；测点卡片+曲线复用监控详情；报文 mock 对齐 `iot_protocol_data`（信息包/升级包/上报/其他）。
+- **本机数据（报文列表）**：设备档案 `#deviceDetail` Tab「本机数据」= `iot_protocol_data` 报文表（receiveTime / packageType / parsedJson / contentHex / status；按 deviceId 查；筛 packageType：message* / data* / upgrade65535 / command）。**不再**内嵌测点曲线；曲线仅在线监控。顶栏「曲线（在线监控）」→ `#monitorDetail`。
 - **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
@@ -71,10 +71,9 @@ python3 -m http.server 8877
 | 3 | 设备列表 | `#devices` |
 | 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
 | 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
-| 4 | 设备档案详情（含改挂记录；Tab：档案信息 / **本机数据** / **报文列表** / 指令下发） | `#deviceDetail` |
-| 4a | 设备档案 · 本机数据（最新测点卡片 + 内嵌 7d/30d 曲线；复用监控详情模式） | `#deviceLocalData` |
-| 4b | 设备档案 · 报文列表（iot_protocol_data 风格：时间 / 类型 / 摘要·解析 / hex 展开；按类型筛） | `#devicePackets` |
-| 4c | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
+| 4 | 设备档案详情（含改挂记录；Tab：档案信息 / **本机数据** / 指令下发） | `#deviceDetail` |
+| 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
+| 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
@@ -97,7 +96,7 @@ python3 -m http.server 8877
 | 3b | 长周期曲线（采集周期 >15 分钟 →「历史全量查、不分段」） | `#monitorCurveLong` |
 | 4 | 在线率（该报没报：应报/实报/漏报统计卡片 + 简表） | `#monitorOnlineRate` |
 
-测点时序为 **PostgreSQL 时序示意**，非实时接入。各品类 mock 的 `latest_json` 与物模型 `kind=property` 标识符对齐。一期不做设施树、地图；**物模型可配置指令模板**；设备档案 Tab 顺序：**档案信息 → 本机数据 → 报文列表 → 指令下发**（`#deviceDetail` / `#deviceLocalData` / `#devicePackets` / `#deviceDispatch`）。点发 dryRun 预览 contentHex + 真正下发 mock toast；AEP CreateCommand 透传 hex dataType=2。
+测点时序为 **PostgreSQL 时序示意**，非实时接入。各品类 mock 的 `latest_json` 与物模型 `kind=property` 标识符对齐。一期不做设施树、地图；**物模型可配置指令模板**；设备档案 Tab 顺序：**档案信息 → 本机数据（报文列表）→ 指令下发**（`#deviceDetail` / `#deviceLocalData` / `#deviceDispatch`；旧 `#devicePackets` 并入本机数据）。曲线仅在线监控。点发 dryRun 预览 contentHex + 真正下发 mock toast；AEP CreateCommand 透传 hex dataType=2。
 
 ## 配色
 

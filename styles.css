@@ -1430,7 +1430,7 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   border: 1px solid #f1b0b7;
 }
 
-/* ---- 设备档案 · 报文列表 ---- */
+/* ---- 设备档案 · 本机数据（iot_protocol_data 报文表） ---- */
 .packet-table .packet-summary {
   font-size: 13px;
   color: #1f1f1f;

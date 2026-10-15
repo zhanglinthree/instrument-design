@@ -255,23 +255,49 @@ const MONITOR_POINTS = {
 };
 
 
-/** 设备报文 mock · 对齐 iot_protocol_data 风格（按设备过滤） */
-const PACKET_TYPES = ['信息包', '升级包', '上报', '其他'];
-const PACKET_TYPE_TAG = { '信息包': 'tag-blue', '升级包': 'tag-orange', '上报': 'tag-green', '其他': 'tag-gray' };
+/** 设备本机数据 · iot_protocol_data 报文列表（按 deviceId 查询；曲线归在线监控） */
+const PACKET_FILTERS = [
+  { key: '', label: '全部' },
+  { key: 'message*', label: 'message*' },
+  { key: 'data*', label: 'data*' },
+  { key: 'upgrade65535', label: 'upgrade65535' },
+  { key: 'command', label: 'command' },
+];
+const PACKET_TYPE_TAG = {
+  messagePackage1: 'tag-blue',
+  messagePackage2: 'tag-blue',
+  dataPackage1: 'tag-green',
+  dataPackage2: 'tag-green',
+  upgradePackage65535: 'tag-orange',
+  command: 'tag-gray',
+};
+const PACKET_STATUS_TAG = { '成功': 'tag-green', '失败': 'tag-red', '待处理': 'tag-orange' };
 
+function matchPackageTypeFilter(packageType, filterKey) {
+  const t = packageType || '';
+  if (!filterKey) return true;
+  if (filterKey === 'message*') return t.startsWith('message');
+  if (filterKey === 'data*') return t.startsWith('data');
+  if (filterKey === 'upgrade65535') return t === 'upgradePackage65535' || t === 'upgrade65535' || (t.startsWith('upgrade') && t.includes('65535'));
+  if (filterKey === 'command') return t === 'command' || t.startsWith('command');
+  return t === filterKey;
+}
+
+/** mock rows · 字段对齐 iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；query by deviceId */
 const PROTOCOL_PACKETS = [
-  { id: 'PK001', deviceId: 'D001', time: '2026-10-14 09:18:33', type: '上报', summary: '液位 3.42 m · 温度 28.6 ℃ · 压强 101.3 kPa', parsed: '{ "yewei": 3.42, "wendu": 28.6, "yaqiang": 101.3 }', hex: 'FA FA 00 54 01 02 0D 5C 01 1E 27 85 00 00 AD AD' },
-  { id: 'PK002', deviceId: 'D001', time: '2026-10-14 09:17:01', type: '信息包', summary: 'IMEI / 固件 1.2.0 / 探头数 1 · B2B2 档案包', parsed: '{ "imei": "860123456789012", "fw": "1.2.0", "probes": 1 }', hex: 'B2 B2 00 3C 86 01 23 45 67 89 01 2F 01 02 00 01 1A 1A' },
-  { id: 'PK003', deviceId: 'D001', time: '2026-10-13 22:05:12', type: '升级包', summary: '固件分片 3/12 · 剩余 9 包 · 解析方式 0xFFFF', parsed: '{ "chunk": 3, "total": 12, "left": 9, "parse": "0xFFFF" }', hex: 'FF FE 00 80 00 03 00 0C 00 09 41 42 43 44 EE EE' },
-  { id: 'PK004', deviceId: 'D001', time: '2026-10-13 18:40:00', type: '其他', summary: '心跳 / 链路保活', parsed: '{ "kind": "heartbeat", "rssi": -72 }', hex: '00 00 00 08 AA 55 00 01 DE AD' },
-  { id: 'PK005', deviceId: 'D001', time: '2026-10-13 16:42:18', type: '上报', summary: '液位 3.38 m · 温度 27.9 ℃ · 压强 100.8 kPa', parsed: '{ "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 }', hex: 'FA FA 00 54 01 02 0D 34 01 17 27 60 00 00 AD AD' },
-  { id: 'PK006', deviceId: 'D001', time: '2026-10-12 11:20:05', type: '信息包', summary: '安装参数同步 · 井深/管径', parsed: '{ "well_depth": 8.5, "pipe_diameter": 600 }', hex: 'B2 B2 00 28 01 08 50 02 02 58 00 00 1A 1A' },
-  { id: 'PK007', deviceId: 'D002', time: '2026-10-14 09:17:50', type: '上报', summary: '从机上报 · 液位 3.38 m', parsed: '{ "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 }', hex: 'FA FA 00 54 01 02 0D 34 01 17 27 60 00 00 AD AD' },
-  { id: 'PK008', deviceId: 'D002', time: '2026-10-14 08:00:11', type: '信息包', summary: '从机信息包 · 挂靠主机 D001', parsed: '{ "masterSn": "MF20260901001", "role": "slave" }', hex: 'B2 B2 00 2A 01 53 4C 41 56 45 00 00 1A 1A' },
-  { id: 'PK009', deviceId: 'D010', time: '2026-10-14 09:18:33', type: '上报', summary: '侧壁 · 液位 1.86 m · 温度 26.2 ℃ · 压强 99.4 kPa', parsed: '{ "yewei": 1.86, "wendu": 26.2, "yaqiang": 99.4 }', hex: 'FA FA 00 54 01 02 07 44 01 06 26 EC 00 00 AD AD' },
-  { id: 'PK010', deviceId: 'D010', time: '2026-10-14 09:10:00', type: '升级包', summary: '侧壁固件分片 1/4', parsed: '{ "chunk": 1, "total": 4, "left": 3 }', hex: 'FF FE 00 40 00 01 00 04 00 03 31 32 33 34 EE EE' },
-  { id: 'PK011', deviceId: 'D003', time: '2026-09-28 09:11:02', type: '上报', summary: '水质 · pH 8.9 · DO 2.1 · 浊度 12.4', parsed: '{ "ph": 8.9, "do": 2.1, "turb": 12.4 }', hex: 'FA FA 00 48 08 5A 02 0A 00 C4 AD AD' },
-  { id: 'PK012', deviceId: 'D005', time: '2026-09-30 16:40:05', type: '上报', summary: '泵站 · 电流 118 A · 振动 4.8 mm/s', parsed: '{ "cur": 118, "vib": 4.8 }', hex: 'FA FA 00 40 00 76 00 30 AD AD' },
+  { id: 'PK001', deviceId: 'D001', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "yewei": 3.42, "wendu": 28.6, "yaqiang": 101.3 }', contentHex: '3C3C000101020D5C011E278500000D0D', status: '成功' },
+  { id: 'PK002', deviceId: 'D001', receiveTime: '2026-10-14 09:17:01', packageType: 'messagePackage1', parsedJson: '{ "imei": "860123456789012", "fw": "1.2.0", "probes": 1 }', contentHex: 'B2B2003C860123456789012F010200011A1A', status: '成功' },
+  { id: 'PK003', deviceId: 'D001', receiveTime: '2026-10-13 22:05:12', packageType: 'upgradePackage65535', parsedJson: '{ "chunk": 3, "total": 12, "left": 9, "parse": "0xFFFF" }', contentHex: 'F0F000800003000C0009414243440D0D', status: '成功' },
+  { id: 'PK004', deviceId: 'D001', receiveTime: '2026-10-13 18:40:00', packageType: 'command', parsedJson: '{ "kind": "cmdAck", "ok": true, "bitIndex": 1 }', contentHex: 'FAFA0008AA550001ADAD', status: '成功' },
+  { id: 'PK005', deviceId: 'D001', receiveTime: '2026-10-13 16:42:18', packageType: 'dataPackage1', parsedJson: '{ "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 }', contentHex: '3C3C000101020D340117276000000D0D', status: '成功' },
+  { id: 'PK006', deviceId: 'D001', receiveTime: '2026-10-12 11:20:05', packageType: 'messagePackage2', parsedJson: '{ "well_depth": 8.5, "pipe_diameter": 600 }', contentHex: 'B2B2002801085002025800001A1A', status: '成功' },
+  { id: 'PK007', deviceId: 'D001', receiveTime: '2026-10-12 10:01:44', packageType: 'command', parsedJson: '{ "kind": "cmdAck", "ok": false, "dealResult": "checksum fail" }', contentHex: 'FAFA0008DEAD0002ADAD', status: '失败' },
+  { id: 'PK008', deviceId: 'D002', receiveTime: '2026-10-14 09:17:50', packageType: 'dataPackage1', parsedJson: '{ "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 }', contentHex: '3C3C000101020D340117276000000D0D', status: '成功' },
+  { id: 'PK009', deviceId: 'D002', receiveTime: '2026-10-14 08:00:11', packageType: 'messagePackage1', parsedJson: '{ "masterSn": "MF20260901001", "role": "slave" }', contentHex: 'B2B2002A01534C41564500001A1A', status: '成功' },
+  { id: 'PK010', deviceId: 'D010', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "yewei": 1.86, "wendu": 26.2, "yaqiang": 99.4 }', contentHex: '3C3C000101020744010626EC00000D0D', status: '成功' },
+  { id: 'PK011', deviceId: 'D010', receiveTime: '2026-10-14 09:10:00', packageType: 'upgradePackage65535', parsedJson: '{ "chunk": 1, "total": 4, "left": 3 }', contentHex: 'F0F00040000100040003313233340D0D', status: '待处理' },
+  { id: 'PK012', deviceId: 'D003', receiveTime: '2026-09-28 09:11:02', packageType: 'dataPackage2', parsedJson: '{ "ph": 8.9, "do": 2.1, "turb": 12.4 }', contentHex: '3C3C0002085A020A00C40D0D', status: '成功' },
+  { id: 'PK013', deviceId: 'D005', receiveTime: '2026-09-30 16:40:05', packageType: 'dataPackage1', parsedJson: '{ "cur": 118, "vib": 4.8 }', contentHex: '3C3C0001007600300D0D', status: '成功' },
 ];
 
 function genCurveSeries(point, days) {
@@ -371,9 +397,9 @@ createApp({
     const transferLogs = ref(TRANSFER_LOGS.map(t => ({ ...t })));
     const showCategoryOverride = ref(false);
 
-    /* ---- 设备档案 · Tab：档案 / 本机数据 / 报文 / 指令点发 ---- */
-    const deviceDetailTab = ref('profile'); // profile | localData | packets | dispatch
-    const packetTypeFilter = ref(''); // '' | 信息包 | 升级包 | 上报 | 其他
+    /* ---- 设备档案 · Tab：档案 / 本机数据（报文列表）/ 指令点发 ---- */
+    const deviceDetailTab = ref('profile'); // profile | localData | dispatch
+    const packetTypeFilter = ref(''); // '' | message* | data* | upgrade65535 | command
     const expandedPacketIds = ref([]); // hex 展开行
     const dispatchSelected = ref([]); // command ids
     const dispatchParams = reactive({}); // code -> params object（如 { value } / { start, end }）
@@ -441,7 +467,7 @@ createApp({
       return deviceDispatchCommands.value.filter(c => set.has(c.id));
     });
 
-    /** 当前设备报文列表（可按类型筛） */
+    /** 当前设备本机数据 = iot_protocol_data（query by deviceId；可按 packageType 筛） */
     const devicePackets = computed(() => {
       const d = currentDevice.value;
       if (!d) return [];
@@ -449,14 +475,14 @@ createApp({
     });
     const filteredDevicePackets = computed(() => {
       const t = packetTypeFilter.value;
-      const rows = devicePackets.value;
-      if (!t) return rows;
-      return rows.filter(p => p.type === t);
+      return devicePackets.value.filter(p => matchPackageTypeFilter(p.packageType, t));
     });
     const devicePacketTypeCounts = computed(() => {
       const rows = devicePackets.value;
-      const counts = { '': rows.length };
-      PACKET_TYPES.forEach(t => { counts[t] = rows.filter(p => p.type === t).length; });
+      const counts = {};
+      PACKET_FILTERS.forEach(f => {
+        counts[f.key] = rows.filter(p => matchPackageTypeFilter(p.packageType, f.key)).length;
+      });
       return counts;
     });
 
@@ -711,7 +737,6 @@ createApp({
           const tabLabel = ({
             profile: '档案',
             localData: '本机数据',
-            packets: '报文列表',
             dispatch: '指令下发',
           })[deviceDetailTab.value] || '档案';
           return { parent: '设备台账', current: name + ' · ' + tabLabel };
@@ -1328,18 +1353,19 @@ createApp({
       currentDevice.value = d;
       module.value = 'ledger';
       screen.value = 'deviceDetail';
-      const allowed = ['profile', 'localData', 'packets', 'dispatch'];
+      // packets 旧 hash 并入 localData（本机数据 = 报文列表）
+      if (tab === 'packets') tab = 'localData';
+      const allowed = ['profile', 'localData', 'dispatch'];
       deviceDetailTab.value = allowed.includes(tab) ? tab : 'profile';
       packetTypeFilter.value = '';
       expandedPacketIds.value = [];
       resetDispatchState();
-      syncMonitorFromDevice(d);
     }
 
     function setDeviceDetailTab(tab) {
+      if (tab === 'packets') tab = 'localData';
       deviceDetailTab.value = tab;
-      if (tab === 'localData') syncMonitorFromDevice(currentDevice.value);
-      if (tab === 'packets') {
+      if (tab === 'localData') {
         packetTypeFilter.value = '';
         expandedPacketIds.value = [];
       }
@@ -1675,7 +1701,7 @@ createApp({
         unassignedDevices: () => goUnassignedDevices(),
         deviceDetail: () => openDeviceDetail(deviceList.value[0]),
         deviceLocalData: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'),
-        devicePackets: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'packets'),
+        devicePackets: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'), // 旧 hash → 本机数据
         deviceDispatch: () => openDeviceDetail(deviceList.value.find(d => d.categoryId === 'C001') || deviceList.value[0], 'dispatch'),
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
@@ -1740,7 +1766,7 @@ createApp({
       deviceDetailTab, setDeviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
       dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
       isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
-      PACKET_TYPES, PACKET_TYPE_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
+      PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
       getCommandParamFields,
       unassignedDevices, unassignedCount, selectedDeviceIds,
@@ -2316,7 +2342,7 @@ createApp({
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">品类默认由归属规则自动匹配（只读展示）；品类「改挂」与项目「人工改挂」均为例外处理。一期不做设施树、地图；本机数据 / 报文列表 / 指令下发均在设备档案 Tab。</div>
+          <div class="table-note">品类默认由归属规则自动匹配（只读展示）；品类「改挂」与项目「人工改挂」均为例外处理。一期不做设施树、地图；本机数据（iot_protocol_data 报文）/ 指令下发在设备档案 Tab；曲线归在线监控。</div>
         </div>
 
         <!-- ===== 设备台账：设备档案详情 ===== -->
@@ -2346,9 +2372,8 @@ createApp({
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" @click="setDeviceDetailTab('localData')">本机数据</button>
-              <button class="btn" @click="setDeviceDetailTab('packets')">报文</button>
+              <button class="btn" @click="openMonitorForDevice(currentDevice)">曲线（在线监控）</button>
               <button class="btn" @click="setDeviceDetailTab('dispatch')" :disabled="!currentDevice.categoryId">指令下发</button>
-              <button class="btn" @click="openMonitorForDevice(currentDevice)">监控全屏</button>
               <button class="btn" @click="openTransferModal(currentDevice)">例外处理 · 人工改挂</button>
               <button class="btn" @click="openEditDevice(currentDevice)">编辑档案</button>
               <button class="btn btn-danger" @click="openDisableDevice" :disabled="currentDevice.lifecycle==='停用'||currentDevice.lifecycle==='报废'">停用</button>
@@ -2358,7 +2383,6 @@ createApp({
           <div class="tabs" style="margin-top:4px">
             <div class="tab" :class="{active: deviceDetailTab==='profile'}" @click="setDeviceDetailTab('profile')">档案信息</div>
             <div class="tab" :class="{active: deviceDetailTab==='localData'}" @click="setDeviceDetailTab('localData')">本机数据</div>
-            <div class="tab" :class="{active: deviceDetailTab==='packets'}" @click="setDeviceDetailTab('packets')">报文列表</div>
             <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="setDeviceDetailTab('dispatch')">指令下发</div>
           </div>
 
@@ -2468,136 +2492,53 @@ createApp({
           </template>
 
           <template v-else-if="deviceDetailTab==='localData'">
-            <div class="banner-muted">本机最新测点由品类物模型 <code>kind=property</code> 驱动；值取 <code>latest_json[identifier]</code>。积水仪示意仍用 yewei/wendu/yaqiang（后端注记亦可为 levelMm/pressureKpa/tempC/sampleTime）。曲线复用监控详情 7 天 / 30 天示意。</div>
-            <div class="stat-row" v-if="currentMonitor">
-              <div class="stat-chip" :class="currentMonitor.trustLevel==='T3'||currentMonitor.trustLevel==='T2'?'ok':(currentMonitor.trustLevel==='T1'?'warn':'danger')">
-                <div class="sc-label">近 24h 可信分</div>
-                <div class="sc-value">{{ currentMonitor.trustScore }} <span class="sc-unit">{{ currentMonitor.trustLevel }}</span></div>
-              </div>
-              <div class="stat-chip warn"><div class="sc-label">预警</div><div class="sc-value">{{ currentMonitor.warn }}</div></div>
-              <div class="stat-chip danger"><div class="sc-label">报警</div><div class="sc-value">{{ currentMonitor.alarm }}</div></div>
-              <div class="stat-chip accent"><div class="sc-label">故障</div><div class="sc-value">{{ currentMonitor.fault }}</div></div>
-              <div class="stat-chip"><div class="sc-label">最近上报</div><div class="sc-value" style="font-size:14px">{{ currentMonitor.lastReportAt }}</div></div>
-            </div>
-
-            <div class="info-section">
-              <div class="info-section-title">最新数据 <span class="sub-nav-hint">点击卡片切换下方曲线测点</span></div>
-              <div class="point-card-grid" v-if="monLatestPoints.length">
-                <div
-                  class="point-card"
-                  v-for="p in monLatestPoints"
-                  :key="'arch-'+p.code"
-                  :class="{ active: monCurvePointCode === p.code }"
-                  @click="selectCurvePoint(p.code)"
-                >
-                  <div class="pc-head">
-                    <span class="pc-name">{{ p.name }}</span>
-                    <code class="pc-code">{{ p.code }}</code>
-                  </div>
-                  <div class="pc-value">
-                    <b>{{ p.value == null ? '—' : p.value }}</b>
-                    <span class="pc-unit" v-if="p.unit">{{ p.unit }}</span>
-                  </div>
-                  <div class="pc-meta">
-                    <span class="tag" :class="TRUST_TAG[p.trustLevel]">{{ p.trustLevel }}</span>
-                    <span>{{ p.ts }}</span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="empty-hint">暂无测点数据 · 请确认品类已配置上报属性</div>
-            </div>
-
-            <div class="info-section">
-              <div class="info-section-title">历史曲线 <span class="sub-nav-hint">7 天 / 30 天 · 预警 orange / 报警 error / 故障 primary</span></div>
-              <div class="toolbar" style="margin-bottom:10px">
-                <select class="select" v-model="monCurvePointCode">
-                  <option v-for="p in monLatestPoints" :key="'arch-opt-'+p.code" :value="p.code">{{ p.name }}（{{ p.code }}）</option>
-                </select>
-                <div class="seg-group">
-                  <button class="seg-btn" :class="{active: monCurveRange===7}" @click="monCurveRange=7">近 7 天</button>
-                  <button class="seg-btn" :class="{active: monCurveRange===30}" @click="monCurveRange=30">近 30 天</button>
-                </div>
-                <div class="spacer"></div>
-                <span class="tag tag-gray" v-if="monSelectedPoint">周期 {{ formatCycle(monSelectedPoint.cycleSec) }}</span>
-                <button class="btn" @click="openMonitorCurve(currentMonitor, monCurvePointCode)">全屏</button>
-              </div>
-              <div v-if="monCycleFullQueryTip" class="banner-tip">采集周期 &gt; 15 分钟：历史全量查、不分段</div>
-              <div class="chart-card" v-if="monSelectedPoint">
-                <div class="chart-legend">
-                  <span class="leg"><i class="lg-line" style="background:#0D6EFD"></i>{{ monSelectedPoint.name }}（{{ monSelectedPoint.code }}）</span>
-                  <span class="leg"><i class="lg-dash" style="border-color:#E78212"></i>预警</span>
-                  <span class="leg"><i class="lg-dash" style="border-color:#DC3545"></i>报警</span>
-                  <span class="leg"><i class="lg-dash" style="border-color:#0D6EFD"></i>故障</span>
-                  <span class="leg muted">示意 · {{ monCurveRange }} 天</span>
-                </div>
-                <svg class="curve-svg" :viewBox="'0 0 ' + monCurveSvg.w + ' ' + monCurveSvg.h" preserveAspectRatio="none">
-                  <rect :x="monCurveSvg.padL" :y="monCurveSvg.padT" :width="monCurveSvg.w - monCurveSvg.padL - monCurveSvg.padR" :height="monCurveSvg.h - monCurveSvg.padT - monCurveSvg.padB" fill="#fafcff" stroke="#eef2f8" />
-                  <g v-for="(tk, i) in monCurveSvg.yTicks" :key="'arch-dyt'+i">
-                    <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="tk.y" :y2="tk.y" stroke="#edf0f5" />
-                    <text :x="monCurveSvg.padL - 8" :y="tk.y + 4" text-anchor="end" font-size="11" fill="#8c8c8c">{{ tk.v }}</text>
-                  </g>
-                  <g v-for="(ln, i) in monCurveSvg.lines" :key="'arch-dln'+i">
-                    <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="ln.y" :y2="ln.y" :stroke="ln.color" stroke-width="1.5" stroke-dasharray="6 4" />
-                    <text :x="monCurveSvg.w - monCurveSvg.padR - 4" :y="ln.y - 4" text-anchor="end" font-size="10" :fill="ln.color">{{ ln.label }} {{ ln.val }}</text>
-                  </g>
-                  <path :d="monCurveSvg.path" fill="none" stroke="#0D6EFD" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
-                  <text :x="(monCurveSvg.padL + monCurveSvg.w - monCurveSvg.padR)/2" :y="monCurveSvg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">时间 →（{{ monCurveRange }} 天 · PG 时序示意）</text>
-                </svg>
-                <div class="chart-meta" v-if="monSelectedPoint">
-                  <span>当前测点：<b>{{ monSelectedPoint.name }}</b>（{{ monSelectedPoint.code }}）</span>
-                  <span>最新值：<b>{{ monSelectedPoint.value == null ? '—' : monSelectedPoint.value }}</b> {{ monSelectedPoint.unit }}</span>
-                  <span>量程：{{ monSelectedPoint.ymin }} ~ {{ monSelectedPoint.ymax }}</span>
-                </div>
-              </div>
-              <div v-else class="empty-hint">请选择测点</div>
-            </div>
-            <div class="table-note">本页为设备档案内嵌「本机数据」；与在线监控详情同源示意。全屏曲线可跳转监控模块。</div>
-          </template>
-
-          <template v-else-if="deviceDetailTab==='packets'">
-            <div class="banner-muted">本设备协议报文列表（mock · <code>iot_protocol_data</code> 风格）。类型：信息包 / 升级包 / 上报 / 其他；hex 可展开查看原文。</div>
+            <div class="banner-muted">本机数据 = 本设备 <code>iot_protocol_data</code> 报文列表（按 <code>deviceId</code> 查询）。列：receiveTime / packageType / parsedJson / contentHex / status。曲线请走顶栏「曲线（在线监控）」→ <code>#monitorDetail</code>。</div>
             <div class="toolbar" style="margin-bottom:10px">
               <div class="seg-group">
-                <button class="seg-btn" :class="{active: packetTypeFilter===''}" @click="packetTypeFilter=''">全部 <span class="seg-cnt">{{ devicePacketTypeCounts[''] || 0 }}</span></button>
-                <button class="seg-btn" v-for="t in PACKET_TYPES" :key="t" :class="{active: packetTypeFilter===t}" @click="packetTypeFilter=t">{{ t }} <span class="seg-cnt">{{ devicePacketTypeCounts[t] || 0 }}</span></button>
+                <button
+                  class="seg-btn"
+                  v-for="f in PACKET_FILTERS"
+                  :key="f.key || 'all'"
+                  :class="{active: packetTypeFilter===f.key}"
+                  @click="packetTypeFilter=f.key"
+                >{{ f.label }} <span class="seg-cnt">{{ devicePacketTypeCounts[f.key] || 0 }}</span></button>
               </div>
               <div class="spacer"></div>
-              <span style="color:#888;font-size:12px">共 {{ filteredDevicePackets.length }} 条</span>
+              <span style="color:#888;font-size:12px">共 {{ filteredDevicePackets.length }} 条 · deviceId={{ currentDevice.id }}</span>
             </div>
             <div class="table-wrap" v-if="filteredDevicePackets.length">
               <table class="data-table packet-table">
                 <thead>
                   <tr>
-                    <th style="width:160px">时间</th>
-                    <th style="width:88px">类型</th>
-                    <th>摘要 / 解析</th>
-                    <th style="width:100px">Hex</th>
+                    <th style="width:160px">receiveTime</th>
+                    <th style="width:160px">packageType</th>
+                    <th>parsedJson</th>
+                    <th style="width:100px">contentHex</th>
+                    <th style="width:88px">status</th>
                   </tr>
                 </thead>
                 <tbody>
                   <template v-for="pk in filteredDevicePackets" :key="pk.id">
                     <tr>
-                      <td>{{ pk.time }}</td>
-                      <td><span class="tag" :class="PACKET_TYPE_TAG[pk.type] || 'tag-gray'">{{ pk.type }}</span></td>
-                      <td>
-                        <div class="packet-summary">{{ pk.summary }}</div>
-                        <div class="packet-parsed"><code>{{ pk.parsed }}</code></div>
-                      </td>
+                      <td>{{ pk.receiveTime }}</td>
+                      <td><span class="tag" :class="PACKET_TYPE_TAG[pk.packageType] || 'tag-gray'"><code>{{ pk.packageType }}</code></span></td>
+                      <td><div class="packet-parsed"><code>{{ pk.parsedJson }}</code></div></td>
                       <td>
                         <button class="btn-link btn" @click="togglePacketHex(pk.id)">{{ isPacketExpanded(pk.id) ? '收起' : '展开' }}</button>
                       </td>
+                      <td><span class="tag" :class="PACKET_STATUS_TAG[pk.status] || 'tag-gray'">{{ pk.status }}</span></td>
                     </tr>
                     <tr v-if="isPacketExpanded(pk.id)" class="packet-hex-row">
-                      <td colspan="4">
-                        <pre class="hex-preview">{{ pk.hex }}</pre>
+                      <td colspan="5">
+                        <pre class="hex-preview">{{ pk.contentHex }}</pre>
                       </td>
                     </tr>
                   </template>
                 </tbody>
               </table>
             </div>
-            <div v-else class="empty-hint">暂无报文 · 可切换类型筛选</div>
-            <div class="table-note">报文入库表示意 iot_protocol_data；一期仅展示本设备历史包，不做全局原始报文台。</div>
+            <div v-else class="empty-hint">暂无报文 · 可切换 packageType 筛选（message* / data* / upgrade65535 / command）</div>
+            <div class="table-note">本机数据不再内嵌测点曲线；历史曲线仅在线监控 <code>#monitorDetail</code> / <code>#monitorCurve</code>。筛选 packageType：message* · data* · upgrade65535 · command。</div>
           </template>
 
           <template v-else-if="deviceDetailTab==='dispatch'">
