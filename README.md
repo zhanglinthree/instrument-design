@@ -33,6 +33,7 @@ python3 -m http.server 8877
 - **双向挂靠**：品类列表/详情展示 **设备数**（`deviceCount`），可点击或「查看设备」跳转台账 `#devices` 并按该品类筛选；设备列表「匹配」列展示 `categoryMatch`（如自动匹配）。
 
 ### 设备台账
+- **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；多选、带参填写后可 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
 - **未定义项目** = **例外池**（SDK 缺产品 / 临时设备等），**不是**主路径。
@@ -69,7 +70,8 @@ python3 -m http.server 8877
 | 3 | 设备列表 | `#devices` |
 | 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
 | 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
-| 4 | 设备档案详情（含改挂记录；「数据」→ 在线监控详情） | `#deviceDetail` |
+| 4 | 设备档案详情（含改挂记录；「数据」→ 在线监控详情；Tab「指令下发」点发） | `#deviceDetail` |
+| 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
@@ -92,7 +94,7 @@ python3 -m http.server 8877
 | 3b | 长周期曲线（采集周期 >15 分钟 →「历史全量查、不分段」） | `#monitorCurveLong` |
 | 4 | 在线率（该报没报：应报/实报/漏报统计卡片 + 简表） | `#monitorOnlineRate` |
 
-测点时序为 **PostgreSQL 时序示意**，非实时接入。各品类 mock 的 `latest_json` 与物模型 `kind=property` 标识符对齐。一期不做设施树、地图；**物模型可配置指令模板**，设备运行时下发台后续在设备档案 / 监控中提供。
+测点时序为 **PostgreSQL 时序示意**，非实时接入。各品类 mock 的 `latest_json` 与物模型 `kind=property` 标识符对齐。一期不做设施树、地图；**物模型可配置指令模板**；**设备点发**在台账设备档案 `#deviceDetail` / `#deviceDispatch`「指令下发」Tab（dryRun 预览 contentHex + 真正下发 mock toast；AEP CreateCommand 透传 hex dataType=2）。
 
 ## 配色
 
@@ -122,7 +124,7 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - `ledger-01-projects.png` 项目列表
 - `ledger-02-create-project.png` 新建项目
 - `ledger-03-devices.png` 设备列表
-- `ledger-04-device-detail.png` 设备档案
+- `ledger-04-device-detail.png` 设备档案（含 Tab「指令下发」）
 - `ledger-05-edit-device.png` 编辑设备档案
 - `ledger-06-aep-reconcile.png` AEP 对账
 - `ledger-07-import.png` 导入说明

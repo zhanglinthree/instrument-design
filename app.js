@@ -329,6 +329,15 @@ createApp({
     const transferLogs = ref(TRANSFER_LOGS.map(t => ({ ...t })));
     const showCategoryOverride = ref(false);
 
+    /* ---- 设备档案 · 指令点发 ---- */
+    const deviceDetailTab = ref('profile'); // profile | dispatch
+    const dispatchSelected = ref([]); // command ids
+    const dispatchParams = reactive({}); // code -> value
+    const dispatchPreviewHex = ref('');
+    const dispatchPreviewOk = ref(false);
+    const toast = reactive({ show: false, type: 'ok', text: '' });
+    let toastTimer = null;
+
     const deviceFormMode = ref('edit');
     const deviceForm = reactive({
       id: '', sn: '', name: '', projectId: '', categoryId: '', lifecycle: '待接入',
@@ -374,6 +383,18 @@ createApp({
     const currentCategoryCommands = computed(() => {
       const cid = currentCategory.value?.id;
       return commandList.value.filter(c => c.categoryId === cid);
+    });
+
+    /** 设备档案点发：取该设备品类下启用的 kind=service 指令 */
+    const deviceDispatchCommands = computed(() => {
+      const d = currentDevice.value;
+      if (!d || !d.categoryId) return [];
+      return commandList.value.filter(c => c.categoryId === d.categoryId && c.enabled !== false);
+    });
+
+    const dispatchSelectedCmds = computed(() => {
+      const set = new Set(dispatchSelected.value);
+      return deviceDispatchCommands.value.filter(c => set.has(c.id));
     });
 
     const industries = ['市政排水', '环保监测', '供水', '气象水文'];
@@ -622,7 +643,10 @@ createApp({
           const un = deviceProjectFilter.value === UNASSIGNED_PROJECT_ID;
           return { parent: '设备台账', current: un ? '例外池 · 未定义项目' : '设备列表' };
         }
-        if (screen.value === 'deviceDetail') return { parent: '设备台账', current: (currentDevice.value?.name || '设备') + ' · 档案' };
+        if (screen.value === 'deviceDetail') {
+          const name = currentDevice.value?.name || '设备';
+          return { parent: '设备台账', current: name + (deviceDetailTab.value === 'dispatch' ? ' · 指令下发' : ' · 档案') };
+        }
         if (screen.value === 'editDevice') return { parent: currentDevice.value?.name || '设备', current: deviceFormMode.value === 'create' ? '新建设备档案' : '编辑设备档案' };
         if (screen.value === 'aepReconcile') return { parent: '设备台账', current: 'AEP 对账' };
         return { parent: '设备管控', current: '设备台账' };
@@ -921,10 +945,138 @@ createApp({
       goDevices();
     }
 
-    function openDeviceDetail(d) {
+    function showToast(text, type) {
+      toast.text = text;
+      toast.type = type || 'ok';
+      toast.show = true;
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.show = false; }, 2800);
+    }
+
+    function resetDispatchState() {
+      dispatchSelected.value = [];
+      Object.keys(dispatchParams).forEach(k => delete dispatchParams[k]);
+      dispatchPreviewHex.value = '';
+      dispatchPreviewOk.value = false;
+    }
+
+    function guessPayloadBytes(cmd) {
+      const code = cmd.code || '';
+      if (!Number(cmd.hasParam)) return 1;
+      if (code === 'installHeightMm' || code === 'raiseHeightMm' || code === 'sinkHeightMm') return 2;
+      if (code === 'syncTime') return 4;
+      if (code === 'switchThreshold') return 4;
+      if (code === 'resendRange') return 6;
+      if (code === 'sampleInterval' || code === 'sendInterval') return 6;
+      if (cmd.dataType === 'int') return 4;
+      if (cmd.dataType === 'float') return 4;
+      return 2;
+    }
+
+    function writeUintBE(buf, offset, value, nbytes) {
+      let v = Math.max(0, Math.floor(Number(value) || 0));
+      for (let i = nbytes - 1; i >= 0; i--) {
+        if (offset + i < buf.length) buf[offset + i] = v & 0xff;
+        v = Math.floor(v / 256);
+      }
+    }
+
+    /** 示意组包：FAFA…ADAD；字节17–24 命令位；内容自 payloadOffset 写入 */
+    function packContentHex(cmds, params) {
+      let maxEnd = 56;
+      for (const c of cmds) {
+        const off = Number(c.payloadOffset) || 25;
+        maxEnd = Math.max(maxEnd, off - 1 + guessPayloadBytes(c));
+      }
+      const frameLen = Math.max(64, maxEnd + 2);
+      const buf = new Uint8Array(frameLen);
+      buf[0] = 0xfa; buf[1] = 0xfa;
+      buf[frameLen - 2] = 0xad; buf[frameLen - 1] = 0xad;
+      for (const c of cmds) {
+        const bit = Number(c.bitIndex);
+        if (bit >= 1 && bit <= 64) {
+          const byteIdx = 16 + Math.floor((bit - 1) / 8);
+          const bitInByte = (bit - 1) % 8;
+          if (byteIdx < frameLen) buf[byteIdx] |= (1 << bitInByte);
+        }
+        const off = Number(c.payloadOffset);
+        if (!off || off < 1) continue;
+        const i = off - 1;
+        if (!Number(c.hasParam)) {
+          if (i < frameLen) buf[i] = 0xf0;
+        } else {
+          const raw = params[c.code];
+          const n = guessPayloadBytes(c);
+          writeUintBE(buf, i, raw, n);
+        }
+      }
+      return Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+
+    function isDispatchSelected(id) {
+      return dispatchSelected.value.includes(id);
+    }
+
+    function toggleDispatchCmd(cmd) {
+      const id = cmd.id;
+      const idx = dispatchSelected.value.indexOf(id);
+      if (idx >= 0) {
+        dispatchSelected.value = dispatchSelected.value.filter(x => x !== id);
+      } else {
+        dispatchSelected.value = [...dispatchSelected.value, id];
+        if (Number(cmd.hasParam) && (dispatchParams[cmd.code] === undefined || dispatchParams[cmd.code] === '')) {
+          if (cmd.code === 'syncTime') dispatchParams[cmd.code] = Math.floor(Date.now() / 1000);
+          else if (cmd.paramMin != null) dispatchParams[cmd.code] = cmd.paramMin;
+          else dispatchParams[cmd.code] = 0;
+        }
+      }
+      dispatchPreviewOk.value = false;
+    }
+
+    function validateDispatch() {
+      const cmds = dispatchSelectedCmds.value;
+      if (!cmds.length) return '请至少勾选一条指令';
+      for (const c of cmds) {
+        if (!Number(c.hasParam)) continue;
+        const v = dispatchParams[c.code];
+        if (v === '' || v === null || v === undefined) return '「' + c.name + '」需要填写参数';
+        const n = Number(v);
+        if (!Number.isFinite(n)) return '「' + c.name + '」参数须为数字';
+        if (c.paramMin != null && n < Number(c.paramMin)) return '「' + c.name + '」小于 paramMin';
+        if (c.paramMax != null && n > Number(c.paramMax)) return '「' + c.name + '」大于 paramMax';
+      }
+      return '';
+    }
+
+    function dryRunDispatch() {
+      const err = validateDispatch();
+      if (err) { showToast(err, 'warn'); return; }
+      const hex = packContentHex(dispatchSelectedCmds.value, dispatchParams);
+      dispatchPreviewHex.value = hex;
+      dispatchPreviewOk.value = true;
+      showToast('dryRun 预览已生成（contentHex）', 'ok');
+    }
+
+    function sendDispatch() {
+      const err = validateDispatch();
+      if (err) { showToast(err, 'warn'); return; }
+      if (!dispatchPreviewOk.value || !dispatchPreviewHex.value) {
+        const hex = packContentHex(dispatchSelectedCmds.value, dispatchParams);
+        dispatchPreviewHex.value = hex;
+        dispatchPreviewOk.value = true;
+      }
+      const d = currentDevice.value;
+      const n = dispatchSelectedCmds.value.length;
+      // mock POST /iot/devices/{id}/commands/send
+      showToast('已下发 ' + n + ' 条指令 → ' + (d?.name || d?.sn || '设备') + '（mock POST send）', 'ok');
+    }
+
+    function openDeviceDetail(d, tab) {
       currentDevice.value = d;
       module.value = 'ledger';
       screen.value = 'deviceDetail';
+      deviceDetailTab.value = tab === 'dispatch' ? 'dispatch' : 'profile';
+      resetDispatchState();
     }
 
     function fillDeviceForm(d) {
@@ -1246,6 +1398,7 @@ createApp({
         devices: () => { deviceProjectFilter.value = ''; deviceCategoryFilter.value = ''; goDevices(); },
         unassignedDevices: () => goUnassignedDevices(),
         deviceDetail: () => openDeviceDetail(deviceList.value[0]),
+        deviceDispatch: () => openDeviceDetail(deviceList.value.find(d => d.categoryId === 'C001') || deviceList.value[0], 'dispatch'),
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
         importExport: () => { goDevices(); openImportModal(); },
@@ -1306,6 +1459,9 @@ createApp({
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
       deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceSnSearch,
       filteredDevices, deviceStats, currentDevice, openDeviceDetail,
+      deviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
+      dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
+      isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
       unassignedDevices, unassignedCount, selectedDeviceIds,
       toggleSelectDevice, toggleSelectAllFiltered,
       currentDeviceSlaves, currentDeviceMaster, installParamEntries,
@@ -1872,7 +2028,7 @@ createApp({
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">品类默认由归属规则自动匹配（只读展示）；品类「改挂」与项目「人工改挂」均为例外处理。一期不做设施树、地图；设备运行时指令下发台后续在设备档案 / 监控中提供。</div>
+          <div class="table-note">品类默认由归属规则自动匹配（只读展示）；品类「改挂」与项目「人工改挂」均为例外处理。一期不做设施树、地图；指令点发在设备档案「指令下发」Tab。</div>
         </div>
 
         <!-- ===== 设备台账：设备档案详情 ===== -->
@@ -1902,12 +2058,19 @@ createApp({
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" @click="openMonitorForDevice(currentDevice)">数据</button>
+              <button class="btn" @click="deviceDetailTab='dispatch'" :disabled="!currentDevice.categoryId">指令下发</button>
               <button class="btn" @click="openTransferModal(currentDevice)">例外处理 · 人工改挂</button>
               <button class="btn" @click="openEditDevice(currentDevice)">编辑档案</button>
               <button class="btn btn-danger" @click="openDisableDevice" :disabled="currentDevice.lifecycle==='停用'||currentDevice.lifecycle==='报废'">停用</button>
             </div>
           </div>
 
+          <div class="tabs" style="margin-top:4px">
+            <div class="tab" :class="{active: deviceDetailTab==='profile'}" @click="deviceDetailTab='profile'">档案信息</div>
+            <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="deviceDetailTab='dispatch'">指令下发</div>
+          </div>
+
+          <template v-if="deviceDetailTab==='profile'">
           <div class="info-section">
             <div class="info-section-title">基础信息</div>
             <div class="kv-grid">
@@ -2010,6 +2173,64 @@ createApp({
             </div>
             <div v-else class="empty-hint">暂无改挂记录</div>
           </div>
+          </template>
+
+          <template v-else-if="deviceDetailTab==='dispatch'">
+            <div class="banner-muted">从本品类物模型指令（kind=service）选取并组包。真正下发走 <b>AEP CreateCommand</b> 透传 hex，dataType=2。物模型「指令」Tab 仅定义，不在此点发。</div>
+            <div v-if="!currentDevice.categoryId" class="empty-hint">设备待归属品类，无法加载指令</div>
+            <div v-else-if="!deviceDispatchCommands.length" class="empty-hint">本品类暂无启用指令；请先在物模型「指令」Tab 配置</div>
+            <template v-else>
+              <div class="toolbar" style="margin-bottom:8px">
+                <span style="color:#666;font-size:13px">已选 <b>{{ dispatchSelected.length }}</b> 条 · 可多选；带参指令需填写参数后再 dryRun / 下发</span>
+                <div class="spacer"></div>
+                <button class="btn" @click="dryRunDispatch" :disabled="!dispatchSelected.length">dryRun 预览</button>
+                <button class="btn btn-primary" @click="sendDispatch" :disabled="!dispatchSelected.length">真正下发</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table dispatch-table">
+                  <thead>
+                    <tr>
+                      <th style="width:44px">选</th>
+                      <th>identifier</th>
+                      <th>名称</th>
+                      <th>bitIndex</th>
+                      <th>hasParam</th>
+                      <th>参数</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="c in deviceDispatchCommands" :key="c.id" :class="{'row-selected': isDispatchSelected(c.id)}">
+                      <td><input type="checkbox" :checked="isDispatchSelected(c.id)" @change="toggleDispatchCmd(c)" /></td>
+                      <td><code>{{ c.code }}</code></td>
+                      <td>{{ c.name }}</td>
+                      <td><code>{{ c.bitIndex }}</code></td>
+                      <td><span class="tag" :class="Number(c.hasParam)?'tag-blue':'tag-gray'">{{ Number(c.hasParam) ? '1 带参' : '0 无参' }}</span></td>
+                      <td>
+                        <template v-if="Number(c.hasParam)">
+                          <div class="dispatch-param" v-show="isDispatchSelected(c.id)">
+                            <input class="input" type="number" v-model.number="dispatchParams[c.code]"
+                              :min="c.paramMin != null ? c.paramMin : undefined"
+                              :max="c.paramMax != null ? c.paramMax : undefined"
+                              :placeholder="(c.dataType||'int') + (c.unit ? ' / '+c.unit : '')" />
+                            <span class="dispatch-param-hint" v-if="c.paramMin != null || c.paramMax != null">
+                              {{ c.paramMin != null ? c.paramMin : '—' }}～{{ c.paramMax != null ? c.paramMax : '—' }}{{ c.unit && c.unit !== '-' ? ' '+c.unit : '' }}
+                            </span>
+                          </div>
+                          <span v-show="!isDispatchSelected(c.id)" class="muted-cell">勾选后填写</span>
+                        </template>
+                        <span v-else class="muted-cell">无参 · 选中写 F0</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="info-section" style="margin-top:16px" v-if="dispatchPreviewHex">
+                <div class="info-section-title">dryRun · contentHex <span class="sub-nav-hint">示意组包 FAFA…ADAD</span></div>
+                <pre class="hex-preview">{{ dispatchPreviewHex }}</pre>
+              </div>
+              <div class="table-note">AEP CreateCommand 透传 hex dataType=2；应答另解析入库。本页 mock：dryRun 仅预览 contentHex，真正下发弹出 toast。</div>
+            </template>
+          </template>
         </div>
 
         <!-- ===== 设备台账：编辑设备档案 ===== -->
@@ -2804,6 +3025,8 @@ createApp({
         </div>
       </div>
     </div>
+
+    <div v-if="toast.show" class="toast" :class="'toast-'+toast.type">{{ toast.text }}</div>
 
   </div>
   `
