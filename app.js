@@ -26,11 +26,28 @@ const CATEGORY_RULES = [
   { id: 'R502', categoryId: 'C005', name: '翻斗式例外', type: '特殊', matchAepProduct: 'AEP-RG-5001-T', matchProtocol: 'RS485 / tipping-bucket', priority: 18, enabled: true, note: '翻斗式雨量计特殊处理' },
 ];
 
+/* 上报属性（kind=property）：按品类挂靠，在线监控动态列取自本品类定义 */
 const PROPERTIES = [
-  { id: 'P1', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true },
-  { id: 'P2', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true },
-  { id: 'P3', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true },
-  { id: 'P4', identifier: 'dianya', name: '电池电压', dataType: 'float', unit: 'V', access: '只读', reportCycle: '300s', required: false },
+  /* 积水仪地埋 C001 */
+  { id: 'P1', categoryId: 'C001', kind: 'property', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true },
+  { id: 'P2', categoryId: 'C001', kind: 'property', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true },
+  { id: 'P3', categoryId: 'C001', kind: 'property', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true },
+  { id: 'P4', categoryId: 'C001', kind: 'property', identifier: 'dianya', name: '电池电压', dataType: 'float', unit: 'V', access: '只读', reportCycle: '300s', required: false },
+  /* 积水仪侧壁 C006：同测点标识，独立品类物模型 */
+  { id: 'P61', categoryId: 'C006', kind: 'property', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true },
+  { id: 'P62', categoryId: 'C006', kind: 'property', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true },
+  { id: 'P63', categoryId: 'C006', kind: 'property', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true },
+  /* 水质监测站 C002：测点集与积水仪不同 */
+  { id: 'P21', categoryId: 'C002', kind: 'property', identifier: 'ph', name: 'pH', dataType: 'float', unit: '', access: '只读', reportCycle: '300s', required: true },
+  { id: 'P22', categoryId: 'C002', kind: 'property', identifier: 'do', name: '溶解氧', dataType: 'float', unit: 'mg/L', access: '只读', reportCycle: '300s', required: true },
+  { id: 'P23', categoryId: 'C002', kind: 'property', identifier: 'turb', name: '浊度', dataType: 'float', unit: 'NTU', access: '只读', reportCycle: '300s', required: false },
+  /* 管网压力表 C003 */
+  { id: 'P31', categoryId: 'C003', kind: 'property', identifier: 'yaqiang', name: '管网压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '900s', required: true },
+  /* 泵站机组 C004 */
+  { id: 'P41', categoryId: 'C004', kind: 'property', identifier: 'cur', name: '运行电流', dataType: 'float', unit: 'A', access: '只读', reportCycle: '120s', required: true },
+  { id: 'P42', categoryId: 'C004', kind: 'property', identifier: 'vib', name: '振动', dataType: 'float', unit: 'mm/s', access: '只读', reportCycle: '120s', required: true },
+  /* 雨量计 C005 */
+  { id: 'P51', categoryId: 'C005', kind: 'property', identifier: 'rain', name: '雨量', dataType: 'float', unit: 'mm', access: '只读', reportCycle: '1800s', required: true },
 ];
 
 const EVENTS = [
@@ -150,15 +167,21 @@ const TRUST_TAG = { T0: 'tag-red', T1: 'tag-orange', T2: 'tag-blue', T3: 'tag-gr
 const TRUST_LABEL = { T0: '不可信', T1: '低可信', T2: '中可信', T3: '高可信' };
 const ONLINE_TAG = { '在线': 'tag-green', '离线': 'tag-gray', '未知': 'tag-orange' };
 
-/** 积水仪主测点：与物模型 / latest_json 字段名对齐 */
-const FLOOD_POINT_KEYS = ['yewei', 'wendu', 'yaqiang'];
+/** 按品类取物模型上报属性（kind=property），供监控动态列 / 详情卡片使用 */
+function getCategoryProperties(categoryId) {
+  if (!categoryId) return [];
+  return PROPERTIES.filter(p => p.categoryId === categoryId && (p.kind || 'property') === 'property');
+}
+
+/** 兼容旧引用：积水仪地埋主测点标识 */
+const FLOOD_POINT_KEYS = getCategoryProperties('C001').map(p => p.identifier).filter(id => id !== 'dianya');
 
 const MONITOR_ROWS = [
   { id: 'D001', sn: 'MF20260901001', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:42:18', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 96, warn: 1, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 1440, actual24h: 1438, latest_json: { yewei: 3.42, wendu: 28.6, yaqiang: 101.3 } },
   { id: 'D002', sn: 'MF20260901002', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '在线', lastReportAt: '2026-09-30 16:41:50', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T3', trustScore: 94, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 2, expected24h: 1440, actual24h: 1438, latest_json: { yewei: 3.38, wendu: 27.9, yaqiang: 100.8 } },
-  { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '离线', lastReportAt: '2026-09-28 09:11:02', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T1', trustScore: 42, warn: 0, alarm: 2, fault: 1, cycleSec: 300, missed24h: 48, expected24h: 288, actual24h: 240, latest_json: { ph: 8.9, do: 2.1 } },
+  { id: 'D003', sn: 'MF20260520011', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '离线', lastReportAt: '2026-09-28 09:11:02', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T1', trustScore: 42, warn: 0, alarm: 2, fault: 1, cycleSec: 300, missed24h: 48, expected24h: 288, actual24h: 240, latest_json: { ph: 8.9, do: 2.1, turb: 12.4 } },
   { id: 'D005', sn: 'MF20260915030', name: '城东泵站1#机组', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C004', categoryName: '泵站机组', online: '在线', lastReportAt: '2026-09-30 16:40:05', firmware: '1.0.3', model: 'MF-PU-300', trustLevel: 'T2', trustScore: 78, warn: 2, alarm: 1, fault: 0, cycleSec: 120, missed24h: 6, expected24h: 720, actual24h: 714, latest_json: { cur: 118, vib: 4.8 } },
-  { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '在线', lastReportAt: '2026-09-30 16:35:40', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T3', trustScore: 91, warn: 0, alarm: 0, fault: 0, cycleSec: 300, missed24h: 1, expected24h: 288, actual24h: 287, latest_json: { ph: 7.2, do: 6.4 } },
+  { id: 'D008', sn: 'MF20260601022', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', online: '在线', lastReportAt: '2026-09-30 16:35:40', firmware: '2.0.1', model: 'MF-WQ-200', trustLevel: 'T3', trustScore: 91, warn: 0, alarm: 0, fault: 0, cycleSec: 300, missed24h: 1, expected24h: 288, actual24h: 287, latest_json: { ph: 7.2, do: 6.4, turb: 4.1 } },
   { id: 'D006', sn: 'MF20260120001', name: '气象局雨量-03', projectId: 'PJ05', projectName: '雨量站扩容', categoryId: 'C005', categoryName: '雨量计', online: '离线', lastReportAt: '2026-07-01 10:00:00', firmware: '1.0.0', model: 'MF-RG-10', trustLevel: 'T0', trustScore: 12, warn: 0, alarm: 0, fault: 1, cycleSec: 1800, missed24h: 48, expected24h: 48, actual24h: 0, latest_json: { rain: null } },
   { id: 'D007', sn: 'MF20260928050', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', online: '未知', lastReportAt: '—', firmware: '1.2.0', model: 'MF-LW-100', trustLevel: 'T0', trustScore: 0, warn: 0, alarm: 0, fault: 0, cycleSec: 60, missed24h: 0, expected24h: 0, actual24h: 0, latest_json: { yewei: null, wendu: null, yaqiang: null } },
   { id: 'D004', sn: 'MF20251108088', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', online: '离线', lastReportAt: '2026-08-10 14:00:00', firmware: '0.9.0', model: 'MF-PP-50', trustLevel: 'T1', trustScore: 35, warn: 1, alarm: 0, fault: 0, cycleSec: 900, missed24h: 12, expected24h: 96, actual24h: 84, latest_json: { yaqiang: 280 } },
@@ -190,6 +213,7 @@ const MONITOR_POINTS = {
   D003: [
     { code: 'ph', name: 'pH', unit: '', value: 8.9, trustLevel: 'T1', trustScore: 40, ts: '2026-09-28 09:11:02', cycleSec: 300, warnLow: 6.5, warnHigh: 8.5, alarmLow: 6.0, alarmHigh: 9.0, faultLow: 5.0, faultHigh: 10.0, ymin: 0, ymax: 14 },
     { code: 'do', name: '溶解氧', unit: 'mg/L', value: 2.1, trustLevel: 'T1', trustScore: 38, ts: '2026-09-28 09:11:02', cycleSec: 300, warnLow: 3.0, warnHigh: null, alarmLow: 2.0, alarmHigh: null, faultLow: 1.0, faultHigh: null, ymin: 0, ymax: 15 },
+    { code: 'turb', name: '浊度', unit: 'NTU', value: 12.4, trustLevel: 'T1', trustScore: 36, ts: '2026-09-28 09:11:02', cycleSec: 300, warnLow: null, warnHigh: 20, alarmLow: null, alarmHigh: 50, faultLow: null, faultHigh: 100, ymin: 0, ymax: 100 },
   ],
   D005: [
     { code: 'cur', name: '运行电流', unit: 'A', value: 118, trustLevel: 'T2', trustScore: 76, ts: '2026-09-30 16:40:05', cycleSec: 120, warnLow: null, warnHigh: 130, alarmLow: null, alarmHigh: 145, faultLow: null, faultHigh: 160, ymin: 0, ymax: 200 },
@@ -204,6 +228,7 @@ const MONITOR_POINTS = {
   D008: [
     { code: 'ph', name: 'pH', unit: '', value: 7.2, trustLevel: 'T3', trustScore: 93, ts: '2026-09-30 16:35:40', cycleSec: 300, warnLow: 6.5, warnHigh: 8.5, alarmLow: 6.0, alarmHigh: 9.0, faultLow: 5.0, faultHigh: 10.0, ymin: 0, ymax: 14 },
     { code: 'do', name: '溶解氧', unit: 'mg/L', value: 6.4, trustLevel: 'T3', trustScore: 90, ts: '2026-09-30 16:35:40', cycleSec: 300, warnLow: 3.0, warnHigh: null, alarmLow: 2.0, alarmHigh: null, faultLow: 1.0, faultHigh: null, ymin: 0, ymax: 15 },
+    { code: 'turb', name: '浊度', unit: 'NTU', value: 4.1, trustLevel: 'T3', trustScore: 91, ts: '2026-09-30 16:35:40', cycleSec: 300, warnLow: null, warnHigh: 20, alarmLow: null, alarmHigh: 50, faultLow: null, faultHigh: 100, ymin: 0, ymax: 100 },
   ],
 };
 
@@ -436,9 +461,63 @@ createApp({
       };
     });
 
+    /** 当前物模型详情品类的上报属性（kind=property） */
+    const currentCategoryProperties = computed(() => {
+      return getCategoryProperties(currentCategory.value?.id);
+    });
+
+    /** 监控列表：选中品类时的动态测点列（来自该品类物模型 property） */
+    const monMetricColumns = computed(() => {
+      const cid = monCategoryFilter.value;
+      if (!cid) return [];
+      return getCategoryProperties(cid);
+    });
+
+    const monHasCategoryFilter = computed(() => !!monCategoryFilter.value);
+
+    const monSelectedCategoryName = computed(() => {
+      const cid = monCategoryFilter.value;
+      if (!cid) return '';
+      const c = CATEGORIES.find(x => x.id === cid);
+      return c ? c.name : cid;
+    });
+
+    /**
+     * 详情最新卡片：以设备所属品类的 property 定义为准，
+     * 值优先取 MONITOR_POINTS，否则取 latest_json[identifier]
+     */
     const monLatestPoints = computed(() => {
-      const id = currentMonitor.value?.id;
-      return (id && MONITOR_POINTS[id]) ? MONITOR_POINTS[id] : [];
+      const row = currentMonitor.value;
+      if (!row) return [];
+      const defs = getCategoryProperties(row.categoryId);
+      const pts = (row.id && MONITOR_POINTS[row.id]) ? MONITOR_POINTS[row.id] : [];
+      const byCode = Object.fromEntries(pts.map(p => [p.code, p]));
+      const lj = row.latest_json || {};
+      if (defs.length) {
+        return defs.map(d => {
+          const hit = byCode[d.identifier];
+          const raw = hit ? hit.value : lj[d.identifier];
+          return {
+            code: d.identifier,
+            name: d.name,
+            unit: d.unit || '',
+            value: raw == null ? null : raw,
+            trustLevel: hit ? hit.trustLevel : (row.trustLevel || 'T0'),
+            trustScore: hit ? hit.trustScore : (row.trustScore || 0),
+            ts: hit ? hit.ts : (row.lastReportAt || '—'),
+            cycleSec: hit ? hit.cycleSec : (row.cycleSec || 60),
+            warnLow: hit ? hit.warnLow : null,
+            warnHigh: hit ? hit.warnHigh : null,
+            alarmLow: hit ? hit.alarmLow : null,
+            alarmHigh: hit ? hit.alarmHigh : null,
+            faultLow: hit ? hit.faultLow : null,
+            faultHigh: hit ? hit.faultHigh : null,
+            ymin: hit && hit.ymin != null ? hit.ymin : 0,
+            ymax: hit && hit.ymax != null ? hit.ymax : 100,
+          };
+        });
+      }
+      return pts;
     });
 
     const monSelectedPoint = computed(() => {
@@ -1008,16 +1087,18 @@ createApp({
     function goMonitorOnlineRate() { module.value = 'monitor'; screen.value = 'monitorOnlineRate'; }
     function openMonitorDetail(row) {
       currentMonitor.value = row;
+      const defs = getCategoryProperties(row.categoryId);
       const pts = MONITOR_POINTS[row.id] || [];
-      monCurvePointCode.value = pts.length ? pts[0].code : '';
+      monCurvePointCode.value = defs.length ? defs[0].identifier : (pts.length ? pts[0].code : '');
       monCurveRange.value = 7;
       module.value = 'monitor';
       screen.value = 'monitorDetail';
     }
     function openMonitorCurve(row, pointCode) {
       if (row) currentMonitor.value = row;
+      const defs = getCategoryProperties(currentMonitor.value.categoryId);
       const pts = MONITOR_POINTS[currentMonitor.value.id] || [];
-      monCurvePointCode.value = pointCode || (pts.length ? pts[0].code : '');
+      monCurvePointCode.value = pointCode || (defs.length ? defs[0].identifier : (pts.length ? pts[0].code : ''));
       monCurveRange.value = 7;
       module.value = 'monitor';
       screen.value = 'monitorCurve';
@@ -1051,10 +1132,28 @@ createApp({
         latest_json: {},
       });
     }
+    /** 按品类 property 定义拼测点条目；无定义时回退 latest_json / MONITOR_POINTS */
     function latestPointEntries(row) {
       if (!row) return [];
-      const pts = MONITOR_POINTS[row.id];
-      if (pts && pts.length) {
+      const defs = getCategoryProperties(row.categoryId);
+      const lj = row.latest_json || {};
+      const pts = MONITOR_POINTS[row.id] || [];
+      const byCode = Object.fromEntries(pts.map(p => [p.code, p]));
+      if (defs.length) {
+        return defs.map(d => {
+          const hit = byCode[d.identifier];
+          const raw = Object.prototype.hasOwnProperty.call(lj, d.identifier)
+            ? lj[d.identifier]
+            : (hit ? hit.value : null);
+          return {
+            code: d.identifier,
+            name: d.name,
+            unit: d.unit || '',
+            value: raw,
+          };
+        });
+      }
+      if (pts.length) {
         return pts.map(p => ({
           code: p.code,
           name: p.name,
@@ -1062,22 +1161,31 @@ createApp({
           value: p.value,
         }));
       }
-      const lj = row.latest_json || {};
-      const nameMap = { yewei: '液位', wendu: '温度', yaqiang: '压强', ph: 'pH', do: '溶解氧', cur: '运行电流', vib: '振动', rain: '雨量', dianya: '电池电压' };
-      const unitMap = { yewei: 'm', wendu: '℃', yaqiang: 'kPa', ph: '', do: 'mg/L', cur: 'A', vib: 'mm/s', rain: 'mm', dianya: 'V' };
       return Object.keys(lj).map(code => ({
         code,
-        name: nameMap[code] || code,
-        unit: unitMap[code] || '',
+        name: code,
+        unit: '',
         value: lj[code],
       }));
+    }
+    function latestMetricValue(row, identifier) {
+      if (!row || !identifier) return null;
+      const lj = row.latest_json || {};
+      if (Object.prototype.hasOwnProperty.call(lj, identifier)) return lj[identifier];
+      const pts = MONITOR_POINTS[row.id] || [];
+      const hit = pts.find(p => p.code === identifier);
+      return hit ? hit.value : null;
+    }
+    function formatMetricCell(val, unit) {
+      if (val == null || val === '') return '—';
+      return unit ? (val + ' ' + unit) : String(val);
     }
     function latestSummaryText(row) {
       const entries = latestPointEntries(row);
       if (!entries.length) return '—';
       return entries.slice(0, 4).map(e => {
         const v = e.value == null || e.value === '' ? '—' : e.value;
-        return e.name + ' ' + v + (e.unit && v !== '—' ? e.unit : '');
+        return e.name + ':' + v + (e.unit && v !== '—' ? e.unit : '');
       }).join(' · ');
     }
     function selectCurvePoint(code) {
@@ -1171,6 +1279,7 @@ createApp({
       goCockpit, cockpitStats, cockpitSyncStatus, COCKPIT_TODOS, COCKPIT_ACTIVITIES,
       filteredCategories, industries, breadcrumb, topbarHint, currentCategory,
       CATEGORIES, PROPERTIES, EVENTS, POINTS, INSTALL_FIELDS, FIRMWARES, COMMANDS,
+      currentCategoryProperties, getCategoryProperties,
       CATEGORY_RULES, categoryRules, currentCategoryRules,
       commandList, currentCategoryCommands, COMMAND_DATA_TYPES, COMMAND_ACCESS_OPTS,
       onCommandHasParamChange,
@@ -1212,11 +1321,12 @@ createApp({
       MONITOR_ROWS, TRUST_TAG, TRUST_LABEL, ONLINE_TAG,
       monProjectFilter, monCategoryFilter, monOnlineFilter, monAlarmFilter, monSearch,
       filteredMonitorRows, monListStats, currentMonitor,
+      monMetricColumns, monHasCategoryFilter, monSelectedCategoryName,
       monLatestPoints, monSelectedPoint, monCurveRange, monCurvePointCode,
       monCurveSeries, monCurveSvg, monCycleFullQueryTip,
       monOnlineRateSummary, monOnlineRateRows,
       goMonitorList, goMonitorOnlineRate, openMonitorDetail, openMonitorCurve, openMonitorForDevice,
-      latestPointEntries, latestSummaryText, selectCurvePoint, FLOOD_POINT_KEYS,
+      latestPointEntries, latestMetricValue, formatMetricCell, latestSummaryText, selectCurvePoint, FLOOD_POINT_KEYS,
       alarmSummaryText, formatCycle,
     };
   },
@@ -1434,7 +1544,10 @@ createApp({
           <div v-if="detailTab==='props'">
             <div class="toolbar"><span style="color:#666;font-size:13px">设备按周期上报的属性定义（与 AEP 解析后的属性对齐）</span><div class="spacer"></div><button class="btn btn-primary btn-sm">＋ 添加属性</button></div>
             <div class="table-wrap"><table class="data-table"><thead><tr><th>标识符</th><th>名称</th><th>数据类型</th><th>单位</th><th>访问</th><th>上报周期</th><th>必报</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="p in PROPERTIES" :key="p.id"><td><code>{{ p.identifier }}</code></td><td>{{ p.name }}</td><td>{{ p.dataType }}</td><td>{{ p.unit }}</td><td>{{ p.access }}</td><td>{{ p.reportCycle }}</td><td><span class="tag" :class="p.required?'tag-blue':'tag-gray'">{{ p.required?'是':'否' }}</span></td><td class="actions"><button class="btn-link btn">编辑</button><button class="btn-link btn danger" @click="confirmDelete('上报属性', p.id, p.name)">删除</button></td></tr></tbody></table></div>
+              <tbody>
+                <tr v-for="p in currentCategoryProperties" :key="p.id"><td><code>{{ p.identifier }}</code></td><td>{{ p.name }}</td><td>{{ p.dataType }}</td><td>{{ p.unit || '—' }}</td><td>{{ p.access }}</td><td>{{ p.reportCycle }}</td><td><span class="tag" :class="p.required?'tag-blue':'tag-gray'">{{ p.required?'是':'否' }}</span></td><td class="actions"><button class="btn-link btn">编辑</button><button class="btn-link btn danger" @click="confirmDelete('上报属性', p.id, p.name)">删除</button></td></tr>
+                <tr v-if="!currentCategoryProperties.length"><td colspan="8"><div class="empty-hint">本品类暂无上报属性（kind=property）</div></td></tr>
+              </tbody></table></div>
           </div>
           <div v-else-if="detailTab==='events'">
             <div class="toolbar"><span style="color:#666;font-size:13px">预警 / 报警 / 故障事件定义</span><div class="spacer"></div><button class="btn btn-primary btn-sm">＋ 添加事件</button></div>
@@ -2042,7 +2155,7 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">在线监控 · 设备数据</h1>
-              <p class="page-desc">设备数据的集中入口：按项目 / 品类筛选，查看在线态与 <code>latest_json</code> 最新测点（积水仪：液位 yewei · 温度 wendu · 压强 yaqiang）；点击行进入详情</p>
+              <p class="page-desc">设备数据的集中入口：筛选<strong>品类</strong>后，表格测点列由该品类物模型 <code>kind=property</code> 动态生成；未选品类时仅展示公共列 +「最新数据」摘要。单元格取值 <code>latest_json[identifier]</code>。</p>
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn" @click="goMonitorOnlineRate">在线率统计</button>
@@ -2061,7 +2174,7 @@ createApp({
               <option value="">全部项目</option>
               <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
-            <select class="select" v-model="monCategoryFilter">
+            <select class="select" v-model="monCategoryFilter" data-testid="mon-category-filter">
               <option value="">全部品类</option>
               <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
@@ -2081,16 +2194,28 @@ createApp({
             </select>
             <button class="btn" @click="monSearch=''; monProjectFilter=''; monCategoryFilter=''; monOnlineFilter=''; monAlarmFilter=''">重置</button>
           </div>
+          <div class="banner-tip" v-if="monHasCategoryFilter" style="margin-bottom:10px">
+            已选品类「{{ monSelectedCategoryName }}」· 测点列 {{ monMetricColumns.length }} 个（来自物模型 property：
+            <template v-for="(col, idx) in monMetricColumns" :key="col.id"><code>{{ col.identifier }}</code><span v-if="idx < monMetricColumns.length - 1"> · </span></template>）
+          </div>
+          <div class="banner-muted" v-else style="margin-bottom:10px">跨品类总览：测点列不展开。请在上方选择品类以查看该品类专属测点列（如积水仪 yewei/wendu/yaqiang，水质站 ph/do/turb）。</div>
           <div class="table-wrap">
-            <table class="data-table">
+            <table class="data-table" data-testid="mon-list-table">
               <thead>
                 <tr>
                   <th>设备</th>
-                  <th>在线态</th>
-                  <th>最新测点 <span class="th-sub">latest_json</span></th>
-                  <th>最近上报</th>
-                  <th>品类</th>
                   <th>项目</th>
+                  <th>品类</th>
+                  <th>在线态</th>
+                  <th>最近上报</th>
+                  <template v-if="monHasCategoryFilter">
+                    <th v-for="col in monMetricColumns" :key="col.identifier" class="metric-col">
+                      {{ col.name }}
+                      <span class="th-sub" v-if="col.unit">{{ col.unit }}</span>
+                      <span class="th-sub"><code>{{ col.identifier }}</code></span>
+                    </th>
+                  </template>
+                  <th v-else>最新数据 <span class="th-sub">摘要</span></th>
                   <th>告警</th>
                   <th>操作</th>
                 </tr>
@@ -2101,26 +2226,24 @@ createApp({
                     <div class="cell-title">{{ d.name }}</div>
                     <div class="cell-sub"><code>{{ d.sn }}</code></div>
                   </td>
+                  <td>{{ d.projectName }}</td>
+                  <td>{{ d.categoryName }}</td>
                   <td>
                     <span class="lifecycle-dot">
                       <i :class="d.online==='在线'?'lc-online':(d.online==='离线'?'lc-offline':'lc-pending')"></i>
                       <span class="tag" :class="ONLINE_TAG[d.online]">{{ d.online }}</span>
                     </span>
                   </td>
-                  <td>
-                    <div class="latest-pills" v-if="latestPointEntries(d).length">
-                      <span class="latest-pill" v-for="e in latestPointEntries(d).slice(0, 4)" :key="e.code">
-                        <span class="lp-name">{{ e.name }}</span>
-                        <b class="lp-val">{{ e.value == null ? '—' : e.value }}</b>
-                        <span class="lp-unit" v-if="e.unit">{{ e.unit }}</span>
-                        <code class="lp-code">{{ e.code }}</code>
-                      </span>
-                    </div>
-                    <span v-else class="tag tag-gray">暂无</span>
-                  </td>
                   <td>{{ d.lastReportAt }}</td>
-                  <td>{{ d.categoryName }}</td>
-                  <td>{{ d.projectName }}</td>
+                  <template v-if="monHasCategoryFilter">
+                    <td v-for="col in monMetricColumns" :key="col.identifier" class="metric-cell">
+                      <b class="metric-val">{{ latestMetricValue(d, col.identifier) == null ? '—' : latestMetricValue(d, col.identifier) }}</b>
+                      <span class="metric-unit" v-if="col.unit && latestMetricValue(d, col.identifier) != null">{{ col.unit }}</span>
+                    </td>
+                  </template>
+                  <td v-else class="latest-summary-cell">
+                    <code class="latest-summary">{{ latestSummaryText(d) }}</code>
+                  </td>
                   <td>
                     <span v-if="!d.warn && !d.alarm && !d.fault" class="tag tag-gray">无</span>
                     <span v-else class="alarm-pills">
@@ -2135,7 +2258,7 @@ createApp({
                   </td>
                 </tr>
                 <tr v-if="!filteredMonitorRows.length">
-                  <td colspan="8"><div class="empty-hint">无匹配监控设备</div></td>
+                  <td :colspan="monHasCategoryFilter ? (7 + monMetricColumns.length) : 8"><div class="empty-hint">无匹配监控设备</div></td>
                 </tr>
               </tbody>
             </table>
@@ -2145,7 +2268,7 @@ createApp({
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">产品口径：设备数据以本列表为集中入口（侧栏「在线监控」）；台账「数据」亦可跳入。测点字段名与物模型 / latest_json 对齐。一期不做设施树、地图。</div>
+          <div class="table-note">产品口径：测点列随品类切换；跨品类总览只用「最新数据」摘要，避免混列。字段名与物模型 property.identifier / latest_json 对齐。一期不做设施树、地图。</div>
         </div>
 
         <!-- ===== 在线监控：设备数据详情（最新值卡片 + 历史曲线） ===== -->
@@ -2185,7 +2308,7 @@ createApp({
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">最新数据 <span class="sub-nav-hint">物模型测点 · 字段名对齐 latest_json · 点击卡片切换曲线</span></div>
+            <div class="info-section-title">最新数据 <span class="sub-nav-hint">由本设备品类物模型 property 驱动 · 值取 latest_json[identifier] · 点击卡片切换曲线</span></div>
             <div class="point-card-grid" v-if="monLatestPoints.length">
               <div
                 class="point-card"
