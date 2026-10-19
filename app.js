@@ -288,20 +288,20 @@ function matchPackageTypeFilter(packageType, filterKey) {
 
 /** mock rows · 字段对齐 iot_protocol_data：id(=数据ID) / receiveTime / packageType / parsedJson / contentHex / status；query by deviceId */
 const PROTOCOL_PACKETS = [
-  { id: 'PK001', deviceId: 'D001', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901001": [ { "yewei": 3.42, "wendu": 28.6, "yaqiang": 101.3 } ] } }', contentHex: '3C3C000101020D5C011E278500000D0D', status: '成功' },
-  { id: 'PK002', deviceId: 'D001', receiveTime: '2026-10-14 09:17:01', packageType: 'messagePackage1', parsedJson: '{ "imei": "860123456789012", "fw": "1.2.0", "probes": 1 }', contentHex: 'B2B2003C860123456789012F010200011A1A', status: '成功' },
-  { id: 'PK003', deviceId: 'D001', receiveTime: '2026-10-13 22:05:12', packageType: 'upgradePackage65535', parsedJson: '{ "chunk": 3, "total": 12, "left": 9, "parse": "0xFFFF" }', contentHex: 'F0F000800003000C0009414243440D0D', status: '成功' },
-  { id: 'PK004', deviceId: 'D001', receiveTime: '2026-10-13 18:40:00', packageType: 'command', parsedJson: '{ "kind": "cmdAck", "ok": true, "bitIndex": 1 }', contentHex: 'FAFA0008AA550001ADAD', status: '成功' },
-  { id: 'PK005', deviceId: 'D001', receiveTime: '2026-10-13 16:42:18', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901001": [ { "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 } ] } }', contentHex: '3C3C000101020D340117276000000D0D', status: '成功' },
-  { id: 'PK006', deviceId: 'D001', receiveTime: '2026-10-12 11:20:05', packageType: 'messagePackage2', parsedJson: '{ "well_depth": 8.5, "pipe_diameter": 600 }', contentHex: 'B2B2002801085002025800001A1A', status: '成功' },
-  { id: 'PK007', deviceId: 'D001', receiveTime: '2026-10-12 10:01:44', packageType: 'command', parsedJson: '{ "kind": "cmdAck", "ok": false, "dealResult": "checksum fail" }', contentHex: 'FAFA0008DEAD0002ADAD', status: '失败' },
-  { id: 'PK008', deviceId: 'D002', receiveTime: '2026-10-14 09:17:50', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901002": [ { "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 } ] } }', contentHex: '3C3C000101020D340117276000000D0D', status: '成功' },
-  { id: 'PK009', deviceId: 'D002', receiveTime: '2026-10-14 08:00:11', packageType: 'messagePackage1', parsedJson: '{ "masterImei": "MF20260901001", "role": "slave" }', contentHex: 'B2B2002A01534C41564500001A1A', status: '成功' },
-  { id: 'PK010', deviceId: 'D010', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20261008018": [ { "yewei": 1.86, "wendu": 26.2, "yaqiang": 99.4 } ] } }', contentHex: '3C3C000101020744010626EC00000D0D', status: '成功' },
-  { id: 'PK011', deviceId: 'D010', receiveTime: '2026-10-14 09:10:00', packageType: 'upgradePackage65535', parsedJson: '{ "chunk": 1, "total": 4, "left": 3 }', contentHex: 'F0F00040000100040003313233340D0D', status: '待处理' },
-  { id: 'PK012', deviceId: 'D003', receiveTime: '2026-09-28 09:11:02', packageType: 'dataPackage2', parsedJson: '{ "data": { "MF20260520011": [ { "ph": 8.9, "do": 2.1, "turb": 12.4 } ] } }', contentHex: '3C3C0002085A020A00C40D0D', status: '成功' },
-  { id: 'PK013', deviceId: 'D005', receiveTime: '2026-09-30 16:40:05', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260915030": [ { "cur": 118, "vib": 4.8 } ] } }', contentHex: '3C3C0001007600300D0D', status: '成功' },
-  { id: 'PK014', deviceId: 'D001', receiveTime: '2026-09-01 08:00:00', packageType: 'dataPackage3', parsedJson: '{ "data": [ { "yewei": 2.10, "wendu": 25.0 } ] }', contentHex: '3C3C0003LEGACYARRAY0D0D', status: '成功', note: '历史 data3：data 仍可能是纯数组；新入库为 序列号→采样列表 KV' },
+  { id: 'PK001', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901001": [ { "yewei": 3.42, "wendu": 28.6, "yaqiang": 101.3 } ] } }', contentHex: '3C3C000101020D5C011E278500000D0D', status: '成功' },
+  { id: 'PK002', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-14 09:17:01', packageType: 'messagePackage1', parsedJson: '{ "imei": "860123456789012", "fw": "1.2.0", "probes": 1 }', contentHex: 'B2B2003C860123456789012F010200011A1A', status: '成功' },
+  { id: 'PK003', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-13 22:05:12', packageType: 'upgradePackage65535', parsedJson: '{ "chunk": 3, "total": 12, "left": 9, "parse": "0xFFFF" }', contentHex: 'F0F000800003000C0009414243440D0D', status: '成功' },
+  { id: 'PK004', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-13 18:40:00', packageType: 'command', parsedJson: '{ "kind": "cmdAck", "ok": true, "bitIndex": 1 }', contentHex: 'FAFA0008AA550001ADAD', status: '成功' },
+  { id: 'PK005', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-13 16:42:18', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901001": [ { "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 } ] } }', contentHex: '3C3C000101020D340117276000000D0D', status: '成功' },
+  { id: 'PK006', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-12 11:20:05', packageType: 'messagePackage2', parsedJson: '{ "well_depth": 8.5, "pipe_diameter": 600 }', contentHex: 'B2B2002801085002025800001A1A', status: '成功' },
+  { id: 'PK007', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-12 10:01:44', packageType: 'command', parsedJson: '{ "kind": "cmdAck", "ok": false, "dealResult": "checksum fail" }', contentHex: 'FAFA0008DEAD0002ADAD', status: '失败' },
+  { id: 'PK008', deviceId: 'D002', serialNum: 'MF20260901002', receiveTime: '2026-10-14 09:17:50', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901002": [ { "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 } ] } }', contentHex: '3C3C000101020D340117276000000D0D', status: '成功' },
+  { id: 'PK009', deviceId: 'D002', serialNum: 'MF20260901002', receiveTime: '2026-10-14 08:00:11', packageType: 'messagePackage1', parsedJson: '{ "masterImei": "MF20260901001", "role": "slave" }', contentHex: 'B2B2002A01534C41564500001A1A', status: '成功' },
+  { id: 'PK010', deviceId: 'D010', serialNum: 'MF20261008018', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20261008018": [ { "yewei": 1.86, "wendu": 26.2, "yaqiang": 99.4 } ] } }', contentHex: '3C3C000101020744010626EC00000D0D', status: '成功' },
+  { id: 'PK011', deviceId: 'D010', serialNum: 'MF20261008018', receiveTime: '2026-10-14 09:10:00', packageType: 'upgradePackage65535', parsedJson: '{ "chunk": 1, "total": 4, "left": 3 }', contentHex: 'F0F00040000100040003313233340D0D', status: '待处理' },
+  { id: 'PK012', deviceId: 'D003', serialNum: 'MF20260520011', receiveTime: '2026-09-28 09:11:02', packageType: 'dataPackage2', parsedJson: '{ "data": { "MF20260520011": [ { "ph": 8.9, "do": 2.1, "turb": 12.4 } ] } }', contentHex: '3C3C0002085A020A00C40D0D', status: '成功' },
+  { id: 'PK013', deviceId: 'D005', serialNum: 'MF20260915030', receiveTime: '2026-09-30 16:40:05', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260915030": [ { "cur": 118, "vib": 4.8 } ] } }', contentHex: '3C3C0001007600300D0D', status: '成功' },
+  { id: 'PK014', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-09-01 08:00:00', packageType: 'dataPackage3', parsedJson: '{ "data": [ { "yewei": 2.10, "wendu": 25.0 } ] }', contentHex: '3C3C0003LEGACYARRAY0D0D', status: '成功', note: '历史 data3：data 仍可能是纯数组；新入库为 序列号→采样列表 KV' },
 ];
 
 function genCurveSeries(point, days) {
@@ -2575,7 +2575,7 @@ createApp({
           </template>
 
           <template v-else-if="deviceDetailTab==='localData'">
-            <div class="banner-muted">本机数据 = 本设备 <code>iot_protocol_data</code> 报文列表（按 <code>deviceId</code> 查询）。列：数据ID(id) / receiveTime / packageType / parsedJson / contentHex / status。datapackage 的 parsedJson.data = 序列号→采样列表（与 data1 一致；历史 data3 可能仍是纯数组）。曲线请走顶栏「曲线（在线监控）」→ <code>#monitorDetail</code>。</div>
+            <div class="banner-muted">本机数据 = 本设备 <code>iot_protocol_data</code> 报文列表（按 <code>deviceId</code> 查询）。列：数据ID(id) / 序列号(serialNum) / receiveTime / packageType / parsedJson / contentHex / status。datapackage 的 parsedJson.data = 序列号→采样列表（与 data1 一致；历史 data3 可能仍是纯数组）。曲线请走顶栏「曲线（在线监控）」→ <code>#monitorDetail</code>。</div>
             <div class="toolbar" style="margin-bottom:10px">
               <div class="seg-group">
                 <button
@@ -2594,6 +2594,7 @@ createApp({
                 <thead>
                   <tr>
                     <th style="width:100px">数据ID</th>
+                    <th style="width:140px">序列号</th>
                     <th style="width:160px">receiveTime</th>
                     <th style="width:160px">packageType</th>
                     <th>parsedJson</th>
@@ -2605,6 +2606,7 @@ createApp({
                   <template v-for="pk in filteredDevicePackets" :key="pk.id">
                     <tr>
                       <td><code>{{ pk.id }}</code></td>
+                      <td><code>{{ pk.serialNum || '—' }}</code></td>
                       <td>{{ pk.receiveTime }}</td>
                       <td><span class="tag" :class="PACKET_TYPE_TAG[pk.packageType] || 'tag-gray'"><code>{{ pk.packageType }}</code></span></td>
                       <td><div class="packet-parsed"><code>{{ pk.parsedJson }}</code></div></td>
@@ -2614,7 +2616,7 @@ createApp({
                       <td><span class="tag" :class="PACKET_STATUS_TAG[pk.status] || 'tag-gray'">{{ pk.status }}</span></td>
                     </tr>
                     <tr v-if="isPacketExpanded(pk.id)" class="packet-hex-row">
-                      <td colspan="6">
+                      <td colspan="7">
                         <pre class="hex-preview">{{ pk.contentHex }}</pre>
                       </td>
                     </tr>
