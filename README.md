@@ -143,3 +143,9 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - 设备台账列表/详情/筛选/关键词/导出：**`serialNum` → `imei`**，列展示 **IMEI**（本原型字段 `imei`）。
 - AEP `status`：`0` 待确认 / `1` 在线 / **`2` 离线** / `9` 忽略；在线监控「在线态」映射 `1→在线`、`2→离线`，其余/空→未知。
 - 采样、协议报文、指令下发里的协议设备号 `serialNum` / `deviceSn` **不变**（与台账 IMEI 分离）。
+
+## 品类挂靠规则 id · 探头子设备（后端 `5e930006`）
+
+- 台账新字段 **`categoryRuleId`**（库 `category_rule_id`）：记录挂靠所用规则 id；型号兜底形如 `fallback:0042`；解绑品类清空。列表「挂靠规则」列 + 详情可读。
+- 列表**默认隐藏** `aepDeviceId` 以 `probe:` 开头的探头子设备；选主机 `masterId` / 关键词 / 勾选「显示探头」可见。
+- `probe:{SN}` 仅为子设备合成键，**不要**当真 AEP 设备 id 展示编辑；真 AEP id 看父一体机。
