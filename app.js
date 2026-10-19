@@ -410,7 +410,7 @@ createApp({
     const showCategoryOverride = ref(false);
 
     /* ---- 设备档案 · Tab：档案 / 本机数据（报文列表）/ 指令点发 ---- */
-    const deviceDetailTab = ref('profile'); // profile | localData | dispatch
+    const deviceDetailTab = ref('profile'); // profile | localData | children | dispatch
     const packetTypeFilter = ref(''); // '' | message* | data* | upgrade65535 | command
     const expandedPacketIds = ref([]); // hex 展开行
     const dispatchSelected = ref([]); // command ids
@@ -712,8 +712,19 @@ createApp({
 
     const currentDeviceSlaves = computed(() => {
       const d = currentDevice.value;
-      if (!d || !d.slaves || !d.slaves.length) return [];
+      if (!d) return [];
+      // 与后端一致：按 masterId=父台账 id 拉探头/子设备（兼兼容 slaves[]）
+      const byMaster = deviceList.value.filter(x => x.masterId === d.id);
+      if (byMaster.length) return byMaster;
+      if (!d.slaves || !d.slaves.length) return [];
       return deviceList.value.filter(x => d.slaves.includes(x.id));
+    });
+    /** 一体机才显示「子设备」入口；探头（probe: 或已挂 masterId）自身不显示 */
+    const canShowChildDevices = computed(() => {
+      const d = currentDevice.value;
+      if (!d) return false;
+      if (isProbeAepId(d.aepDeviceId) || d.masterId) return false;
+      return true;
     });
 
     const currentDeviceMaster = computed(() => {
@@ -754,6 +765,7 @@ createApp({
           const tabLabel = ({
             profile: '档案',
             localData: '本机数据',
+            children: '子设备',
             dispatch: '指令下发',
           })[deviceDetailTab.value] || '档案';
           return { parent: '设备台账', current: name + ' · ' + tabLabel };
@@ -1372,7 +1384,7 @@ createApp({
       screen.value = 'deviceDetail';
       // packets 旧 hash 并入 localData（本机数据 = 报文列表）
       if (tab === 'packets') tab = 'localData';
-      const allowed = ['profile', 'localData', 'dispatch'];
+      const allowed = ['profile', 'localData', 'children', 'dispatch'];
       deviceDetailTab.value = allowed.includes(tab) ? tab : 'profile';
       packetTypeFilter.value = '';
       expandedPacketIds.value = [];
@@ -1790,7 +1802,7 @@ createApp({
       getCommandParamFields,
       unassignedDevices, unassignedCount, selectedDeviceIds,
       toggleSelectDevice, toggleSelectAllFiltered,
-      currentDeviceSlaves, currentDeviceMaster, installParamEntries,
+      currentDeviceSlaves, currentDeviceMaster, canShowChildDevices, installParamEntries,
       deviceForm, deviceFormMode, openEditDevice, saveDevice, showCategoryOverride,
       categoryMatchLabel, isUnassigned, displayProjectName,
       showDisableConfirm, openDisableDevice, doDisableDevice,
@@ -2310,10 +2322,7 @@ createApp({
               <option v-for="s in LIFECYCLES" :key="s" :value="s">{{ s }}</option>
             </select>
             <input class="input input-md" v-model="deviceImeiSearch" placeholder="IMEI / 名称 / AEP ID" />
-            <select class="select" v-model="deviceMasterFilter">
-              <option value="">全部（默认藏探头）</option>
-              <option v-for="m in deviceList.filter(x => !x.masterId && !isProbeAepId(x.aepDeviceId))" :key="m.id" :value="m.id">主机：{{ m.name }}</option>
-            </select>
+            <input class="input input-sm" style="width:140px" v-model="deviceMasterFilter" placeholder="父设备ID" title="填一体机台账 id，查 probe 子设备" />
             <label class="hint" style="display:inline-flex;align-items:center;gap:4px;margin:0;white-space:nowrap">
               <input type="checkbox" v-model="showProbeDevices" /> 显示探头子设备
             </label>
@@ -2402,6 +2411,7 @@ createApp({
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" @click="setDeviceDetailTab('localData')">本机数据</button>
+              <button class="btn" v-if="canShowChildDevices" @click="setDeviceDetailTab('children')">子设备（探头）{{ currentDeviceSlaves.length ? ' · ' + currentDeviceSlaves.length : '' }}</button>
               <button class="btn" @click="openMonitorForDevice(currentDevice)">曲线（在线监控）</button>
               <button class="btn" @click="setDeviceDetailTab('dispatch')" :disabled="!currentDevice.categoryId">指令下发</button>
               <button class="btn" @click="openTransferModal(currentDevice)">例外处理 · 人工改挂</button>
@@ -2413,6 +2423,7 @@ createApp({
           <div class="tabs" style="margin-top:4px">
             <div class="tab" :class="{active: deviceDetailTab==='profile'}" @click="setDeviceDetailTab('profile')">档案信息</div>
             <div class="tab" :class="{active: deviceDetailTab==='localData'}" @click="setDeviceDetailTab('localData')">本机数据</div>
+            <div class="tab" v-if="canShowChildDevices" :class="{active: deviceDetailTab==='children'}" @click="setDeviceDetailTab('children')">子设备</div>
             <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="setDeviceDetailTab('dispatch')">指令下发</div>
           </div>
 
@@ -2483,7 +2494,9 @@ createApp({
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">主从关系</div>
+            <div class="info-section-title">主从关系
+              <a v-if="canShowChildDevices" class="btn-link btn" style="padding:0;margin-left:8px;font-size:13px" @click="setDeviceDetailTab('children')">查看子设备（探头）→</a>
+            </div>
             <div class="relation-card">
               <div class="relation-node" v-if="currentDeviceMaster">
                 <span class="rn-role">主机</span>
@@ -2527,6 +2540,38 @@ createApp({
             </div>
             <div v-else class="empty-hint">暂无改挂记录</div>
           </div>
+          </template>
+
+
+          <template v-else-if="deviceDetailTab==='children'">
+            <div class="banner-muted">按 <code>masterId</code>=当前台账 id 查询探头子设备（列表默认藏 <code>probe:</code>）。探头 aepDeviceId 为合成键，真 AEP id 看本一体机。</div>
+            <div class="table-wrap" v-if="currentDeviceSlaves.length">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>IMEI</th><th>名称</th><th>aepDeviceId</th><th>生命周期</th><th>品类</th><th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="s in currentDeviceSlaves" :key="s.id">
+                    <td><code>{{ s.imei }}</code></td>
+                    <td>{{ s.name }}</td>
+                    <td>
+                      <span v-if="isProbeAepId(s.aepDeviceId)" class="tag tag-gray">{{ s.aepDeviceId }}</span>
+                      <span v-else>{{ s.aepDeviceId || '—' }}</span>
+                    </td>
+                    <td><span class="tag" :class="LC_TAG[s.lifecycle]">{{ s.lifecycle }}</span></td>
+                    <td>{{ s.categoryName || '待归属' }}</td>
+                    <td class="actions">
+                      <button class="btn-link btn" @click="openDeviceDetail(s)">档案</button>
+                      <button class="btn-link btn" @click="openDeviceDetail(s, 'localData')">本机数据</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="empty-hint">暂无子设备 / 探头（masterId={{ currentDevice.id }}）</div>
+            <div class="table-note">也可在设备列表筛「父设备ID」={{ currentDevice.id }} 查看。探头详情自身不显示「子设备」入口。</div>
           </template>
 
           <template v-else-if="deviceDetailTab==='localData'">
