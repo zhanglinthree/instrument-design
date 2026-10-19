@@ -1588,9 +1588,19 @@ createApp({
       module.value = 'monitor';
       screen.value = 'monitorCurve';
     }
-    /** 台账「数据」入口：按设备 id/sn 跳转在线监控详情 */
+    /** 台账「曲线」入口：按子设备（单探头）各画各的；一体机有探头时引导去子设备 Tab */
     function openMonitorForDevice(device) {
       if (!device) return;
+      const kids = deviceList.value.filter(x => x.masterId === device.id);
+      const isHub = !device.masterId && !isProbeAepId(device.aepDeviceId) && kids.length > 0;
+      if (isHub) {
+        currentDevice.value = device;
+        module.value = 'ledger';
+        screen.value = 'deviceDetail';
+        deviceDetailTab.value = 'children';
+        showToast('曲线按探头分图：请在子设备里点「曲线」', 'ok');
+        return;
+      }
       const row = MONITOR_ROWS.find(r => r.id === device.id || r.imei === device.imei);
       if (row) {
         openMonitorDetail(row);
@@ -2412,7 +2422,7 @@ createApp({
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" @click="setDeviceDetailTab('localData')">本机数据</button>
               <button class="btn" v-if="canShowChildDevices" @click="setDeviceDetailTab('children')">子设备（探头）{{ currentDeviceSlaves.length ? ' · ' + currentDeviceSlaves.length : '' }}</button>
-              <button class="btn" @click="openMonitorForDevice(currentDevice)">曲线（在线监控）</button>
+              <button class="btn" @click="openMonitorForDevice(currentDevice)">{{ (canShowChildDevices && currentDeviceSlaves.length) ? '曲线 · 先选探头' : '曲线（在线监控）' }}</button>
               <button class="btn" @click="setDeviceDetailTab('dispatch')" :disabled="!currentDevice.categoryId">指令下发</button>
               <button class="btn" @click="openTransferModal(currentDevice)">例外处理 · 人工改挂</button>
               <button class="btn" @click="openEditDevice(currentDevice)">编辑档案</button>
@@ -2544,7 +2554,7 @@ createApp({
 
 
           <template v-else-if="deviceDetailTab==='children'">
-            <div class="banner-muted">按 <code>masterId</code>=当前台账 id 查询探头子设备（列表默认藏 <code>probe:</code>）。探头 aepDeviceId 为合成键，真 AEP id 看本一体机。</div>
+            <div class="banner-muted">按 masterId=当前台账 id 查探头。曲线按<strong>单个探头各一图</strong>（单位不同不混轴）；采样 history 挂子设备 deviceId。报文仍挂本一体机「本机数据」。</div>
             <div class="table-wrap" v-if="currentDeviceSlaves.length">
               <table class="data-table">
                 <thead>
@@ -2564,18 +2574,23 @@ createApp({
                     <td>{{ s.categoryName || '待归属' }}</td>
                     <td class="actions">
                       <button class="btn-link btn" @click="openDeviceDetail(s)">档案</button>
-                      <button class="btn-link btn" @click="openDeviceDetail(s, 'localData')">本机数据</button>
+                      <button class="btn-link btn" @click="openMonitorForDevice(s)">曲线</button>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <div v-else class="empty-hint">暂无子设备 / 探头（masterId={{ currentDevice.id }}）</div>
-            <div class="table-note">也可在设备列表筛「父设备ID」={{ currentDevice.id }} 查看。探头详情自身不显示「子设备」入口。</div>
+            <div class="table-note">入口：一体机 → 子设备 → 该探头「曲线」。列表也可筛父设备ID。探头自身不显示「子设备」入口。</div>
           </template>
 
           <template v-else-if="deviceDetailTab==='localData'">
-            <div class="banner-muted">本机数据 = 本设备 <code>iot_protocol_data</code> 报文列表（按 <code>deviceId</code> 查询）。列：数据ID(id) / 序列号(serialNum) / receiveTime / packageType / parsedJson / contentHex / status。datapackage 的 parsedJson.data = 序列号→采样列表（与 data1 一致；历史 data3 可能仍是纯数组）。曲线请走顶栏「曲线（在线监控）」→ <code>#monitorDetail</code>。</div>
+            <div class="banner-muted">
+              本机数据 = iot_protocol_data 报文（按 deviceId）。列：数据ID / 序列号(serialNum) / receiveTime / packageType / parsedJson / contentHex / status。
+              <template v-if="canShowChildDevices && currentDeviceSlaves.length">报文挂<strong>本一体机</strong>；曲线请到「子设备」里点各探头「曲线」（不混图）。</template>
+              <template v-else-if="currentDeviceMaster">采样曲线挂<strong>本探头</strong> deviceId；报文一般在父一体机「本机数据」。</template>
+              <template v-else>曲线 → 顶栏「曲线（在线监控）」。</template>
+            </div>
             <div class="toolbar" style="margin-bottom:10px">
               <div class="seg-group">
                 <button
