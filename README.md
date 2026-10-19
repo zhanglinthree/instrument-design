@@ -149,3 +149,8 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - 台账新字段 **`categoryRuleId`**（库 `category_rule_id`）：记录挂靠所用规则 id；型号兜底形如 `fallback:0042`；解绑品类清空。列表「挂靠规则」列 + 详情可读。
 - 列表**默认隐藏** `aepDeviceId` 以 `probe:` 开头的探头子设备；选主机 `masterId` / 关键词 / 勾选「显示探头」可见。
 - `probe:{SN}` 仅为子设备合成键，**不要**当真 AEP 设备 id 展示编辑；真 AEP id 看父一体机。
+
+## parsedJson.data 约定（后端 `23b64da5`）
+
+- `parsedJson.data` 统一为 **序列号 → 采样列表**（与 data1 一致）。
+- 历史 data3 旧数据可能仍是纯数组；**新入库**才是 KV。原型 PK014 示意旧形态。
