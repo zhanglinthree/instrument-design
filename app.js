@@ -285,7 +285,7 @@ function matchPackageTypeFilter(packageType, filterKey) {
   return t === filterKey;
 }
 
-/** mock rows · 字段对齐 iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；query by deviceId */
+/** mock rows · 字段对齐 iot_protocol_data：id(=数据ID) / receiveTime / packageType / parsedJson / contentHex / status；query by deviceId */
 const PROTOCOL_PACKETS = [
   { id: 'PK001', deviceId: 'D001', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "yewei": 3.42, "wendu": 28.6, "yaqiang": 101.3 }', contentHex: '3C3C000101020D5C011E278500000D0D', status: '成功' },
   { id: 'PK002', deviceId: 'D001', receiveTime: '2026-10-14 09:17:01', packageType: 'messagePackage1', parsedJson: '{ "imei": "860123456789012", "fw": "1.2.0", "probes": 1 }', contentHex: 'B2B2003C860123456789012F010200011A1A', status: '成功' },
@@ -2528,7 +2528,7 @@ createApp({
           </template>
 
           <template v-else-if="deviceDetailTab==='localData'">
-            <div class="banner-muted">本机数据 = 本设备 <code>iot_protocol_data</code> 报文列表（按 <code>deviceId</code> 查询）。列：receiveTime / packageType / parsedJson / contentHex / status。曲线请走顶栏「曲线（在线监控）」→ <code>#monitorDetail</code>。</div>
+            <div class="banner-muted">本机数据 = 本设备 <code>iot_protocol_data</code> 报文列表（按 <code>deviceId</code> 查询）。列：数据ID(id) / receiveTime / packageType / parsedJson / contentHex / status。曲线请走顶栏「曲线（在线监控）」→ <code>#monitorDetail</code>。</div>
             <div class="toolbar" style="margin-bottom:10px">
               <div class="seg-group">
                 <button
@@ -2546,6 +2546,7 @@ createApp({
               <table class="data-table packet-table">
                 <thead>
                   <tr>
+                    <th style="width:100px">数据ID</th>
                     <th style="width:160px">receiveTime</th>
                     <th style="width:160px">packageType</th>
                     <th>parsedJson</th>
@@ -2556,6 +2557,7 @@ createApp({
                 <tbody>
                   <template v-for="pk in filteredDevicePackets" :key="pk.id">
                     <tr>
+                      <td><code>{{ pk.id }}</code></td>
                       <td>{{ pk.receiveTime }}</td>
                       <td><span class="tag" :class="PACKET_TYPE_TAG[pk.packageType] || 'tag-gray'"><code>{{ pk.packageType }}</code></span></td>
                       <td><div class="packet-parsed"><code>{{ pk.parsedJson }}</code></div></td>
@@ -2565,7 +2567,7 @@ createApp({
                       <td><span class="tag" :class="PACKET_STATUS_TAG[pk.status] || 'tag-gray'">{{ pk.status }}</span></td>
                     </tr>
                     <tr v-if="isPacketExpanded(pk.id)" class="packet-hex-row">
-                      <td colspan="5">
+                      <td colspan="6">
                         <pre class="hex-preview">{{ pk.contentHex }}</pre>
                       </td>
                     </tr>
