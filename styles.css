@@ -1466,3 +1466,81 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   background: rgba(255, 255, 255, 0.25);
   color: inherit;
 }
+
+
+/* ---- 监控曲线：分开/合并 + 悬停 readout ---- */
+.curve-readout {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.curve-readout-hint {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 6px;
+}
+.curve-readout-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 13px;
+  color: #333;
+}
+.curve-readout-items.muted { color: #8c8c8c; }
+.curve-readout-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.curve-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.curve-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.curve-stack .curve-svg { height: 320px; }
+.curve-merge-legend { margin-right: 4px; }
+.point-card.dim { opacity: 0.72; }
+
+/* ---- 设备发送记录详情 ---- */
+.send-log-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 860px) {
+  .send-log-detail-grid { grid-template-columns: 1fr; }
+}
+.send-log-col {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafcff;
+}
+.send-log-kv {
+  grid-template-columns: 120px 1fr;
+}
+.json-block {
+  margin: 0;
+  padding: 8px 10px;
+  background: #0f172a0a;
+  border: 1px solid #e8ecf2;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}

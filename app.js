@@ -217,7 +217,7 @@ const MONITOR_POINTS = {
     { code: 'yewei', name: '液位', unit: 'm', value: 3.42, trustLevel: 'T3', trustScore: 98, ts: '2026-09-30 16:42:18', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
     { code: 'wendu', name: '温度', unit: '℃', value: 28.6, trustLevel: 'T3', trustScore: 97, ts: '2026-09-30 16:41:00', cycleSec: 120, warnLow: -10, warnHigh: 60, alarmLow: -20, alarmHigh: 70, faultLow: null, faultHigh: 80, ymin: -40, ymax: 85 },
     { code: 'yaqiang', name: '压强', unit: 'kPa', value: 101.3, trustLevel: 'T3', trustScore: 96, ts: '2026-09-30 16:42:18', cycleSec: 60, warnLow: 80, warnHigh: 120, alarmLow: 70, alarmHigh: 130, faultLow: null, faultHigh: 150, ymin: 0, ymax: 200 },
-    { code: 'dianya', name: '电池电压', unit: 'V', value: 3.78, trustLevel: 'T3', trustScore: 95, ts: '2026-09-30 16:40:00', cycleSec: 300, warnLow: 3.5, warnHigh: null, alarmLow: 3.3, alarmHigh: null, faultLow: 3.0, faultHigh: null, ymin: 2.5, ymax: 5 },
+    { code: 'dianya', name: '电池电压', unit: 'V', value: null, trustLevel: 'T3', trustScore: 95, ts: '2026-09-30 16:40:00', cycleSec: 300, warnLow: 3.5, warnHigh: null, alarmLow: 3.3, alarmHigh: null, faultLow: 3.0, faultHigh: null, ymin: 2.5, ymax: 5 },
   ],
   D002: [
     { code: 'yewei', name: '液位', unit: 'm', value: 3.38, trustLevel: 'T3', trustScore: 94, ts: '2026-09-30 16:41:50', cycleSec: 60, warnLow: 0.5, warnHigh: 7.5, alarmLow: 0.2, alarmHigh: 8.5, faultLow: null, faultHigh: 9.5, ymin: 0, ymax: 10 },
@@ -304,11 +304,61 @@ const PROTOCOL_PACKETS = [
   { id: 'PK014', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-09-01 08:00:00', packageType: 'dataPackage3', parsedJson: '{ "data": [ { "yewei": 2.10, "wendu": 25.0 } ] }', contentHex: '3C3C0003LEGACYARRAY0D0D', status: '成功', note: '历史 data3：data 仍可能是纯数组；新入库为 序列号→采样列表 KV' },
 ];
 
+/** mock rows · GET /iot/deviceCommand/log（设备发送记录）字段对齐 FE：deviceId / identifiers / paramsJson / contentHex / aepRequestJson / aepResponseJson / commandId / commandStatus / aepCode / aepMsg / sendTime */
+const DEVICE_SEND_LOGS = [
+  {
+    id: 'SL001', deviceId: 'D001',
+    identifiers: ['reboot'],
+    paramsJson: '{}',
+    contentHex: 'FAFA0008AA550001ADAD',
+    aepRequestJson: '{ "deviceId": "AEP-DEV-10001", "operator": "admin", "command": "reboot", "dataType": 2, "payload": "FAFA0008AA550001ADAD" }',
+    aepResponseJson: '{ "code": 0, "msg": "ok", "commandId": "AEP-CMD-90001" }',
+    commandId: 'AEP-CMD-90001', commandStatus: 'SUCCESS', aepCode: 0, aepMsg: 'ok',
+    sendTime: '2026-10-14 09:20:11'
+  },
+  {
+    id: 'SL002', deviceId: 'D001',
+    identifiers: 'sampleInterval',
+    paramsJson: '{ "longMin": 60, "midMin": 10, "shortMin": 1 }',
+    contentHex: 'FAFA001CAA55008000003C0A01ADAD',
+    aepRequestJson: '{ "deviceId": "AEP-DEV-10001", "operator": "admin", "command": "sampleInterval", "params": { "longMin": 60, "midMin": 10, "shortMin": 1 } }',
+    aepResponseJson: '{ "code": 0, "msg": "accepted", "commandId": "AEP-CMD-90002" }',
+    commandId: 'AEP-CMD-90002', commandStatus: 'SUCCESS', aepCode: 0, aepMsg: 'accepted',
+    sendTime: '2026-10-13 18:41:05'
+  },
+  {
+    id: 'SL003', deviceId: 'D001',
+    identifiers: ['resendRange'],
+    paramsJson: '{ "start": 100, "end": 120 }',
+    contentHex: 'FAFA0014AA550040000064000078ADAD',
+    aepRequestJson: '{ "deviceId": "AEP-DEV-10001", "operator": "zhangsan", "command": "resendRange", "params": { "start": 100, "end": 120 } }',
+    aepResponseJson: '{ "code": 50013, "msg": "device offline", "commandId": "AEP-CMD-90003" }',
+    commandId: 'AEP-CMD-90003', commandStatus: 'FAILED', aepCode: 50013, aepMsg: 'device offline',
+    sendTime: '2026-10-12 10:02:30'
+  },
+  {
+    id: 'SL004', deviceId: 'D003',
+    identifiers: ['reboot', 'syncTime'],
+    paramsJson: '{ "syncTime": { "value": 1728700000 } }',
+    contentHex: 'FAFA0010BB660003ADAD',
+    aepRequestJson: '{ "deviceId": "AEP-DEV-WQ-11", "operator": "admin", "commands": ["reboot","syncTime"] }',
+    aepResponseJson: '{ "code": 0, "msg": "ok", "commandId": "AEP-CMD-91001" }',
+    commandId: 'AEP-CMD-91001', commandStatus: 'SUCCESS', aepCode: 0, aepMsg: 'ok',
+    sendTime: '2026-09-28 09:15:44'
+  },
+];
+
+function isFiniteMetricValue(v) {
+  if (v === null || v === undefined || v === '') return false;
+  return Number.isFinite(Number(v));
+}
+
 function genCurveSeries(point, days) {
+  if (!point || !isFiniteMetricValue(point.value)) return [];
   const n = days === 30 ? 90 : 48;
   const ymin = point.ymin != null ? point.ymin : 0;
   const ymax = point.ymax != null ? point.ymax : 10;
-  const mid = point.value != null ? point.value : (ymin + ymax) / 2;
+  const mid = Number(point.value);
   const amp = (ymax - ymin) * 0.18;
   const pts = [];
   for (let i = 0; i < n; i++) {
@@ -317,9 +367,65 @@ function genCurveSeries(point, days) {
     let v = mid + wave;
     if (i > n * 0.72 && point.warnHigh != null) v = Math.min(ymax, point.warnHigh + (ymax - point.warnHigh) * 0.15 * Math.sin(i));
     v = Math.max(ymin, Math.min(ymax, v));
-    pts.push({ i, t, v: Math.round(v * 100) / 100 });
+    pts.push({ i, t, v: Math.round(v * 100) / 100, sampleTime: t });
   }
   return pts;
+}
+
+const CURVE_SERIES_COLORS = ['#0D6EFD', '#12B886', '#E78212', '#DC3545', '#7950F2', '#15AABF', '#F06595'];
+
+function buildSingleCurveSvg(point, series, color) {
+  const w = 1000, h = 320, padL = 48, padR = 16, padT = 20, padB = 36;
+  if (!point || !series || !series.length) {
+    return { path: '', paths: [], w, h, padL, padR, padT, padB, lines: [], yTicks: [], ymin: 0, ymax: 1, color: color || CURVE_SERIES_COLORS[0] };
+  }
+  const ymin = point.ymin != null ? point.ymin : 0;
+  const ymax = point.ymax != null ? point.ymax : 10;
+  const x = (t) => padL + t * (w - padL - padR);
+  const y = (v) => padT + (1 - (v - ymin) / (ymax - ymin || 1)) * (h - padT - padB);
+  const stroke = color || CURVE_SERIES_COLORS[0];
+  const path = series.map((pt, idx) => (idx ? 'L' : 'M') + x(pt.t).toFixed(1) + ',' + y(pt.v).toFixed(1)).join(' ');
+  const mkLine = (val, c, label) => {
+    if (val == null || val === '' || Number.isNaN(Number(val))) return null;
+    const vv = Number(val);
+    if (vv < ymin || vv > ymax) return null;
+    return { y: y(vv), color: c, label, val: vv };
+  };
+  const lines = [
+    mkLine(point.warnHigh, '#E78212', '预警上限'),
+    mkLine(point.warnLow, '#E78212', '预警下限'),
+    mkLine(point.alarmHigh, '#DC3545', '报警上限'),
+    mkLine(point.alarmLow, '#DC3545', '报警下限'),
+    mkLine(point.faultHigh, '#0D6EFD', '故障上限'),
+    mkLine(point.faultLow, '#0D6EFD', '故障下限'),
+  ].filter(Boolean);
+  const yTicks = [ymin, ymin + (ymax - ymin) / 2, ymax].map(v => ({ v: Math.round(v * 100) / 100, y: y(v) }));
+  return { path, paths: [{ path, color: stroke, code: point.code, name: point.name }], w, h, padL, padR, padT, padB, lines, yTicks, ymin, ymax, color: stroke };
+}
+
+function buildMergeCurveSvg(entries) {
+  const w = 1000, h = 320, padL = 48, padR = 16, padT = 20, padB = 36;
+  if (!entries || !entries.length) {
+    return { path: '', paths: [], w, h, padL, padR, padT, padB, lines: [], yTicks: [{ v: 0, y: h / 2 }, { v: 0.5, y: h / 2 }, { v: 1, y: h / 2 }], ymin: 0, ymax: 1, color: CURVE_SERIES_COLORS[0] };
+  }
+  const x = (t) => padL + t * (w - padL - padR);
+  const paths = entries.map((e, idx) => {
+    const p = e.point;
+    const series = e.series;
+    const ymin = p.ymin != null ? p.ymin : 0;
+    const ymax = p.ymax != null ? p.ymax : 10;
+    const y = (v) => padT + (1 - (v - ymin) / (ymax - ymin || 1)) * (h - padT - padB);
+    const color = CURVE_SERIES_COLORS[idx % CURVE_SERIES_COLORS.length];
+    const path = series.map((pt, i) => (i ? 'L' : 'M') + x(pt.t).toFixed(1) + ',' + y(pt.v).toFixed(1)).join(' ');
+    return { path, color, code: p.code, name: p.name, unit: p.unit || '', ymin, ymax };
+  });
+  // 归一化示意刻度 0/0.5/1（各序列自缩放）
+  const yTicks = [
+    { v: 'max', y: padT },
+    { v: 'mid', y: padT + (h - padT - padB) / 2 },
+    { v: 'min', y: h - padB },
+  ];
+  return { path: paths[0] ? paths[0].path : '', paths, w, h, padL, padR, padT, padB, lines: [], yTicks, ymin: 0, ymax: 1, color: paths[0] ? paths[0].color : CURVE_SERIES_COLORS[0] };
 }
 
 createApp({
@@ -409,14 +515,16 @@ createApp({
     const transferLogs = ref(TRANSFER_LOGS.map(t => ({ ...t })));
     const showCategoryOverride = ref(false);
 
-    /* ---- 设备档案 · Tab：档案 / 本机数据（报文列表）/ 指令点发 ---- */
-    const deviceDetailTab = ref('profile'); // profile | localData | children | dispatch
+    /* ---- 设备档案 · Tab：档案 / 本机数据 / 指令 / 设备发送记录 / 子设备 ---- */
+    const deviceDetailTab = ref('profile'); // profile | localData | dispatch | sendLog | children
     const packetTypeFilter = ref(''); // '' | message* | data* | upgrade65535 | command
     const expandedPacketIds = ref([]); // hex 展开行
     const dispatchSelected = ref([]); // command ids
     const dispatchParams = reactive({}); // code -> params object（如 { value } / { start, end }）
     const dispatchPreviewHex = ref('');
     const dispatchPreviewOk = ref(false);
+    const showSendLogModal = ref(false);
+    const currentSendLog = ref(null);
     const toast = reactive({ show: false, type: 'ok', text: '' });
     let toastTimer = null;
 
@@ -441,6 +549,8 @@ createApp({
     const currentMonitor = ref(MONITOR_ROWS[0]);
     const monCurveRange = ref(7); // 7 | 30
     const monCurvePointCode = ref('yewei');
+    const monCurveMode = ref('split'); // 'split' | 'merge' · 默认分开
+    const monHoverT = ref(null); // 0..1 · 悬停采样比例（统一 sampleTime）
 
     const filteredCategories = computed(() => {
       return CATEGORIES.filter(c => {
@@ -496,6 +606,16 @@ createApp({
         counts[f.key] = rows.filter(p => matchPackageTypeFilter(p.packageType, f.key)).length;
       });
       return counts;
+    });
+
+    /** 设备发送记录 · GET /iot/deviceCommand/log · 进页按 deviceId 自动过滤，sendTime 倒序 */
+    const deviceSendLogs = computed(() => {
+      const d = currentDevice.value;
+      if (!d) return [];
+      return DEVICE_SEND_LOGS
+        .filter(r => r.deviceId === d.id)
+        .slice()
+        .sort((a, b) => String(b.sendTime || '').localeCompare(String(a.sendTime || '')));
     });
 
     const industries = ['市政排水', '环保监测', '供水', '气象水文'];
@@ -610,47 +730,71 @@ createApp({
     });
 
     /**
-     * 详情最新卡片：以设备所属品类的 property 定义为准，
-     * 值优先取 MONITOR_POINTS，否则取 latest_json[identifier]
+     * 详情最新卡片 / 曲线指标源：仅设备品类 kind=property 属性（顺序=物模型列表）。
+     * 无品类或无属性 → 空列表（不扫 latest_json / history 全字段）。
+     * 值优先 MONITOR_POINTS，否则 latest_json[identifier]。
      */
     const monLatestPoints = computed(() => {
       const row = currentMonitor.value;
-      if (!row) return [];
+      if (!row || !row.categoryId) return [];
       const defs = getCategoryProperties(row.categoryId);
+      if (!defs.length) return [];
       const pts = (row.id && MONITOR_POINTS[row.id]) ? MONITOR_POINTS[row.id] : [];
       const byCode = Object.fromEntries(pts.map(p => [p.code, p]));
       const lj = row.latest_json || {};
-      if (defs.length) {
-        return defs.map(d => {
-          const hit = byCode[d.identifier];
-          const raw = hit ? hit.value : lj[d.identifier];
-          return {
-            code: d.identifier,
-            name: d.name,
-            unit: d.unit || '',
-            value: raw == null ? null : raw,
-            trustLevel: hit ? hit.trustLevel : (row.trustLevel || 'T0'),
-            trustScore: hit ? hit.trustScore : (row.trustScore || 0),
-            ts: hit ? hit.ts : (row.lastReportAt || '—'),
-            cycleSec: hit ? hit.cycleSec : (row.cycleSec || 60),
-            warnLow: hit ? hit.warnLow : null,
-            warnHigh: hit ? hit.warnHigh : null,
-            alarmLow: hit ? hit.alarmLow : null,
-            alarmHigh: hit ? hit.alarmHigh : null,
-            faultLow: hit ? hit.faultLow : null,
-            faultHigh: hit ? hit.faultHigh : null,
-            ymin: hit && hit.ymin != null ? hit.ymin : 0,
-            ymax: hit && hit.ymax != null ? hit.ymax : 100,
-          };
-        });
-      }
-      return pts;
+      return defs.map(d => {
+        const hit = byCode[d.identifier];
+        const raw = hit ? hit.value : lj[d.identifier];
+        return {
+          code: d.identifier,
+          name: d.name,
+          unit: d.unit || '',
+          value: raw == null ? null : raw,
+          trustLevel: hit ? hit.trustLevel : (row.trustLevel || 'T0'),
+          trustScore: hit ? hit.trustScore : (row.trustScore || 0),
+          ts: hit ? hit.ts : (row.lastReportAt || '—'),
+          cycleSec: hit ? hit.cycleSec : (row.cycleSec || 60),
+          warnLow: hit ? hit.warnLow : null,
+          warnHigh: hit ? hit.warnHigh : null,
+          alarmLow: hit ? hit.alarmLow : null,
+          alarmHigh: hit ? hit.alarmHigh : null,
+          faultLow: hit ? hit.faultLow : null,
+          faultHigh: hit ? hit.faultHigh : null,
+          ymin: hit && hit.ymin != null ? hit.ymin : 0,
+          ymax: hit && hit.ymax != null ? hit.ymax : 100,
+        };
+      });
+    });
+
+    /** 属性卡片空态文案（精确口径） */
+    const monPointsEmptyHint = computed(() => {
+      const row = currentMonitor.value;
+      if (!row) return '暂无测点数据';
+      if (!row.categoryId) return '设备未关联品类，无法按物模型展示指标';
+      if (!getCategoryProperties(row.categoryId).length) return '该品类未配置上报属性，无法按物模型展示指标';
+      return '暂无测点数据';
+    });
+
+    /** 曲线区空态文案（精确口径） */
+    const monCurveEmptyHint = computed(() => {
+      const row = currentMonitor.value;
+      if (!row) return '所选时间范围内暂无可用历史曲线数据';
+      if (!row.categoryId) return '设备未关联品类，无法按物模型展示曲线';
+      if (!getCategoryProperties(row.categoryId).length) return '该品类未配置上报属性，无法按物模型展示曲线';
+      return '所选时间范围内暂无可用历史曲线数据';
+    });
+
+    /** 有有效数值的属性才可画曲线（跳过 null/undefined/NaN/''） */
+    const monChartablePoints = computed(() => {
+      return monLatestPoints.value.filter(p => isFiniteMetricValue(p.value));
     });
 
     const monSelectedPoint = computed(() => {
       const pts = monLatestPoints.value;
       if (!pts.length) return null;
-      return pts.find(p => p.code === monCurvePointCode.value) || pts[0];
+      const chartable = monChartablePoints.value;
+      const pool = chartable.length ? chartable : pts;
+      return pool.find(p => p.code === monCurvePointCode.value) || pool[0];
     });
 
     const monCurveSeries = computed(() => {
@@ -659,37 +803,83 @@ createApp({
       return genCurveSeries(p, monCurveRange.value);
     });
 
+    /** 分开=每指标一图；合并=多线同图。无有效数值的指标不画。 */
+    const monCurveCharts = computed(() => {
+      const points = monChartablePoints.value;
+      const days = monCurveRange.value;
+      if (!points.length) return [];
+      if (monCurveMode.value === 'merge') {
+        const entries = points.map(p => ({ point: p, series: genCurveSeries(p, days) })).filter(e => e.series.length);
+        if (!entries.length) return [];
+        const svg = buildMergeCurveSvg(entries);
+        return [{
+          key: 'merge',
+          mode: 'merge',
+          title: '合并曲线',
+          point: null,
+          series: entries[0].series,
+          entries,
+          svg,
+        }];
+      }
+      return points.map((p, idx) => {
+        const series = genCurveSeries(p, days);
+        if (!series.length) return null;
+        const color = CURVE_SERIES_COLORS[idx % CURVE_SERIES_COLORS.length];
+        return {
+          key: p.code,
+          mode: 'split',
+          title: p.name + '（' + p.code + '）',
+          point: p,
+          series,
+          entries: [{ point: p, series }],
+          svg: buildSingleCurveSvg(p, series, color),
+        };
+      }).filter(Boolean);
+    });
+
     const monCurveSvg = computed(() => {
-      const p = monSelectedPoint.value;
-      const series = monCurveSeries.value;
-      if (!p || !series.length) return { path: '', w: 1000, h: 320, pad: 40, lines: [], labels: [] };
-      const w = 1000, h = 320, padL = 48, padR = 16, padT = 20, padB = 36;
-      const ymin = p.ymin, ymax = p.ymax;
-      const x = (t) => padL + t * (w - padL - padR);
-      const y = (v) => padT + (1 - (v - ymin) / (ymax - ymin || 1)) * (h - padT - padB);
-      const path = series.map((pt, idx) => (idx ? 'L' : 'M') + x(pt.t).toFixed(1) + ',' + y(pt.v).toFixed(1)).join(' ');
-      const mkLine = (val, color, label) => {
-        if (val == null || val === '' || Number.isNaN(Number(val))) return null;
-        const vv = Number(val);
-        if (vv < ymin || vv > ymax) return null;
-        const yy = y(vv);
-        return { y: yy, color, label, val: vv };
+      const charts = monCurveCharts.value;
+      if (charts.length) return charts[0].svg;
+      return { path: '', paths: [], w: 1000, h: 320, padL: 48, padR: 16, padT: 20, padB: 36, lines: [], yTicks: [], ymin: 0, ymax: 1 };
+    });
+
+    /** 悬停 readout：当前 sampleTime 下全部已展示指标的 name / value / unit */
+    const monHoverReadout = computed(() => {
+      const charts = monCurveCharts.value;
+      if (!charts.length || monHoverT.value == null) return [];
+      const t = monHoverT.value;
+      const items = [];
+      const pushFrom = (point, series, color) => {
+        if (!point || !series || !series.length) return;
+        let best = series[0];
+        let bestDist = Math.abs(best.t - t);
+        for (let i = 1; i < series.length; i++) {
+          const d = Math.abs(series[i].t - t);
+          if (d < bestDist) { best = series[i]; bestDist = d; }
+        }
+        items.push({
+          code: point.code,
+          name: point.name,
+          unit: point.unit || '',
+          value: best.v,
+          color: color || '#0D6EFD',
+        });
       };
-      const lines = [
-        mkLine(p.warnHigh, '#E78212', '预警上限'),
-        mkLine(p.warnLow, '#E78212', '预警下限'),
-        mkLine(p.alarmHigh, '#DC3545', '报警上限'),
-        mkLine(p.alarmLow, '#DC3545', '报警下限'),
-        mkLine(p.faultHigh, '#0D6EFD', '故障上限'),
-        mkLine(p.faultLow, '#0D6EFD', '故障下限'),
-      ].filter(Boolean);
-      const yTicks = [ymin, ymin + (ymax - ymin) / 2, ymax].map(v => ({ v: Math.round(v * 100) / 100, y: y(v) }));
-      return { path, w, h, padL, padR, padT, padB, lines, yTicks, ymin, ymax };
+      charts.forEach(ch => {
+        if (ch.mode === 'merge') {
+          (ch.entries || []).forEach((e, idx) => {
+            pushFrom(e.point, e.series, CURVE_SERIES_COLORS[idx % CURVE_SERIES_COLORS.length]);
+          });
+        } else {
+          pushFrom(ch.point, ch.series, ch.svg && ch.svg.color);
+        }
+      });
+      return items;
     });
 
     const monCycleFullQueryTip = computed(() => {
-      const p = monSelectedPoint.value;
-      return !!(p && p.cycleSec > 15 * 60);
+      return monChartablePoints.value.some(p => p.cycleSec > 15 * 60);
     });
 
     const monOnlineRateSummary = computed(() => {
@@ -719,11 +909,12 @@ createApp({
       if (!d.slaves || !d.slaves.length) return [];
       return deviceList.value.filter(x => d.slaves.includes(x.id));
     });
-    /** 一体机才显示「子设备」入口；探头（probe: 或已挂 masterId）自身不显示 */
+    /** 仅当存在真实子设备时显示入口：非 probe、无 masterId，且 masterId=本机 的子设备 total>0 */
     const canShowChildDevices = computed(() => {
       const d = currentDevice.value;
       if (!d) return false;
       if (isProbeAepId(d.aepDeviceId) || d.masterId) return false;
+      if (!currentDeviceSlaves.value.length) return false;
       return true;
     });
 
@@ -765,8 +956,9 @@ createApp({
           const tabLabel = ({
             profile: '档案',
             localData: '本机数据',
+            dispatch: '指令',
+            sendLog: '设备发送记录',
             children: '子设备',
-            dispatch: '指令下发',
           })[deviceDetailTab.value] || '档案';
           return { parent: '设备台账', current: name + ' · ' + tabLabel };
         }
@@ -1382,23 +1574,85 @@ createApp({
       currentDevice.value = d;
       module.value = 'ledger';
       screen.value = 'deviceDetail';
-      // packets 旧 hash 并入 localData（本机数据 = 报文列表）
+      // packets 旧 hash 并入 localData（本机数据 = 报文列表）；commandLog 旧名 → sendLog
       if (tab === 'packets') tab = 'localData';
-      const allowed = ['profile', 'localData', 'children', 'dispatch'];
-      deviceDetailTab.value = allowed.includes(tab) ? tab : 'profile';
+      if (tab === 'commandLog') tab = 'sendLog';
+      const allowed = ['profile', 'localData', 'dispatch', 'sendLog', 'children'];
+      let next = allowed.includes(tab) ? tab : 'profile';
+      // ?tab=children 无真实子设备时回落档案，避免空表长期挂着
+      if (next === 'children') {
+        const slaves = deviceList.value.filter(x => x.masterId === d.id);
+        const hasSlaves = slaves.length || (d.slaves && d.slaves.length);
+        if (isProbeAepId(d.aepDeviceId) || d.masterId || !hasSlaves) next = 'profile';
+      }
+      deviceDetailTab.value = next;
       packetTypeFilter.value = '';
       expandedPacketIds.value = [];
       resetDispatchState();
+      showSendLogModal.value = false;
+      currentSendLog.value = null;
     }
 
     function setDeviceDetailTab(tab) {
       if (tab === 'packets') tab = 'localData';
+      if (tab === 'commandLog') tab = 'sendLog';
+      if (tab === 'children' && !canShowChildDevices.value) {
+        deviceDetailTab.value = 'profile';
+        return;
+      }
       deviceDetailTab.value = tab;
       if (tab === 'localData') {
         packetTypeFilter.value = '';
         expandedPacketIds.value = [];
       }
       if (tab === 'dispatch') resetDispatchState();
+      if (tab === 'sendLog') {
+        showSendLogModal.value = false;
+        currentSendLog.value = null;
+      }
+    }
+
+    function formatIdentifiers(ids) {
+      if (ids == null || ids === '') return '—';
+      if (Array.isArray(ids)) return ids.length ? ids.join(', ') : '—';
+      return String(ids);
+    }
+    function sendLogSuccess(row) {
+      if (!row) return false;
+      if (row.commandStatus === 'SUCCESS' || row.commandStatus === '成功') return true;
+      if (row.commandStatus === 'FAILED' || row.commandStatus === '失败') return false;
+      return Number(row.aepCode) === 0;
+    }
+    function openSendLogDetail(row) {
+      currentSendLog.value = row;
+      showSendLogModal.value = true;
+    }
+    function closeSendLogDetail() {
+      showSendLogModal.value = false;
+      currentSendLog.value = null;
+    }
+
+    function onMonCurveMove(evt, chart) {
+      if (!chart || !chart.svg) return;
+      const svgEl = evt.currentTarget;
+      const rect = svgEl.getBoundingClientRect();
+      const padL = chart.svg.padL || 48;
+      const padR = chart.svg.padR || 16;
+      const w = chart.svg.w || 1000;
+      const plotW = w - padL - padR;
+      if (plotW <= 0 || rect.width <= 0) return;
+      const xInView = ((evt.clientX - rect.left) / rect.width) * w;
+      let t = (xInView - padL) / plotW;
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
+      monHoverT.value = t;
+    }
+    function onMonCurveLeave() {
+      monHoverT.value = null;
+    }
+    function setMonCurveMode(mode) {
+      monCurveMode.value = mode === 'merge' ? 'merge' : 'split';
+      monHoverT.value = null;
     }
 
     function isPacketExpanded(id) {
@@ -1709,10 +1963,20 @@ createApp({
       showImportModal.value = false;
       showDisableConfirm.value = false;
       showTransferModal.value = false;
+      showSendLogModal.value = false;
     }
 
     function jump(hash) {
       resetOverlays();
+      let tabFromQuery = null;
+      let key = hash || '';
+      if (key.includes('?')) {
+        const parts = key.split('?');
+        key = parts[0];
+        try {
+          tabFromQuery = new URLSearchParams(parts.slice(1).join('?')).get('tab');
+        } catch (e) { tabFromQuery = null; }
+      }
       const map = {
         cockpit: () => goCockpit(),
         workbench: () => goCockpit(),
@@ -1740,10 +2004,11 @@ createApp({
         editProject: () => { goProjects(); openEditProject(PROJECTS[0]); },
         devices: () => { deviceProjectFilter.value = ''; deviceCategoryFilter.value = ''; goDevices(); },
         unassignedDevices: () => goUnassignedDevices(),
-        deviceDetail: () => openDeviceDetail(deviceList.value[0]),
+        deviceDetail: () => openDeviceDetail(deviceList.value[0], tabFromQuery || 'profile'),
         deviceLocalData: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'),
         devicePackets: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'), // 旧 hash → 本机数据
         deviceDispatch: () => openDeviceDetail(deviceList.value.find(d => d.categoryId === 'C001') || deviceList.value[0], 'dispatch'),
+        deviceSendLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'sendLog'),
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
         importExport: () => { goDevices(); openImportModal(); },
@@ -1757,7 +2022,8 @@ createApp({
         monitorOnlineRate: () => goMonitorOnlineRate(),
         monitorCurveLong: () => openMonitorCurve(MONITOR_ROWS.find(r => r.id === 'D006') || MONITOR_ROWS[0], 'rain'),
       };
-      if (map[hash]) map[hash]();
+      if (map[key]) map[key]();
+      else if (map[hash]) map[hash]();
     }
 
     function applyHash() {
@@ -1809,6 +2075,7 @@ createApp({
       isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
+      deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess,
       getCommandParamFields,
       unassignedDevices, unassignedCount, selectedDeviceIds,
       toggleSelectDevice, toggleSelectAllFiltered,
@@ -1826,8 +2093,10 @@ createApp({
       monProjectFilter, monCategoryFilter, monOnlineFilter, monAlarmFilter, monSearch,
       filteredMonitorRows, monListStats, currentMonitor,
       monMetricColumns, monHasCategoryFilter, monSelectedCategoryName,
-      monLatestPoints, monSelectedPoint, monCurveRange, monCurvePointCode,
+      monLatestPoints, monSelectedPoint, monCurveRange, monCurvePointCode, monCurveMode, monHoverT,
+      monChartablePoints, monCurveCharts, monHoverReadout, monPointsEmptyHint, monCurveEmptyHint,
       monCurveSeries, monCurveSvg, monCycleFullQueryTip,
+      onMonCurveMove, onMonCurveLeave, setMonCurveMode, isFiniteMetricValue,
       monOnlineRateSummary, monOnlineRateRows,
       goMonitorList, goMonitorOnlineRate, openMonitorDetail, openMonitorCurve, openMonitorForDevice,
       latestPointEntries, latestMetricValue, formatMetricCell, latestSummaryText, selectCurvePoint, FLOOD_POINT_KEYS,
@@ -2421,9 +2690,10 @@ createApp({
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" @click="setDeviceDetailTab('localData')">本机数据</button>
-              <button class="btn" v-if="canShowChildDevices" @click="setDeviceDetailTab('children')">子设备（探头）{{ currentDeviceSlaves.length ? ' · ' + currentDeviceSlaves.length : '' }}</button>
-              <button class="btn" @click="openMonitorForDevice(currentDevice)">{{ (canShowChildDevices && currentDeviceSlaves.length) ? '曲线 · 先选探头' : '曲线（在线监控）' }}</button>
-              <button class="btn" @click="setDeviceDetailTab('dispatch')" :disabled="!currentDevice.categoryId">指令下发</button>
+              <button class="btn" @click="setDeviceDetailTab('dispatch')" :disabled="!currentDevice.categoryId">指令</button>
+              <button class="btn" @click="setDeviceDetailTab('sendLog')">设备发送记录</button>
+              <button class="btn" v-if="canShowChildDevices" @click="setDeviceDetailTab('children')">子设备（探头） · {{ currentDeviceSlaves.length }}</button>
+              <button class="btn" @click="openMonitorForDevice(currentDevice)">{{ canShowChildDevices ? '曲线 · 先选探头' : '曲线（在线监控）' }}</button>
               <button class="btn" @click="openTransferModal(currentDevice)">例外处理 · 人工改挂</button>
               <button class="btn" @click="openEditDevice(currentDevice)">编辑档案</button>
               <button class="btn btn-danger" @click="openDisableDevice" :disabled="currentDevice.lifecycle==='停用'||currentDevice.lifecycle==='报废'">停用</button>
@@ -2431,10 +2701,11 @@ createApp({
           </div>
 
           <div class="tabs" style="margin-top:4px">
-            <div class="tab" :class="{active: deviceDetailTab==='profile'}" @click="setDeviceDetailTab('profile')">档案信息</div>
+            <div class="tab" :class="{active: deviceDetailTab==='profile'}" @click="setDeviceDetailTab('profile')">档案</div>
             <div class="tab" :class="{active: deviceDetailTab==='localData'}" @click="setDeviceDetailTab('localData')">本机数据</div>
+            <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="setDeviceDetailTab('dispatch')">指令</div>
+            <div class="tab" :class="{active: deviceDetailTab==='sendLog'}" @click="setDeviceDetailTab('sendLog')">设备发送记录</div>
             <div class="tab" v-if="canShowChildDevices" :class="{active: deviceDetailTab==='children'}" @click="setDeviceDetailTab('children')">子设备</div>
-            <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="setDeviceDetailTab('dispatch')">指令下发</div>
           </div>
 
           <template v-if="deviceDetailTab==='profile'">
@@ -2586,8 +2857,8 @@ createApp({
 
           <template v-else-if="deviceDetailTab==='localData'">
             <div class="banner-muted">
-              本机数据 = iot_protocol_data 报文（按 deviceId）。列：数据ID / 序列号(serialNum) / receiveTime / packageType / parsedJson / contentHex / status。
-              <template v-if="canShowChildDevices && currentDeviceSlaves.length">报文挂<strong>本一体机</strong>；曲线请到「子设备」里点各探头「曲线」（不混图）。</template>
+              本机数据 = iot_protocol_data 报文（按 deviceId）。无「解析摘要」列；保留序列号(serialNum) + parsedJson 原文（非摘要）。列：数据ID / serialNum / receiveTime / packageType / parsedJson / contentHex / status。
+              <template v-if="canShowChildDevices">报文挂<strong>本一体机</strong>；曲线请到「子设备」里点各探头「曲线」（不混图）。</template>
               <template v-else-if="currentDeviceMaster">采样曲线挂<strong>本探头</strong> deviceId；报文一般在父一体机「本机数据」。</template>
               <template v-else>曲线 → 顶栏「曲线（在线监控）」。</template>
             </div>
@@ -2644,7 +2915,7 @@ createApp({
           </template>
 
           <template v-else-if="deviceDetailTab==='dispatch'">
-            <div class="banner-muted">从本品类物模型指令（kind=service）选取并组包。真正下发走 <b>AEP CreateCommand</b> 透传 hex，dataType=2。物模型「指令」Tab 仅定义，不在此点发。</div>
+            <div class="banner-muted">指令点发：从本品类物模型指令（kind=service）选取并组包。真正下发走 <b>AEP CreateCommand</b> 透传 hex，dataType=2。物模型「指令」Tab 仅定义，不在此点发。历史见「设备发送记录」。</div>
             <div v-if="!currentDevice.categoryId" class="empty-hint">设备待归属品类，无法加载指令</div>
             <div v-else-if="!deviceDispatchCommands.length" class="empty-hint">本品类暂无启用指令；请先在物模型「指令」Tab 配置</div>
             <template v-else>
@@ -2706,6 +2977,37 @@ createApp({
               <div class="table-note">请求体对齐后端：commands[].params 为对象键（如 resendRange→start/end；sampleInterval→longMin/midMin/shortMin；高度类→value）。dryRun 仍预览 contentHex；真正下发 mock toast。AEP CreateCommand 透传 hex dataType=2。</div>
             </template>
           </template>
+
+          <template v-else-if="deviceDetailTab==='sendLog'">
+            <div class="banner-muted">进页自动拉 <code>GET /iot/deviceCommand/log</code>（按 deviceId={{ currentDevice.id }} · sendTime 倒序）。与「指令」点发共用同一发送记录数据源示意。</div>
+            <div class="table-wrap" v-if="deviceSendLogs.length">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:160px">发送时间</th>
+                    <th style="width:100px">成功与否</th>
+                    <th>identifiers</th>
+                    <th style="width:160px">commandId</th>
+                    <th style="width:88px">aepCode</th>
+                    <th style="width:88px">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in deviceSendLogs" :key="row.id">
+                    <td>{{ row.sendTime }}</td>
+                    <td><span class="tag" :class="sendLogSuccess(row) ? 'tag-green' : 'tag-red'">{{ sendLogSuccess(row) ? '成功' : '失败' }}</span></td>
+                    <td><code>{{ formatIdentifiers(row.identifiers) }}</code></td>
+                    <td><code>{{ row.commandId || '—' }}</code></td>
+                    <td>{{ row.aepCode == null ? '—' : row.aepCode }}</td>
+                    <td class="actions"><button class="btn-link btn" @click="openSendLogDetail(row)">详情</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="empty-hint">暂无设备发送记录</div>
+            <div class="table-note">列表字段：sendTime / commandStatus·成功与否 / identifiers / commandId / aepCode；详情含下发侧与返回侧 JSON。</div>
+          </template>
+
         </div>
 
         <!-- ===== 设备台账：编辑设备档案 ===== -->
@@ -3008,75 +3310,106 @@ createApp({
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">最新数据 <span class="sub-nav-hint">由本设备品类物模型 property 驱动 · 值取 latest_json[identifier] · 点击卡片切换曲线</span></div>
+            <div class="info-section-title">最新数据 <span class="sub-nav-hint">指标源=品类 kind=property 属性（顺序同物模型）· 值取 MONITOR_POINTS / latest_json[identifier] · 无有效数值的属性不参与下方曲线</span></div>
+            <div class="banner-muted" style="margin-bottom:10px">仅展示本设备品类物模型 property；未关联品类或品类无属性时不扫 history / latest_json 全字段。</div>
             <div class="point-card-grid" v-if="monLatestPoints.length">
               <div
                 class="point-card"
                 v-for="p in monLatestPoints"
                 :key="p.code"
-                :class="{ active: monCurvePointCode === p.code }"
-                @click="selectCurvePoint(p.code)"
+                :class="{ dim: !isFiniteMetricValue(p.value) }"
               >
                 <div class="pc-head">
                   <span class="pc-name">{{ p.name }}</span>
                   <code class="pc-code">{{ p.code }}</code>
                 </div>
                 <div class="pc-value">
-                  <b>{{ p.value == null ? '—' : p.value }}</b>
+                  <b>{{ p.value == null || p.value === '' ? '—' : p.value }}</b>
                   <span class="pc-unit" v-if="p.unit">{{ p.unit }}</span>
                 </div>
                 <div class="pc-meta">
                   <span class="tag" :class="TRUST_TAG[p.trustLevel]">{{ p.trustLevel }}</span>
                   <span>{{ p.ts }}</span>
+                  <span class="tag tag-gray" v-if="!isFiniteMetricValue(p.value)">无曲线</span>
                 </div>
               </div>
             </div>
-            <div v-else class="empty-hint">暂无测点数据</div>
+            <div v-else class="empty-hint">{{ monPointsEmptyHint }}</div>
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">历史曲线 <span class="sub-nav-hint">7 天 / 30 天 · 预警 orange / 报警 error / 故障 primary 参考线</span></div>
+            <div class="info-section-title">历史曲线 <span class="sub-nav-hint">分开=每指标一图 · 合并=多线同图 · 横轴 sampleTime · 无有效数值不画</span></div>
             <div class="toolbar" style="margin-bottom:10px">
-              <select class="select" v-model="monCurvePointCode">
-                <option v-for="p in monLatestPoints" :key="p.code" :value="p.code">{{ p.name }}（{{ p.code }}）</option>
-              </select>
+              <div class="seg-group">
+                <button class="seg-btn" :class="{active: monCurveMode==='split'}" @click="setMonCurveMode('split')">分开</button>
+                <button class="seg-btn" :class="{active: monCurveMode==='merge'}" @click="setMonCurveMode('merge')">合并</button>
+              </div>
               <div class="seg-group">
                 <button class="seg-btn" :class="{active: monCurveRange===7}" @click="monCurveRange=7">近 7 天</button>
                 <button class="seg-btn" :class="{active: monCurveRange===30}" @click="monCurveRange=30">近 30 天</button>
               </div>
               <div class="spacer"></div>
-              <span class="tag tag-gray" v-if="monSelectedPoint">周期 {{ formatCycle(monSelectedPoint.cycleSec) }}</span>
-              <button class="btn" @click="openMonitorCurve(currentMonitor, monCurvePointCode)">全屏</button>
+              <span class="tag tag-gray">可画 {{ monChartablePoints.length }} / 属性 {{ monLatestPoints.length }}</span>
+              <button class="btn" @click="openMonitorCurve(currentMonitor)">全屏</button>
             </div>
             <div v-if="monCycleFullQueryTip" class="banner-tip">采集周期 &gt; 15 分钟：历史全量查、不分段</div>
-            <div class="chart-card" v-if="monSelectedPoint">
-              <div class="chart-legend">
-                <span class="leg"><i class="lg-line" style="background:#0D6EFD"></i>{{ monSelectedPoint.name }}（{{ monSelectedPoint.code }}）</span>
-                <span class="leg"><i class="lg-dash" style="border-color:#E78212"></i>预警</span>
-                <span class="leg"><i class="lg-dash" style="border-color:#DC3545"></i>报警</span>
-                <span class="leg"><i class="lg-dash" style="border-color:#0D6EFD"></i>故障</span>
-                <span class="leg muted">示意 · {{ monCurveRange }} 天</span>
+
+            <div class="curve-readout" v-if="monCurveCharts.length">
+              <div class="curve-readout-hint">悬停或点击任一曲线，查看该采样时间点全部指标</div>
+              <div class="curve-readout-items" v-if="monHoverReadout.length">
+                <span class="curve-readout-item" v-for="it in monHoverReadout" :key="it.code">
+                  <i class="curve-dot" :style="{background: it.color}"></i>
+                  <b>{{ it.name }}</b>：{{ it.value }}<span v-if="it.unit"> {{ it.unit }}</span>
+                </span>
               </div>
-              <svg class="curve-svg" :viewBox="'0 0 ' + monCurveSvg.w + ' ' + monCurveSvg.h" preserveAspectRatio="none">
-                <rect :x="monCurveSvg.padL" :y="monCurveSvg.padT" :width="monCurveSvg.w - monCurveSvg.padL - monCurveSvg.padR" :height="monCurveSvg.h - monCurveSvg.padT - monCurveSvg.padB" fill="#fafcff" stroke="#eef2f8" />
-                <g v-for="(tk, i) in monCurveSvg.yTicks" :key="'dyt'+i">
-                  <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="tk.y" :y2="tk.y" stroke="#edf0f5" />
-                  <text :x="monCurveSvg.padL - 8" :y="tk.y + 4" text-anchor="end" font-size="11" fill="#8c8c8c">{{ tk.v }}</text>
-                </g>
-                <g v-for="(ln, i) in monCurveSvg.lines" :key="'dln'+i">
-                  <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="ln.y" :y2="ln.y" :stroke="ln.color" stroke-width="1.5" stroke-dasharray="6 4" />
-                  <text :x="monCurveSvg.w - monCurveSvg.padR - 4" :y="ln.y - 4" text-anchor="end" font-size="10" :fill="ln.color">{{ ln.label }} {{ ln.val }}</text>
-                </g>
-                <path :d="monCurveSvg.path" fill="none" stroke="#0D6EFD" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
-                <text :x="(monCurveSvg.padL + monCurveSvg.w - monCurveSvg.padR)/2" :y="monCurveSvg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">时间 →（{{ monCurveRange }} 天 · PG 时序示意）</text>
-              </svg>
-              <div class="chart-meta" v-if="monSelectedPoint">
-                <span>当前测点：<b>{{ monSelectedPoint.name }}</b>（{{ monSelectedPoint.code }}）</span>
-                <span>最新值：<b>{{ monSelectedPoint.value == null ? '—' : monSelectedPoint.value }}</b> {{ monSelectedPoint.unit }}</span>
-                <span>量程：{{ monSelectedPoint.ymin }} ~ {{ monSelectedPoint.ymax }}</span>
+              <div class="curve-readout-items muted" v-else>将指针移入图表以查看 sampleTime 联动读数</div>
+            </div>
+            <div v-if="monCurveCharts.length" class="curve-stack" :class="monCurveMode==='merge' ? 'is-merge' : 'is-split'">
+              <div class="chart-card" v-for="ch in monCurveCharts" :key="ch.key">
+                <div class="chart-legend">
+                  <template v-if="ch.mode==='merge'">
+                    <span class="leg curve-merge-legend" v-for="(p, i) in ch.entries" :key="p.point.code">
+                      <i class="lg-line" :style="{background: (ch.svg.paths[i] && ch.svg.paths[i].color) || '#0D6EFD'}"></i>
+                      {{ p.point.name }}（{{ p.point.code }}）
+                    </span>
+                  </template>
+                  <template v-else>
+                    <span class="leg"><i class="lg-line" :style="{background: ch.svg.color}"></i>{{ ch.title }}</span>
+                    <span class="leg"><i class="lg-dash" style="border-color:#E78212"></i>预警</span>
+                    <span class="leg"><i class="lg-dash" style="border-color:#DC3545"></i>报警</span>
+                    <span class="leg"><i class="lg-dash" style="border-color:#0D6EFD"></i>故障</span>
+                  </template>
+                  <span class="leg muted">sampleTime · {{ monCurveRange }} 天</span>
+                </div>
+                <svg class="curve-svg" :viewBox="'0 0 ' + ch.svg.w + ' ' + ch.svg.h" preserveAspectRatio="none"
+                  @mousemove="onMonCurveMove($event, ch)" @mouseleave="onMonCurveLeave" @click="onMonCurveMove($event, ch)">
+                  <rect :x="ch.svg.padL" :y="ch.svg.padT" :width="ch.svg.w - ch.svg.padL - ch.svg.padR" :height="ch.svg.h - ch.svg.padT - ch.svg.padB" fill="#fafcff" stroke="#eef2f8" />
+                  <g v-for="(tk, i) in ch.svg.yTicks" :key="'yt'+ch.key+i">
+                    <line :x1="ch.svg.padL" :x2="ch.svg.w - ch.svg.padR" :y1="tk.y" :y2="tk.y" stroke="#edf0f5" />
+                    <text :x="ch.svg.padL - 8" :y="tk.y + 4" text-anchor="end" font-size="11" fill="#8c8c8c">{{ tk.v }}</text>
+                  </g>
+                  <g v-for="(ln, i) in ch.svg.lines" :key="'ln'+ch.key+i">
+                    <line :x1="ch.svg.padL" :x2="ch.svg.w - ch.svg.padR" :y1="ln.y" :y2="ln.y" :stroke="ln.color" stroke-width="1.5" stroke-dasharray="6 4" />
+                    <text :x="ch.svg.w - ch.svg.padR - 4" :y="ln.y - 4" text-anchor="end" font-size="10" :fill="ln.color">{{ ln.label }} {{ ln.val }}</text>
+                  </g>
+                  <path v-for="(pp, pi) in (ch.svg.paths && ch.svg.paths.length ? ch.svg.paths : [{path: ch.svg.path, color: ch.svg.color}])" :key="'p'+ch.key+pi"
+                    :d="pp.path" fill="none" :stroke="pp.color" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
+                  <line v-if="monHoverT != null" :x1="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :x2="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :y1="ch.svg.padT" :y2="ch.svg.h - ch.svg.padB" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" />
+                  <text :x="(ch.svg.padL + ch.svg.w - ch.svg.padR)/2" :y="ch.svg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">sampleTime →（{{ monCurveRange }} 天 · PG 时序示意）</text>
+                </svg>
+                <div class="chart-meta" v-if="ch.point">
+                  <span>测点：<b>{{ ch.point.name }}</b>（{{ ch.point.code }}）</span>
+                  <span>最新值：<b>{{ ch.point.value == null ? '—' : ch.point.value }}</b> {{ ch.point.unit }}</span>
+                  <span>量程：{{ ch.point.ymin }} ~ {{ ch.point.ymax }}</span>
+                </div>
+                <div class="chart-meta" v-else>
+                  <span>合并模式 · 各序列按自身 ymin/ymax 归一化到同一画布</span>
+                  <span>可画指标 {{ monChartablePoints.length }} 个</span>
+                </div>
               </div>
             </div>
-            <div v-else class="empty-hint">请选择测点</div>
+            <div v-else class="empty-hint">{{ monCurveEmptyHint }}</div>
+
           </div>
 
           <div class="info-section">
@@ -3090,7 +3423,7 @@ createApp({
               <div class="k">latest_json</div><div class="v"><code style="font-size:12px">{{ latestSummaryText(currentMonitor) }}</code></div>
             </div>
           </div>
-          <div class="table-note">测点数值与曲线为 PostgreSQL 时序库示意，非实时接入；字段名与物模型测点字典一致。</div>
+          <div class="table-note">测点与曲线仅按品类 property 标识符对齐；无有效数值的属性不画曲线（如 D001 dianya / D006·D007 全空演示空态）。PG 时序示意，非实时接入。</div>
         </div>
 
         <!-- ===== 在线监控：历史曲线 ===== -->
@@ -3099,51 +3432,81 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">历史曲线 · {{ currentMonitor.name }}</h1>
-              <p class="page-desc">测点时序示意（PG）；参考线：预警 orange / 报警 error / 故障 primary</p>
+              <p class="page-desc">指标源=品类 kind=property；分开/合并展示；横轴 sampleTime；悬停联动全部指标读数</p>
             </div>
           </div>
           <div class="toolbar">
-            <select class="select" v-model="monCurvePointCode">
-              <option v-for="p in monLatestPoints" :key="p.code" :value="p.code">{{ p.name }}（{{ p.code }}）</option>
-            </select>
+            <div class="seg-group">
+              <button class="seg-btn" :class="{active: monCurveMode==='split'}" @click="setMonCurveMode('split')">分开</button>
+              <button class="seg-btn" :class="{active: monCurveMode==='merge'}" @click="setMonCurveMode('merge')">合并</button>
+            </div>
             <div class="seg-group">
               <button class="seg-btn" :class="{active: monCurveRange===7}" @click="monCurveRange=7">近 7 天</button>
               <button class="seg-btn" :class="{active: monCurveRange===30}" @click="monCurveRange=30">近 30 天</button>
             </div>
             <div class="spacer"></div>
-            <span class="tag tag-gray" v-if="monSelectedPoint">周期 {{ formatCycle(monSelectedPoint.cycleSec) }}</span>
+            <span class="tag tag-gray">可画 {{ monChartablePoints.length }} / 属性 {{ monLatestPoints.length }}</span>
           </div>
           <div v-if="monCycleFullQueryTip" class="banner-tip">
             采集周期 &gt; 15 分钟：历史全量查、不分段
           </div>
-          <div class="chart-card" v-if="monSelectedPoint">
-            <div class="chart-legend">
-              <span class="leg"><i class="lg-line" style="background:#0D6EFD"></i>测点值</span>
-              <span class="leg"><i class="lg-dash" style="border-color:#E78212"></i>预警</span>
-              <span class="leg"><i class="lg-dash" style="border-color:#DC3545"></i>报警</span>
-              <span class="leg"><i class="lg-dash" style="border-color:#0D6EFD"></i>故障</span>
-              <span class="leg muted">示意数据 · {{ monCurveRange }} 天</span>
+
+            <div class="curve-readout" v-if="monCurveCharts.length">
+              <div class="curve-readout-hint">悬停或点击任一曲线，查看该采样时间点全部指标</div>
+              <div class="curve-readout-items" v-if="monHoverReadout.length">
+                <span class="curve-readout-item" v-for="it in monHoverReadout" :key="it.code">
+                  <i class="curve-dot" :style="{background: it.color}"></i>
+                  <b>{{ it.name }}</b>：{{ it.value }}<span v-if="it.unit"> {{ it.unit }}</span>
+                </span>
+              </div>
+              <div class="curve-readout-items muted" v-else>将指针移入图表以查看 sampleTime 联动读数</div>
             </div>
-            <svg class="curve-svg" :viewBox="'0 0 ' + monCurveSvg.w + ' ' + monCurveSvg.h" preserveAspectRatio="none">
-              <rect :x="monCurveSvg.padL" :y="monCurveSvg.padT" :width="monCurveSvg.w - monCurveSvg.padL - monCurveSvg.padR" :height="monCurveSvg.h - monCurveSvg.padT - monCurveSvg.padB" fill="#fafcff" stroke="#eef2f8" />
-              <g v-for="(tk, i) in monCurveSvg.yTicks" :key="'yt'+i">
-                <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="tk.y" :y2="tk.y" stroke="#edf0f5" />
-                <text :x="monCurveSvg.padL - 8" :y="tk.y + 4" text-anchor="end" font-size="11" fill="#8c8c8c">{{ tk.v }}</text>
-              </g>
-              <g v-for="(ln, i) in monCurveSvg.lines" :key="'ln'+i">
-                <line :x1="monCurveSvg.padL" :x2="monCurveSvg.w - monCurveSvg.padR" :y1="ln.y" :y2="ln.y" :stroke="ln.color" stroke-width="1.5" stroke-dasharray="6 4" />
-                <text :x="monCurveSvg.w - monCurveSvg.padR - 4" :y="ln.y - 4" text-anchor="end" font-size="10" :fill="ln.color">{{ ln.label }} {{ ln.val }}</text>
-              </g>
-              <path :d="monCurveSvg.path" fill="none" stroke="#0D6EFD" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
-              <text :x="(monCurveSvg.padL + monCurveSvg.w - monCurveSvg.padR)/2" :y="monCurveSvg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">时间 →（{{ monCurveRange }} 天 · PG 时序示意）</text>
-            </svg>
-            <div class="chart-meta" v-if="monSelectedPoint">
-              <span>当前测点：<b>{{ monSelectedPoint.name }}</b>（{{ monSelectedPoint.code }}）</span>
-              <span>最新值：<b>{{ monSelectedPoint.value == null ? '—' : monSelectedPoint.value }}</b> {{ monSelectedPoint.unit }}</span>
-              <span>单位量程：{{ monSelectedPoint.ymin }} ~ {{ monSelectedPoint.ymax }}</span>
+            <div v-if="monCurveCharts.length" class="curve-stack" :class="monCurveMode==='merge' ? 'is-merge' : 'is-split'">
+              <div class="chart-card" v-for="ch in monCurveCharts" :key="ch.key">
+                <div class="chart-legend">
+                  <template v-if="ch.mode==='merge'">
+                    <span class="leg curve-merge-legend" v-for="(p, i) in ch.entries" :key="p.point.code">
+                      <i class="lg-line" :style="{background: (ch.svg.paths[i] && ch.svg.paths[i].color) || '#0D6EFD'}"></i>
+                      {{ p.point.name }}（{{ p.point.code }}）
+                    </span>
+                  </template>
+                  <template v-else>
+                    <span class="leg"><i class="lg-line" :style="{background: ch.svg.color}"></i>{{ ch.title }}</span>
+                    <span class="leg"><i class="lg-dash" style="border-color:#E78212"></i>预警</span>
+                    <span class="leg"><i class="lg-dash" style="border-color:#DC3545"></i>报警</span>
+                    <span class="leg"><i class="lg-dash" style="border-color:#0D6EFD"></i>故障</span>
+                  </template>
+                  <span class="leg muted">sampleTime · {{ monCurveRange }} 天</span>
+                </div>
+                <svg class="curve-svg" :viewBox="'0 0 ' + ch.svg.w + ' ' + ch.svg.h" preserveAspectRatio="none"
+                  @mousemove="onMonCurveMove($event, ch)" @mouseleave="onMonCurveLeave" @click="onMonCurveMove($event, ch)">
+                  <rect :x="ch.svg.padL" :y="ch.svg.padT" :width="ch.svg.w - ch.svg.padL - ch.svg.padR" :height="ch.svg.h - ch.svg.padT - ch.svg.padB" fill="#fafcff" stroke="#eef2f8" />
+                  <g v-for="(tk, i) in ch.svg.yTicks" :key="'yt'+ch.key+i">
+                    <line :x1="ch.svg.padL" :x2="ch.svg.w - ch.svg.padR" :y1="tk.y" :y2="tk.y" stroke="#edf0f5" />
+                    <text :x="ch.svg.padL - 8" :y="tk.y + 4" text-anchor="end" font-size="11" fill="#8c8c8c">{{ tk.v }}</text>
+                  </g>
+                  <g v-for="(ln, i) in ch.svg.lines" :key="'ln'+ch.key+i">
+                    <line :x1="ch.svg.padL" :x2="ch.svg.w - ch.svg.padR" :y1="ln.y" :y2="ln.y" :stroke="ln.color" stroke-width="1.5" stroke-dasharray="6 4" />
+                    <text :x="ch.svg.w - ch.svg.padR - 4" :y="ln.y - 4" text-anchor="end" font-size="10" :fill="ln.color">{{ ln.label }} {{ ln.val }}</text>
+                  </g>
+                  <path v-for="(pp, pi) in (ch.svg.paths && ch.svg.paths.length ? ch.svg.paths : [{path: ch.svg.path, color: ch.svg.color}])" :key="'p'+ch.key+pi"
+                    :d="pp.path" fill="none" :stroke="pp.color" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
+                  <line v-if="monHoverT != null" :x1="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :x2="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :y1="ch.svg.padT" :y2="ch.svg.h - ch.svg.padB" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" />
+                  <text :x="(ch.svg.padL + ch.svg.w - ch.svg.padR)/2" :y="ch.svg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">sampleTime →（{{ monCurveRange }} 天 · PG 时序示意）</text>
+                </svg>
+                <div class="chart-meta" v-if="ch.point">
+                  <span>测点：<b>{{ ch.point.name }}</b>（{{ ch.point.code }}）</span>
+                  <span>最新值：<b>{{ ch.point.value == null ? '—' : ch.point.value }}</b> {{ ch.point.unit }}</span>
+                  <span>量程：{{ ch.point.ymin }} ~ {{ ch.point.ymax }}</span>
+                </div>
+                <div class="chart-meta" v-else>
+                  <span>合并模式 · 各序列按自身 ymin/ymax 归一化到同一画布</span>
+                  <span>可画指标 {{ monChartablePoints.length }} 个</span>
+                </div>
+              </div>
             </div>
-          </div>
-          <div v-else class="empty-hint">请选择测点</div>
+            <div v-else class="empty-hint">{{ monCurveEmptyHint }}</div>
+
         </div>
 
         <!-- ===== 在线监控：在线率 ===== -->
@@ -3501,6 +3864,43 @@ createApp({
         <div class="modal-footer">
           <button class="btn" @click="showDisableConfirm=false">取消</button>
           <button class="btn btn-danger" @click="doDisableDevice">停用</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设备发送记录详情 -->
+    <div v-if="showSendLogModal && currentSendLog" class="overlay" @click.self="closeSendLogDetail">
+      <div class="modal modal-lg">
+        <div class="modal-header">
+          <span>发送记录详情 · {{ formatIdentifiers(currentSendLog.identifiers) }}</span>
+          <button class="close-x" @click="closeSendLogDetail">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="send-log-detail-grid">
+            <div class="send-log-col">
+              <div class="info-section-title">下发侧</div>
+              <div class="kv-grid send-log-kv">
+                <div class="k">identifiers</div><div class="v"><code>{{ formatIdentifiers(currentSendLog.identifiers) }}</code></div>
+                <div class="k">paramsJson</div><div class="v"><pre class="json-block">{{ currentSendLog.paramsJson }}</pre></div>
+                <div class="k">contentHex</div><div class="v"><pre class="hex-preview">{{ currentSendLog.contentHex }}</pre></div>
+                <div class="k">aepRequestJson</div><div class="v"><pre class="json-block">{{ currentSendLog.aepRequestJson }}</pre></div>
+              </div>
+            </div>
+            <div class="send-log-col">
+              <div class="info-section-title">返回侧</div>
+              <div class="kv-grid send-log-kv">
+                <div class="k">aepResponseJson</div><div class="v"><pre class="json-block">{{ currentSendLog.aepResponseJson }}</pre></div>
+                <div class="k">commandId</div><div class="v"><code>{{ currentSendLog.commandId || '—' }}</code></div>
+                <div class="k">commandStatus</div><div class="v"><span class="tag" :class="sendLogSuccess(currentSendLog) ? 'tag-green' : 'tag-red'">{{ currentSendLog.commandStatus }}</span></div>
+                <div class="k">aepCode</div><div class="v">{{ currentSendLog.aepCode == null ? '—' : currentSendLog.aepCode }}</div>
+                <div class="k">aepMsg</div><div class="v">{{ currentSendLog.aepMsg || '—' }}</div>
+                <div class="k">sendTime</div><div class="v">{{ currentSendLog.sendTime }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" @click="closeSendLogDetail">关闭</button>
         </div>
       </div>
     </div>
