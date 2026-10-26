@@ -313,7 +313,8 @@ const DEVICE_SEND_LOGS = [
     contentHex: 'FAFA0008AA550001ADAD',
     aepRequestJson: '{ "deviceId": "AEP-DEV-10001", "operator": "admin", "command": "reboot", "dataType": 2, "payload": "FAFA0008AA550001ADAD" }',
     aepResponseJson: '{ "code": 0, "msg": "ok", "commandId": "AEP-CMD-90001" }',
-    commandId: 'AEP-CMD-90001', commandStatus: 'SUCCESS', aepCode: 0, aepMsg: 'ok',
+    commandId: 'AEP-CMD-90001', commandStatus: 'DELIVERED', aepCode: 0, aepMsg: 'ok',
+    success: 1, dryRun: 0,
     sendTime: '2026-10-14 09:20:11'
   },
   {
@@ -323,7 +324,8 @@ const DEVICE_SEND_LOGS = [
     contentHex: 'FAFA001CAA55008000003C0A01ADAD',
     aepRequestJson: '{ "deviceId": "AEP-DEV-10001", "operator": "admin", "command": "sampleInterval", "params": { "longMin": 60, "midMin": 10, "shortMin": 1 } }',
     aepResponseJson: '{ "code": 0, "msg": "accepted", "commandId": "AEP-CMD-90002" }',
-    commandId: 'AEP-CMD-90002', commandStatus: 'SUCCESS', aepCode: 0, aepMsg: 'accepted',
+    commandId: 'AEP-CMD-90002', commandStatus: 'SENT', aepCode: 0, aepMsg: 'accepted',
+    success: 1, dryRun: 1,
     sendTime: '2026-10-13 18:41:05'
   },
   {
@@ -334,16 +336,29 @@ const DEVICE_SEND_LOGS = [
     aepRequestJson: '{ "deviceId": "AEP-DEV-10001", "operator": "zhangsan", "command": "resendRange", "params": { "start": 100, "end": 120 } }',
     aepResponseJson: '{ "code": 50013, "msg": "device offline", "commandId": "AEP-CMD-90003" }',
     commandId: 'AEP-CMD-90003', commandStatus: 'FAILED', aepCode: 50013, aepMsg: 'device offline',
+    success: 0, dryRun: 0,
     sendTime: '2026-10-12 10:02:30'
   },
   {
-    id: 'SL004', deviceId: 'D003',
+    id: 'SL004', deviceId: 'D001',
+    identifiers: ['cancelAllCommands'],
+    paramsJson: '{}',
+    contentHex: '',
+    aepRequestJson: '{ "deviceId": "AEP-DEV-10001", "operator": "admin", "command": "cancelAllCommands" }',
+    aepResponseJson: '{ "code": 0, "msg": "cancelled", "commandId": "AEP-CMD-90004" }',
+    commandId: 'AEP-CMD-90004', commandStatus: 'CANCELLED', aepCode: 0, aepMsg: 'cancelled',
+    success: 1, dryRun: 0,
+    sendTime: '2026-10-11 16:08:22'
+  },
+  {
+    id: 'SL005', deviceId: 'D003',
     identifiers: ['reboot', 'syncTime'],
     paramsJson: '{ "syncTime": { "value": 1728700000 } }',
     contentHex: 'FAFA0010BB660003ADAD',
     aepRequestJson: '{ "deviceId": "AEP-DEV-WQ-11", "operator": "admin", "commands": ["reboot","syncTime"] }',
     aepResponseJson: '{ "code": 0, "msg": "ok", "commandId": "AEP-CMD-91001" }',
-    commandId: 'AEP-CMD-91001', commandStatus: 'SUCCESS', aepCode: 0, aepMsg: 'ok',
+    commandId: 'AEP-CMD-91001', commandStatus: 'DELIVERED', aepCode: 0, aepMsg: 'ok',
+    success: 1, dryRun: 0,
     sendTime: '2026-09-28 09:15:44'
   },
 ];
@@ -1617,11 +1632,20 @@ createApp({
       if (Array.isArray(ids)) return ids.length ? ids.join(', ') : '—';
       return String(ids);
     }
+    /** 结果列：字段 success；1→成功（绿），否则失败（红）。不用 commandStatus 字符串当结果。 */
     function sendLogSuccess(row) {
       if (!row) return false;
-      if (row.commandStatus === 'SUCCESS' || row.commandStatus === '成功') return true;
-      if (row.commandStatus === 'FAILED' || row.commandStatus === '失败') return false;
-      return Number(row.aepCode) === 0;
+      return Number(row.success) === 1;
+    }
+    /** 类型：identifiers 含 cancelAllCommands → 取消全部，否则 下发 */
+    function sendLogTypeLabel(row) {
+      const raw = row && row.identifiers;
+      const list = Array.isArray(raw) ? raw : (raw == null || raw === '' ? [] : [String(raw)]);
+      const hit = list.some(x => String(x).includes('cancelAllCommands'));
+      return hit ? '取消全部' : '下发';
+    }
+    function sendLogDryRunLabel(row) {
+      return Number(row && row.dryRun) === 1 ? '是' : '否';
     }
     function openSendLogDetail(row) {
       currentSendLog.value = row;
@@ -2075,7 +2099,7 @@ createApp({
       isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
-      deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess,
+      deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess, sendLogTypeLabel, sendLogDryRunLabel,
       getCommandParamFields,
       unassignedDevices, unassignedCount, selectedDeviceIds,
       toggleSelectDevice, toggleSelectAllFiltered,
@@ -2979,33 +3003,37 @@ createApp({
           </template>
 
           <template v-else-if="deviceDetailTab==='sendLog'">
-            <div class="banner-muted">进页自动拉 <code>GET /iot/deviceCommand/log</code>（按 deviceId={{ currentDevice.id }} · sendTime 倒序）。与「指令」点发共用同一发送记录数据源示意。</div>
+            <div class="banner-muted">进页自动拉 <code>GET /iot/deviceCommand/log</code>（按 deviceId={{ currentDevice.id }} · sendTime 倒序）。与「指令」内下发历史同一组件示意。列表对齐 IotDeviceCommandLogPanel；aepCode 仅详情返回侧。</div>
             <div class="table-wrap" v-if="deviceSendLogs.length">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th style="width:160px">发送时间</th>
-                    <th style="width:100px">成功与否</th>
+                    <th style="width:150px">时间</th>
+                    <th style="width:88px">类型</th>
                     <th>identifiers</th>
-                    <th style="width:160px">commandId</th>
-                    <th style="width:88px">aepCode</th>
-                    <th style="width:88px">操作</th>
+                    <th style="width:72px">结果</th>
+                    <th style="width:64px">dryRun</th>
+                    <th style="width:150px">commandId</th>
+                    <th style="width:120px">状态</th>
+                    <th style="width:110px">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="row in deviceSendLogs" :key="row.id">
                     <td>{{ row.sendTime }}</td>
-                    <td><span class="tag" :class="sendLogSuccess(row) ? 'tag-green' : 'tag-red'">{{ sendLogSuccess(row) ? '成功' : '失败' }}</span></td>
+                    <td>{{ sendLogTypeLabel(row) }}</td>
                     <td><code>{{ formatIdentifiers(row.identifiers) }}</code></td>
+                    <td><span class="tag" :class="sendLogSuccess(row) ? 'tag-green' : 'tag-red'">{{ sendLogSuccess(row) ? '成功' : '失败' }}</span></td>
+                    <td>{{ sendLogDryRunLabel(row) }}</td>
                     <td><code>{{ row.commandId || '—' }}</code></td>
-                    <td>{{ row.aepCode == null ? '—' : row.aepCode }}</td>
-                    <td class="actions"><button class="btn-link btn" @click="openSendLogDetail(row)">详情</button></td>
+                    <td><code>{{ row.commandStatus || '—' }}</code></td>
+                    <td class="actions"><button class="btn-link btn" @click="openSendLogDetail(row)">查看出站/返回</button></td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <div v-else class="empty-hint">暂无设备发送记录</div>
-            <div class="table-note">列表字段：sendTime / commandStatus·成功与否 / identifiers / commandId / aepCode；详情含下发侧与返回侧 JSON。</div>
+            <div class="table-note">结果列 = success（1→成功绿 / 否则失败红）；状态列 = commandStatus 原文（不做中文映射）；aepCode 不进列表。</div>
           </template>
 
         </div>
@@ -3891,7 +3919,10 @@ createApp({
               <div class="kv-grid send-log-kv">
                 <div class="k">aepResponseJson</div><div class="v"><pre class="json-block">{{ currentSendLog.aepResponseJson }}</pre></div>
                 <div class="k">commandId</div><div class="v"><code>{{ currentSendLog.commandId || '—' }}</code></div>
-                <div class="k">commandStatus</div><div class="v"><span class="tag" :class="sendLogSuccess(currentSendLog) ? 'tag-green' : 'tag-red'">{{ currentSendLog.commandStatus }}</span></div>
+                <div class="k">commandStatus</div><div class="v"><code>{{ currentSendLog.commandStatus || '—' }}</code></div>
+                <div class="k">success</div><div class="v"><span class="tag" :class="sendLogSuccess(currentSendLog) ? 'tag-green' : 'tag-red'">{{ sendLogSuccess(currentSendLog) ? '成功' : '失败' }}</span></div>
+                <div class="k">dryRun</div><div class="v">{{ sendLogDryRunLabel(currentSendLog) }}</div>
+                <div class="k">类型</div><div class="v">{{ sendLogTypeLabel(currentSendLog) }}</div>
                 <div class="k">aepCode</div><div class="v">{{ currentSendLog.aepCode == null ? '—' : currentSendLog.aepCode }}</div>
                 <div class="k">aepMsg</div><div class="v">{{ currentSendLog.aepMsg || '—' }}</div>
                 <div class="k">sendTime</div><div class="v">{{ currentSendLog.sendTime }}</div>
