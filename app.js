@@ -2372,20 +2372,20 @@ createApp({
               <div
                 v-for="row in cockpitProjectRows"
                 :key="row.id"
-                class="cockpit-project-row"
+                class="cockpit-project-card"
                 @click="openDevicesForProject(row.project)"
               >
-                <div class="cpr-main">
+                <div class="cpr-hd">
                   <div class="cpr-title">
                     <span class="cpr-name">{{ row.name }}</span>
                     <span class="tag" :class="PJ_STATUS_TAG[row.status] || 'tag-gray'">{{ row.status }}</span>
-                    <span class="cpr-meta">{{ row.region || '—' }} · 设备 {{ row.deviceCount }} 台</span>
                   </div>
-                  <div class="cpr-cats" v-if="row.topCategories.length">
-                    <span v-for="cat in row.topCategories" :key="cat.name" class="cpr-cat-pill">{{ cat.name }} {{ cat.count }}</span>
-                  </div>
-                  <div class="cpr-cats muted" v-else>暂无设备</div>
                 </div>
+                <div class="cpr-meta">{{ row.region || '—' }} · 设备 {{ row.deviceCount }} 台</div>
+                <div class="cpr-cats" v-if="row.topCategories.length">
+                  <span v-for="cat in row.topCategories" :key="cat.name" class="cpr-cat-pill">{{ cat.name }} {{ cat.count }}</span>
+                </div>
+                <div class="cpr-cats muted" v-else>暂无设备</div>
                 <div class="cpr-stats">
                   <div class="cpr-stat ok"><span class="k">在线</span><span class="v">{{ row.online }}</span></div>
                   <div class="cpr-stat"><span class="k">离线</span><span class="v">{{ row.offline }}</span></div>
@@ -2398,17 +2398,18 @@ createApp({
                 </div>
               </div>
               <div
-                class="cockpit-project-row aside"
+                class="cockpit-project-card aside"
                 @click="jump('unassignedDevices')"
                 title="例外池 · 未定义项目"
               >
-                <div class="cpr-main">
+                <div class="cpr-hd">
                   <div class="cpr-title">
                     <span class="cpr-name">未定义项目（例外池）</span>
                     <span class="tag tag-orange">例外</span>
-                    <span class="cpr-meta">非主路径 · SDK 缺映射 / 临时设备等 · {{ cockpitUnassignedRow.deviceCount }} 台</span>
                   </div>
                 </div>
+                <div class="cpr-meta">非主路径 · SDK 缺映射 / 临时设备 · {{ cockpitUnassignedRow.deviceCount }} 台</div>
+                <div class="cpr-cats muted">例外池 · 点击进入未挂项目设备</div>
                 <div class="cpr-stats">
                   <div class="cpr-stat ok"><span class="k">在线</span><span class="v">{{ cockpitUnassignedRow.online }}</span></div>
                   <div class="cpr-stat"><span class="k">离线</span><span class="v">{{ cockpitUnassignedRow.offline }}</span></div>
