@@ -185,6 +185,10 @@ const COCKPIT_ACTIVITIES = [
   { id: 'CA6', time: '2026-09-30 08:05', actor: '赵强', action: '设备档案更新', result: '城东泵站1#机组 固件/坐标已同步', tone: 'ok' },
 ];
 
+/** 平台累计数据量演示基数：叠加 mock 报文/采样后形成「平台数据总量」KPI */
+const PLATFORM_DATA_SEED = 1284560;
+
+
 /* ========== 在线监控 Mock（设备数据集中入口） ========== */
 const TRUST_TAG = { T0: 'tag-red', T1: 'tag-orange', T2: 'tag-blue', T3: 'tag-green' };
 const TRUST_LABEL = { T0: '不可信', T1: '低可信', T2: '中可信', T3: '高可信' };
@@ -1011,18 +1015,121 @@ createApp({
 
     function goCockpit() { module.value = 'cockpit'; screen.value = 'cockpit'; }
 
+    function formatPlatformCount(n) {
+      const v = Number(n) || 0;
+      if (v >= 10000) {
+        const wan = v / 10000;
+        return (wan >= 100 ? wan.toFixed(0) : wan.toFixed(wan >= 10 ? 1 : 2).replace(/\.0+$/, '').replace(/(\.[1-9])0$/, '$1')) + ' 万';
+      }
+      return String(v);
+    }
+
     const cockpitStats = computed(() => {
       const all = deviceList.value;
       const online = all.filter(d => d.lifecycle === '在线').length;
       const offlineAbnormal = all.filter(d => ['离线', '待接入', '停用', '报废'].includes(d.lifecycle)).length;
       const pendingDiff = aepDiffs.value.filter(d => d.action === 'pending').length;
+      const packetCount = PROTOCOL_PACKETS.length;
+      const samplePoints = MONITOR_ROWS.reduce((s, r) => s + (Number(r.actual24h) || 0), 0);
+      const platformDataTotal = PLATFORM_DATA_SEED + packetCount + samplePoints;
+      const onlineRate = all.length ? Math.round((online / all.length) * 100) : 0;
       return {
         deviceTotal: all.length,
         online,
         offlineAbnormal,
+        onlineRate,
         projectCount: PROJECTS.length,
         unassigned: unassignedCount.value,
         pendingDiff,
+        platformDataTotal,
+        platformDataLabel: formatPlatformCount(platformDataTotal),
+        packetCount,
+        samplePoints,
+      };
+    });
+
+    /** 品类分布：展示全部 CATEGORIES（含 0），另计空 categoryId 为「待归属」 */
+    const cockpitCategoryDist = computed(() => {
+      const all = deviceList.value;
+      const counts = {};
+      let uncategorized = 0;
+      all.forEach(d => {
+        if (!d.categoryId) uncategorized += 1;
+        else counts[d.categoryId] = (counts[d.categoryId] || 0) + 1;
+      });
+      const max = Math.max(uncategorized, ...CATEGORIES.map(c => counts[c.id] || 0), 1);
+      const rows = CATEGORIES.map(c => {
+        const count = counts[c.id] || 0;
+        return {
+          id: c.id,
+          name: c.name,
+          count,
+          pct: Math.round((count / max) * 100),
+          empty: count === 0,
+        };
+      });
+      rows.push({
+        id: '__uncat__',
+        name: '待归属',
+        count: uncategorized,
+        pct: Math.round((uncategorized / max) * 100),
+        empty: uncategorized === 0,
+        uncategorized: true,
+      });
+      return rows;
+    });
+
+    /** 按项目罗列：各项目在运行设备概况 */
+    const cockpitProjectRows = computed(() => {
+      const all = deviceList.value;
+      const rows = PROJECTS.map(p => {
+        const devices = all.filter(d => d.projectId === p.id);
+        const online = devices.filter(d => d.lifecycle === '在线').length;
+        const offline = devices.filter(d => d.lifecycle === '离线').length;
+        const pending = devices.filter(d => d.lifecycle === '待接入').length;
+        const other = devices.length - online - offline - pending;
+        const onlineRate = devices.length ? Math.round((online / devices.length) * 100) : 0;
+        const catMap = {};
+        devices.forEach(d => {
+          const name = d.categoryName || (d.categoryId ? d.categoryId : '待归属');
+          catMap[name] = (catMap[name] || 0) + 1;
+        });
+        const topCategories = Object.entries(catMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name, count]) => ({ name, count }));
+        return {
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          region: p.region,
+          deviceCount: devices.length,
+          online,
+          offline,
+          pending,
+          other,
+          onlineRate,
+          topCategories,
+          project: p,
+        };
+      });
+      return rows;
+    });
+
+    const cockpitUnassignedRow = computed(() => {
+      const devices = deviceList.value.filter(d => !d.projectId);
+      const online = devices.filter(d => d.lifecycle === '在线').length;
+      const offline = devices.filter(d => d.lifecycle === '离线').length;
+      const pending = devices.filter(d => d.lifecycle === '待接入').length;
+      const other = devices.length - online - offline - pending;
+      const onlineRate = devices.length ? Math.round((online / devices.length) * 100) : 0;
+      return {
+        deviceCount: devices.length,
+        online,
+        offline,
+        pending,
+        other,
+        onlineRate,
       };
     });
 
@@ -2079,7 +2186,7 @@ createApp({
 
     return {
       module, screen, detailTab, searchKeyword, filterIndustry,
-      goCockpit, cockpitStats, cockpitSyncStatus, COCKPIT_TODOS, COCKPIT_ACTIVITIES,
+      goCockpit, cockpitStats, cockpitCategoryDist, cockpitProjectRows, cockpitUnassignedRow, cockpitSyncStatus, COCKPIT_TODOS, COCKPIT_ACTIVITIES, formatPlatformCount,
       filteredCategories, industries, breadcrumb, topbarHint, currentCategory,
       CATEGORIES, PROPERTIES, EVENTS, POINTS, INSTALL_FIELDS, FIRMWARES, COMMANDS,
       currentCategoryProperties, getCategoryProperties,
@@ -2185,92 +2292,190 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">驾驶舱</h1>
-              <p class="page-desc">登录后的工作台首页。项目与 AEP 产品 1:1；AEP 同步为主路径；「未定义项目」为例外池。非 GIS 大屏。</p>
+              <p class="page-desc">平台核心数据总览：设备规模、项目分布、品类构成与累计数据量；下方按项目查看在运行设备情况。AEP 对账与例外处理见底部运维区。</p>
             </div>
-            <button class="btn btn-primary" @click="jump('aepReconcile')">同步自 AEP</button>
+            <button class="btn" @click="jump('aepReconcile')">同步自 AEP</button>
           </div>
 
-          <div class="stat-row cockpit-stats">
-            <div class="stat-chip accent" style="cursor:pointer" @click="jump('devices')"><div class="sc-label">设备总数</div><div class="sc-value">{{ cockpitStats.deviceTotal }}</div></div>
-            <div class="stat-chip ok" style="cursor:pointer" @click="jump('monitor')"><div class="sc-label">在线</div><div class="sc-value">{{ cockpitStats.online }}</div></div>
-            <div class="stat-chip danger" style="cursor:pointer" @click="jump('devices')"><div class="sc-label">离线 / 异常</div><div class="sc-value">{{ cockpitStats.offlineAbnormal }}</div></div>
-            <div class="stat-chip" style="cursor:pointer" @click="jump('projects')"><div class="sc-label">项目数</div><div class="sc-value">{{ cockpitStats.projectCount }}</div></div>
-            <div class="stat-chip warn" style="cursor:pointer" @click="jump('unassignedDevices')" title="例外池，非主路径"><div class="sc-label">例外池（未定义项目）</div><div class="sc-value">{{ cockpitStats.unassigned }}</div></div>
-            <div class="stat-chip warn" style="cursor:pointer" @click="jump('aepReconcile')"><div class="sc-label">待处理对账差异</div><div class="sc-value">{{ cockpitStats.pendingDiff }}</div></div>
+          <!-- 核心概览 Hero -->
+          <section class="cockpit-hero" aria-label="核心概览">
+            <div class="cockpit-hero-card accent" style="cursor:pointer" @click="jump('devices')">
+              <div class="ch-label">设备总数</div>
+              <div class="ch-value">{{ cockpitStats.deviceTotal }}</div>
+              <div class="ch-hint">台账在册设备</div>
+            </div>
+            <div class="cockpit-hero-card" style="cursor:pointer" @click="jump('projects')">
+              <div class="ch-label">项目数</div>
+              <div class="ch-value">{{ cockpitStats.projectCount }}</div>
+              <div class="ch-hint">正式项目（不含例外池）</div>
+            </div>
+            <div class="cockpit-hero-card data" title="累计数据报文 ≈ 历史基数 + 协议报文样例 + 近 24h 采样点数（演示）">
+              <div class="ch-label">平台数据总量</div>
+              <div class="ch-value">{{ cockpitStats.platformDataLabel }}</div>
+              <div class="ch-hint">累计数据报文 · 条</div>
+            </div>
+          </section>
+
+          <!-- 次要状态条 -->
+          <div class="cockpit-secondary-stats">
+            <div class="stat-chip ok" style="cursor:pointer" @click="jump('monitor')">
+              <div class="sc-label">在线</div>
+              <div class="sc-value">{{ cockpitStats.online }}</div>
+            </div>
+            <div class="stat-chip danger" style="cursor:pointer" @click="jump('devices')">
+              <div class="sc-label">离线 / 异常</div>
+              <div class="sc-value">{{ cockpitStats.offlineAbnormal }}</div>
+            </div>
+            <div class="stat-chip" style="cursor:pointer" @click="jump('monitor')">
+              <div class="sc-label">在线率</div>
+              <div class="sc-value">{{ cockpitStats.onlineRate }}%</div>
+            </div>
+            <div class="stat-chip warn" style="cursor:pointer" @click="jump('unassignedDevices')" title="例外池，非主路径">
+              <div class="sc-label">例外池</div>
+              <div class="sc-value">{{ cockpitStats.unassigned }}</div>
+            </div>
+            <div class="stat-chip warn" style="cursor:pointer" @click="jump('aepReconcile')">
+              <div class="sc-label">待处理对账</div>
+              <div class="sc-value">{{ cockpitStats.pendingDiff }}</div>
+            </div>
           </div>
 
-          <div class="cockpit-mid">
-            <div class="cockpit-panel">
+          <!-- 品类分布 -->
+          <section class="cockpit-panel cockpit-category-panel">
+            <div class="cockpit-panel-hd">
+              <h3>品类分布</h3>
+              <span class="sub-nav-hint">按物模型品类统计 · 含 0 台品类与待归属</span>
+            </div>
+            <div class="cockpit-cat-grid">
+              <div
+                v-for="c in cockpitCategoryDist"
+                :key="c.id"
+                class="cockpit-cat-card"
+                :class="{ empty: c.empty, warn: c.uncategorized && c.count > 0 }"
+                style="cursor:pointer"
+                @click="c.uncategorized ? jump('devices') : openDevicesForCategory(c.id)"
+              >
+                <div class="cc-name">{{ c.name }}</div>
+                <div class="cc-count">{{ c.count }}</div>
+                <div class="cc-bar"><span :style="{ width: c.pct + '%' }"></span></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 按项目罗列：在运行设备情况 -->
+          <section class="cockpit-panel cockpit-projects-panel">
+            <div class="cockpit-panel-hd">
+              <h3>按项目 · 在运行设备</h3>
+              <span class="sub-nav-hint">一览各项目设备规模与在线情况 · 点击进入该项目设备列表</span>
+            </div>
+            <div class="cockpit-project-list">
+              <div
+                v-for="row in cockpitProjectRows"
+                :key="row.id"
+                class="cockpit-project-row"
+                @click="openDevicesForProject(row.project)"
+              >
+                <div class="cpr-main">
+                  <div class="cpr-title">
+                    <span class="cpr-name">{{ row.name }}</span>
+                    <span class="tag" :class="PJ_STATUS_TAG[row.status] || 'tag-gray'">{{ row.status }}</span>
+                  </div>
+                  <div class="cpr-meta">{{ row.region || '—' }} · 设备 {{ row.deviceCount }} 台</div>
+                  <div class="cpr-cats" v-if="row.topCategories.length">
+                    <span v-for="cat in row.topCategories" :key="cat.name" class="cpr-cat-pill">{{ cat.name }} {{ cat.count }}</span>
+                  </div>
+                  <div class="cpr-cats muted" v-else>暂无设备</div>
+                </div>
+                <div class="cpr-stats">
+                  <div class="cpr-stat ok"><span class="k">在线</span><span class="v">{{ row.online }}</span></div>
+                  <div class="cpr-stat"><span class="k">离线</span><span class="v">{{ row.offline }}</span></div>
+                  <div class="cpr-stat warn" v-if="row.pending"><span class="k">待接入</span><span class="v">{{ row.pending }}</span></div>
+                  <div class="cpr-rate">
+                    <div class="cpr-rate-label">在线率</div>
+                    <div class="cpr-rate-value">{{ row.deviceCount ? row.onlineRate + '%' : '—' }}</div>
+                    <div class="cpr-rate-bar"><span :style="{ width: (row.deviceCount ? row.onlineRate : 0) + '%' }"></span></div>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="cockpit-project-row aside"
+                @click="jump('unassignedDevices')"
+                title="例外池 · 未定义项目"
+              >
+                <div class="cpr-main">
+                  <div class="cpr-title">
+                    <span class="cpr-name">未定义项目（例外池）</span>
+                    <span class="tag tag-orange">例外</span>
+                  </div>
+                  <div class="cpr-meta">非主路径 · SDK 缺映射 / 临时设备等 · {{ cockpitUnassignedRow.deviceCount }} 台</div>
+                </div>
+                <div class="cpr-stats">
+                  <div class="cpr-stat ok"><span class="k">在线</span><span class="v">{{ cockpitUnassignedRow.online }}</span></div>
+                  <div class="cpr-stat"><span class="k">离线</span><span class="v">{{ cockpitUnassignedRow.offline }}</span></div>
+                  <div class="cpr-stat warn" v-if="cockpitUnassignedRow.pending"><span class="k">待接入</span><span class="v">{{ cockpitUnassignedRow.pending }}</span></div>
+                  <div class="cpr-rate">
+                    <div class="cpr-rate-label">在线率</div>
+                    <div class="cpr-rate-value">{{ cockpitUnassignedRow.deviceCount ? cockpitUnassignedRow.onlineRate + '%' : '—' }}</div>
+                    <div class="cpr-rate-bar"><span :style="{ width: (cockpitUnassignedRow.deviceCount ? cockpitUnassignedRow.onlineRate : 0) + '%' }"></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 运维辅助（降级） -->
+          <section class="cockpit-ops">
+            <div class="cockpit-panel cockpit-ops-compact">
               <div class="cockpit-panel-hd">
-                <h3>最近 AEP 同步</h3>
+                <h3>AEP 同步 · 对账</h3>
                 <span class="tag" :class="cockpitSyncStatus.ok ? 'tag-green' : 'tag-orange'">{{ cockpitSyncStatus.result }}</span>
               </div>
-              <div class="cockpit-sync-body">
+              <div class="cockpit-sync-body compact">
                 <div class="sync-row"><span class="k">最近同步</span><span class="v">{{ cockpitSyncStatus.lastAt }}</span></div>
-                <div class="sync-row"><span class="k">同步结果</span><span class="v">{{ cockpitSyncStatus.ok ? '清单一致' : cockpitSyncStatus.summary }}</span></div>
-                <div class="sync-row"><span class="k">口径</span><span class="v">周期对账 · OpenAPI 绑定为主 · 例外池不覆盖已挂项目</span></div>
+                <div class="sync-row"><span class="k">结果</span><span class="v">{{ cockpitSyncStatus.ok ? '清单一致' : cockpitSyncStatus.summary }}</span></div>
                 <div class="cockpit-sync-actions">
                   <button class="btn btn-primary" @click="jump('aepReconcile')">查看对账差异</button>
                   <button class="btn" @click="syncFromAep">立即同步</button>
                 </div>
               </div>
-            </div>
-            <div class="cockpit-panel">
-              <div class="cockpit-panel-hd">
-                <h3>快捷入口</h3>
-              </div>
-              <div class="quick-chips">
+              <div class="quick-chips" style="margin-top:12px">
                 <button class="quick-chip" @click="jump('list')">物模型 · 品类</button>
                 <button class="quick-chip" @click="jump('projects')">项目列表</button>
                 <button class="quick-chip" @click="jump('devices')">设备列表</button>
                 <button class="quick-chip accent" @click="jump('aepReconcile')">AEP 对账</button>
-                <button class="quick-chip warn" @click="jump('unassignedDevices')">例外池 · 未定义项目 <span class="tag tag-orange" style="margin-left:4px">{{ cockpitStats.unassigned }}</span></button>
+                <button class="quick-chip warn" @click="jump('unassignedDevices')">例外池 <span class="tag tag-orange" style="margin-left:4px">{{ cockpitStats.unassigned }}</span></button>
                 <button class="quick-chip" @click="jump('monitor')">在线监控</button>
-                <span class="quick-chip muted" title="一期未开放">告警（未开放）</span>
               </div>
             </div>
-          </div>
-
-          <div class="cockpit-bottom">
             <div class="cockpit-panel">
               <div class="cockpit-panel-hd">
                 <h3>例外待办</h3>
-                <span class="sub-nav-hint">未挂项目设备 · 对账待处理</span>
+                <span class="sub-nav-hint">未挂项目 · 对账差异</span>
               </div>
-              <div class="table-wrap">
-                <table class="data-table">
-                  <thead><tr><th>类型</th><th>对象</th><th>说明</th><th>时间</th><th>操作</th></tr></thead>
-                  <tbody>
-                    <tr v-for="t in COCKPIT_TODOS" :key="t.id">
-                      <td><span class="tag" :class="t.severity==='danger'?'tag-red':'tag-orange'">{{ t.type }}</span></td>
-                      <td>
-                        <div>{{ t.title }}</div>
-                        <code style="font-size:12px;color:#888">{{ t.imei }}</code>
-                      </td>
-                      <td style="max-width:280px;white-space:normal">{{ t.detail }}</td>
-                      <td>{{ t.time }}</td>
-                      <td class="actions"><button class="btn-link btn" @click="jump(t.target)">处理</button></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <ul class="cockpit-todo-compact">
+                <li v-for="t in COCKPIT_TODOS.slice(0, 4)" :key="t.id">
+                  <span class="tag" :class="t.severity==='danger'?'tag-red':'tag-orange'">{{ t.type }}</span>
+                  <span class="todo-title">{{ t.title }}</span>
+                  <button class="btn-link btn" @click="jump(t.target)">处理</button>
+                </li>
+              </ul>
+              <button class="btn-link btn" style="margin-top:8px" @click="jump('aepReconcile')">查看全部 →</button>
             </div>
             <div class="cockpit-panel">
               <div class="cockpit-panel-hd">
                 <h3>近期动态</h3>
               </div>
-              <ul class="cockpit-timeline">
-                <li v-for="a in COCKPIT_ACTIVITIES" :key="a.id" :class="'tone-'+a.tone">
+              <ul class="cockpit-timeline compact">
+                <li v-for="a in COCKPIT_ACTIVITIES.slice(0, 4)" :key="a.id" :class="'tone-'+a.tone">
                   <div class="tl-dot"></div>
                   <div class="tl-body">
                     <div class="tl-meta"><span class="tl-time">{{ a.time }}</span><span class="tl-actor">{{ a.actor }}</span></div>
                     <div class="tl-action">{{ a.action }}</div>
-                    <div class="tl-result">{{ a.result }}</div>
                   </div>
                 </li>
               </ul>
             </div>
-          </div>
+          </section>
         </div>
 
         <!-- ===== 物模型：品类列表 ===== -->
