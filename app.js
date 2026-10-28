@@ -2379,8 +2379,8 @@ createApp({
                   <div class="cpr-title">
                     <span class="cpr-name">{{ row.name }}</span>
                     <span class="tag" :class="PJ_STATUS_TAG[row.status] || 'tag-gray'">{{ row.status }}</span>
+                    <span class="cpr-meta">{{ row.region || '—' }} · 设备 {{ row.deviceCount }} 台</span>
                   </div>
-                  <div class="cpr-meta">{{ row.region || '—' }} · 设备 {{ row.deviceCount }} 台</div>
                   <div class="cpr-cats" v-if="row.topCategories.length">
                     <span v-for="cat in row.topCategories" :key="cat.name" class="cpr-cat-pill">{{ cat.name }} {{ cat.count }}</span>
                   </div>
@@ -2406,8 +2406,8 @@ createApp({
                   <div class="cpr-title">
                     <span class="cpr-name">未定义项目（例外池）</span>
                     <span class="tag tag-orange">例外</span>
+                    <span class="cpr-meta">非主路径 · SDK 缺映射 / 临时设备等 · {{ cockpitUnassignedRow.deviceCount }} 台</span>
                   </div>
-                  <div class="cpr-meta">非主路径 · SDK 缺映射 / 临时设备等 · {{ cockpitUnassignedRow.deviceCount }} 台</div>
                 </div>
                 <div class="cpr-stats">
                   <div class="cpr-stat ok"><span class="k">在线</span><span class="v">{{ cockpitUnassignedRow.online }}</span></div>
