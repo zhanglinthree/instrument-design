@@ -1033,6 +1033,35 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   border-color: #ffd591;
 }
 .cockpit-cat-card.warn .cc-count { color: var(--orange); }
+.cockpit-cat-uncat {
+  max-width: 220px;
+}
+.cockpit-cat-footer {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed #e8e8e8;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+.cockpit-cat-footer.mismatch {
+  color: #d46b08;
+  font-weight: 600;
+}
+.cockpit-cat-footer-warn {
+  color: #cf1322;
+}
+.cockpit-cat-footer.mismatch .cockpit-cat-footer-warn {
+  color: #cf1322;
+}
+.cpr-stat-click {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background .15s;
+}
+.cpr-stat-click:hover {
+  background: rgba(13,110,253,.08);
+}
+
 .cockpit-cat-card .cc-bar {
   height: 4px;
   background: #eef0f5;

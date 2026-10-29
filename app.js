@@ -1058,35 +1058,45 @@ createApp({
     });
 
     /**
-     * 品类分布（层级，对齐 BE overview）：
-     * - 父行「一体机」code=aio：无 masterId 且非 probe: 的主机/一体机台数
-     * - 子区：有 masterId（探头/子设备）按 categoryId 聚合；空 category →「未分类」uncategorized=true
-     * - hide-zero；点击一体机 → openDevicesForCategory('aio')（mock：仅主机）；子品类 → categoryId；未分类 → 空品类
+     * 品类分布（层级，对齐 BE overview / tip 闭环）：
+     * 每台设备恰好落入一个桶（禁止双重计数）：
+     * 1) aio（code=aio）：无 masterId 且非 probe:、且有 categoryId → 仅主机/hub 台数（不含探头）
+     * 2) aio.children：有 masterId 或 aepDeviceId 以 probe: 开头 → 按 categoryId 聚合；不计入 aio.count，不进顶层 flat
+     * 3) others：非 hub、非 probe、品类不在 aio-children 集合内的独立设备 → 顶层 flat（本 mock 暂无，预留）
+     * 4) 未分类：categoryId 为空 → 顶层「未分类」（不用「待归属」）
+     * 闭环：aio.count + Σ children.count + Σ others.count + uncategorized.count === deviceTotal
+     * 下钻：aio→category=aio；child/other→categoryId；未分类→__uncat__（空品类）
      */
     const cockpitCategoryDist = computed(() => {
       const all = deviceList.value;
-      const isHub = (d) => !d.masterId && !isProbeAepId(d.aepDeviceId);
-      const isChild = (d) => !!(d.masterId) || isProbeAepId(d.aepDeviceId);
-      const hubs = all.filter(isHub);
-      const children = all.filter(isChild);
+      const deviceTotal = all.length;
+      const isChildDev = (d) => !!(d.masterId) || isProbeAepId(d.aepDeviceId);
+      const isHubDev = (d) => !d.masterId && !isProbeAepId(d.aepDeviceId);
+
+      const uncatDevices = all.filter(d => !d.categoryId);
+      const childDevices = all.filter(d => d.categoryId && isChildDev(d));
+      const hubDevices = all.filter(d => d.categoryId && isHubDev(d));
+      /* others：预留。当前口径下有品类的非探头全部进 aio，故为空。 */
+      const otherDevices = [];
+
       const aio = {
         id: 'aio',
         code: 'aio',
         name: '一体机',
-        count: hubs.length,
-        empty: hubs.length === 0,
+        count: hubDevices.length,
+        empty: hubDevices.length === 0,
         role: 'parent',
         pct: 100,
       };
-      const counts = {};
-      let uncategorized = 0;
-      children.forEach(d => {
-        if (!d.categoryId) uncategorized += 1;
-        else counts[d.categoryId] = (counts[d.categoryId] || 0) + 1;
+
+      const childCounts = {};
+      childDevices.forEach(d => {
+        childCounts[d.categoryId] = (childCounts[d.categoryId] || 0) + 1;
       });
+      const childCategoryIds = new Set(Object.keys(childCounts));
       const childRows = CATEGORIES
         .map(c => {
-          const count = counts[c.id] || 0;
+          const count = childCounts[c.id] || 0;
           return {
             id: c.id,
             code: c.code,
@@ -1097,20 +1107,59 @@ createApp({
           };
         })
         .filter(r => r.count > 0);
-      if (uncategorized > 0) {
-        childRows.push({
-          id: '__uncat__',
-          code: '',
-          name: '未分类',
-          count: uncategorized,
-          empty: false,
-          uncategorized: true,
-          role: 'child',
-        });
-      }
-      const max = Math.max(...childRows.map(r => r.count), 1);
-      childRows.forEach(r => { r.pct = Math.round((r.count / max) * 100); });
-      return { aio, children: childRows };
+
+      const otherCounts = {};
+      otherDevices.forEach(d => {
+        if (childCategoryIds.has(d.categoryId)) return; /* 不与 children 重复 */
+        otherCounts[d.categoryId] = (otherCounts[d.categoryId] || 0) + 1;
+      });
+      const otherRows = CATEGORIES
+        .map(c => {
+          const count = otherCounts[c.id] || 0;
+          return {
+            id: c.id,
+            code: c.code,
+            name: c.name,
+            count,
+            empty: false,
+            role: 'other',
+          };
+        })
+        .filter(r => r.count > 0);
+
+      const uncategorized = uncatDevices.length > 0 ? {
+        id: '__uncat__',
+        code: '',
+        name: '未分类',
+        count: uncatDevices.length,
+        empty: false,
+        uncategorized: true,
+        role: 'uncategorized',
+      } : null;
+
+      const barMax = Math.max(
+        ...childRows.map(r => r.count),
+        ...otherRows.map(r => r.count),
+        uncategorized ? uncategorized.count : 0,
+        1,
+      );
+      childRows.forEach(r => { r.pct = Math.round((r.count / barMax) * 100); });
+      otherRows.forEach(r => { r.pct = Math.round((r.count / barMax) * 100); });
+      if (uncategorized) uncategorized.pct = Math.round((uncategorized.count / barMax) * 100);
+
+      const distSum = aio.count
+        + childRows.reduce((s, r) => s + r.count, 0)
+        + otherRows.reduce((s, r) => s + r.count, 0)
+        + (uncategorized ? uncategorized.count : 0);
+      return {
+        aio,
+        children: childRows,
+        others: otherRows,
+        uncategorized,
+        distSum,
+        deviceTotal,
+        closedLoopOk: distSum === deviceTotal,
+      };
     });
 
     /** 按项目罗列：各项目在运行设备概况 */
@@ -1422,11 +1471,49 @@ createApp({
     }
     function saveProject() { showProjectModal.value = false; }
 
-    function openDevicesForProject(p) {
-      deviceProjectFilter.value = p.id;
+    /** 清空台账筛选项，进入全部设备（工作台「设备总数」） */
+    function openAllDevices() {
+      deviceProjectFilter.value = '';
       deviceCategoryFilter.value = '';
       deviceLifecycleFilter.value = '';
       deviceImeiSearch.value = '';
+      deviceMasterFilter.value = '';
+      showProbeDevices.value = false;
+      selectedDeviceIds.value = [];
+      goDevices();
+    }
+
+    function openDevicesForProject(p) {
+      const pid = (p && typeof p === 'object') ? p.id : p;
+      deviceProjectFilter.value = pid || '';
+      deviceCategoryFilter.value = '';
+      deviceLifecycleFilter.value = '';
+      deviceImeiSearch.value = '';
+      deviceMasterFilter.value = '';
+      selectedDeviceIds.value = [];
+      goDevices();
+    }
+
+    /**
+     * 工作台下钻 → 设备台账筛选项对照（对齐 FE）：
+     * - 设备总数 → 清空筛选
+     * - 在线/离线/待接入 → lifecycle（BE status 0/1/2）
+     * - 品类 aio → category=aio（仅主机）
+     * - 子品类 / 独立品类 → categoryId
+     * - 未分类 → __uncat__（空 categoryId）
+     * - 项目卡片 → projectId
+     * - 项目卡片内 在线/离线/待接入 → projectId + lifecycle
+     * - 未定义/例外池 → projectId=__unassigned__（空 projectId）
+     * - 例外池内状态数字 → __unassigned__ + lifecycle
+     * - 在线率偏低仅视觉，整卡仍只带 projectId
+     */
+    function openDevicesForProjectLifecycle(p, lifecycle) {
+      const pid = (p && typeof p === 'object') ? p.id : p;
+      deviceProjectFilter.value = pid || '';
+      deviceLifecycleFilter.value = lifecycle || '';
+      deviceCategoryFilter.value = '';
+      deviceImeiSearch.value = '';
+      deviceMasterFilter.value = '';
       selectedDeviceIds.value = [];
       goDevices();
     }
@@ -2213,7 +2300,7 @@ createApp({
         projects: () => goProjects(),
         createProject: () => { goProjects(); openCreateProject(); },
         editProject: () => { goProjects(); openEditProject(PROJECTS[0]); },
-        devices: () => { deviceProjectFilter.value = ''; deviceCategoryFilter.value = ''; goDevices(); },
+        devices: () => openAllDevices(),
         unassignedDevices: () => goUnassignedDevices(),
         deviceDetail: () => openDeviceDetail(deviceList.value[0], tabFromQuery || 'profile'),
         deviceLocalData: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'),
@@ -2277,7 +2364,7 @@ createApp({
       UNASSIGNED_PROJECT_ID, UNASSIGNED_PROJECT_NAME,
       projectSearch, projectStatusFilter, filteredProjects,
       showProjectModal, projectModalMode, projectForm,
-      openCreateProject, openEditProject, saveProject, openDevicesForProject, openDevicesForCategory, openDevicesForLifecycle, LIFECYCLE_TO_STATUS,
+      openCreateProject, openEditProject, saveProject, openAllDevices, openDevicesForProject, openDevicesForProjectLifecycle, openDevicesForCategory, openDevicesForLifecycle, LIFECYCLE_TO_STATUS,
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
       deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, showProbeDevices, isProbeAepId, displayAepDeviceId,
       filteredDevices, deviceStats, currentDevice, openDeviceDetail,
@@ -2364,7 +2451,7 @@ createApp({
 
           <!-- 核心概览 Hero -->
           <section class="cockpit-hero" aria-label="核心概览">
-            <div class="cockpit-hero-card accent" style="cursor:pointer" @click="jump('devices')">
+            <div class="cockpit-hero-card accent" style="cursor:pointer" title="设备台账 · 清空筛选" @click="openAllDevices()">
               <div class="ch-label">设备总数</div>
               <div class="ch-value">{{ cockpitStats.deviceTotal }}</div>
               <div class="ch-hint">台账在册设备</div>
@@ -2409,17 +2496,17 @@ createApp({
             </div>
           </div>
 
-          <!-- 品类分布：一体机(code=aio) 独占首行；下方为子设备按品类分布 -->
+          <!-- 品类分布：aio 独占首行 → 子设备 → 独立品类 → 未分类；脚注闭环校验 -->
           <section class="cockpit-panel cockpit-category-panel">
             <div class="cockpit-panel-hd">
               <h3>品类分布</h3>
-              <span class="sub-nav-hint">一体机（aio）+ 子设备品类 · 仅显示有设备的项</span>
+              <span class="sub-nav-hint">一体机（aio）+ 子设备 / 独立品类 · 仅显示有设备的项 · 闭环对齐设备总数</span>
             </div>
             <div
               v-if="cockpitCategoryDist.aio && cockpitCategoryDist.aio.count > 0"
               class="cockpit-cat-card cockpit-cat-parent"
               style="cursor:pointer"
-              title="筛选一体机/主机（无 masterId）"
+              title="筛选一体机/主机（无 masterId 且非 probe）"
               @click="openDevicesForCategory(cockpitCategoryDist.aio)"
             >
               <div class="cc-name">{{ cockpitCategoryDist.aio.name }} <span class="cc-code">code=aio</span></div>
@@ -2427,12 +2514,27 @@ createApp({
               <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.aio.pct + '%' }"></span></div>
             </div>
             <div class="cockpit-cat-children-label" v-if="cockpitCategoryDist.children.length">子设备类型分布</div>
-            <div class="cockpit-cat-grid">
+            <div class="cockpit-cat-grid" v-if="cockpitCategoryDist.children.length">
               <div
                 v-for="c in cockpitCategoryDist.children"
-                :key="c.id"
+                :key="'child-' + c.id"
                 class="cockpit-cat-card"
-                :class="{ empty: c.empty, warn: c.uncategorized && c.count > 0 }"
+                :class="{ empty: c.empty }"
+                style="cursor:pointer"
+                title="筛选该品类（含探头子设备）"
+                @click="openDevicesForCategory(c)"
+              >
+                <div class="cc-name">{{ c.name }}</div>
+                <div class="cc-count">{{ c.count }}</div>
+                <div class="cc-bar"><span :style="{ width: c.pct + '%' }"></span></div>
+              </div>
+            </div>
+            <div class="cockpit-cat-children-label" v-if="cockpitCategoryDist.others && cockpitCategoryDist.others.length">独立品类</div>
+            <div class="cockpit-cat-grid" v-if="cockpitCategoryDist.others && cockpitCategoryDist.others.length">
+              <div
+                v-for="c in cockpitCategoryDist.others"
+                :key="'other-' + c.id"
+                class="cockpit-cat-card"
                 style="cursor:pointer"
                 @click="openDevicesForCategory(c)"
               >
@@ -2440,6 +2542,25 @@ createApp({
                 <div class="cc-count">{{ c.count }}</div>
                 <div class="cc-bar"><span :style="{ width: c.pct + '%' }"></span></div>
               </div>
+            </div>
+            <div
+              v-if="cockpitCategoryDist.uncategorized && cockpitCategoryDist.uncategorized.count > 0"
+              class="cockpit-cat-card warn cockpit-cat-uncat"
+              style="cursor:pointer;margin-top:10px"
+              title="筛选未分类（空 categoryId）"
+              @click="openDevicesForCategory(cockpitCategoryDist.uncategorized)"
+            >
+              <div class="cc-name">{{ cockpitCategoryDist.uncategorized.name }}</div>
+              <div class="cc-count">{{ cockpitCategoryDist.uncategorized.count }}</div>
+              <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.uncategorized.pct + '%' }"></span></div>
+            </div>
+            <div
+              class="cockpit-cat-footer"
+              :class="{ mismatch: !cockpitCategoryDist.closedLoopOk }"
+              :title="cockpitCategoryDist.closedLoopOk ? '闭环：aio + children + others + 未分类 = 设备总数' : '分布合计与设备总数不一致'"
+            >
+              合计 {{ cockpitCategoryDist.distSum }} / 设备总数 {{ cockpitCategoryDist.deviceTotal }}
+              <span v-if="!cockpitCategoryDist.closedLoopOk" class="cockpit-cat-footer-warn"> · 不一致</span>
             </div>
           </section>
 
@@ -2470,9 +2591,9 @@ createApp({
                 </div>
                 <div class="cpr-cats muted" v-else>暂无设备</div>
                 <div class="cpr-stats">
-                  <div class="cpr-stat ok"><span class="k">在线</span><span class="v">{{ row.online }}</span></div>
-                  <div class="cpr-stat"><span class="k">离线</span><span class="v">{{ row.offline }}</span></div>
-                  <div class="cpr-stat warn" v-if="row.pending"><span class="k">待接入</span><span class="v">{{ row.pending }}</span></div>
+                  <div class="cpr-stat ok cpr-stat-click" title="该项目 · 在线" @click.stop="openDevicesForProjectLifecycle(row.project, '在线')"><span class="k">在线</span><span class="v">{{ row.online }}</span></div>
+                  <div class="cpr-stat cpr-stat-click" title="该项目 · 离线" @click.stop="openDevicesForProjectLifecycle(row.project, '离线')"><span class="k">离线</span><span class="v">{{ row.offline }}</span></div>
+                  <div class="cpr-stat warn cpr-stat-click" v-if="row.pending" title="该项目 · 待接入" @click.stop="openDevicesForProjectLifecycle(row.project, '待接入')"><span class="k">待接入</span><span class="v">{{ row.pending }}</span></div>
                   <div class="cpr-rate">
                     <div class="cpr-rate-label">在线率</div>
                     <div class="cpr-rate-value">{{ row.deviceCount ? row.onlineRate + '%' : '—' }}</div>
@@ -2482,7 +2603,7 @@ createApp({
               </div>
               <div
                 class="cockpit-project-card aside"
-                @click="jump('unassignedDevices')"
+                @click="goUnassignedDevices()"
                 title="例外池 · 未定义项目"
               >
                 <div class="cpr-hd">
@@ -2494,9 +2615,9 @@ createApp({
                 <div class="cpr-meta">非主路径 · SDK 缺映射 / 临时设备 · {{ cockpitUnassignedRow.deviceCount }} 台</div>
                 <div class="cpr-cats muted">例外池 · 点击进入未挂项目设备</div>
                 <div class="cpr-stats">
-                  <div class="cpr-stat ok"><span class="k">在线</span><span class="v">{{ cockpitUnassignedRow.online }}</span></div>
-                  <div class="cpr-stat"><span class="k">离线</span><span class="v">{{ cockpitUnassignedRow.offline }}</span></div>
-                  <div class="cpr-stat warn" v-if="cockpitUnassignedRow.pending"><span class="k">待接入</span><span class="v">{{ cockpitUnassignedRow.pending }}</span></div>
+                  <div class="cpr-stat ok cpr-stat-click" title="例外池 · 在线" @click.stop="openDevicesForProjectLifecycle('__unassigned__', '在线')"><span class="k">在线</span><span class="v">{{ cockpitUnassignedRow.online }}</span></div>
+                  <div class="cpr-stat cpr-stat-click" title="例外池 · 离线" @click.stop="openDevicesForProjectLifecycle('__unassigned__', '离线')"><span class="k">离线</span><span class="v">{{ cockpitUnassignedRow.offline }}</span></div>
+                  <div class="cpr-stat warn cpr-stat-click" v-if="cockpitUnassignedRow.pending" title="例外池 · 待接入" @click.stop="openDevicesForProjectLifecycle('__unassigned__', '待接入')"><span class="k">待接入</span><span class="v">{{ cockpitUnassignedRow.pending }}</span></div>
                   <div class="cpr-rate">
                     <div class="cpr-rate-label">在线率</div>
                     <div class="cpr-rate-value">{{ cockpitUnassignedRow.deviceCount ? cockpitUnassignedRow.onlineRate + '%' : '—' }}</div>
