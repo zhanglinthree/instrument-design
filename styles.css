@@ -965,10 +965,43 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   color: #8c8c8c;
 }
 
+/* 一体机父行：独占整行；子品类仍用下方 denser grid（最多约 4 列） */
+.cockpit-cat-parent {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  background: linear-gradient(180deg, #f0f5ff 0%, #fafbfc 100%);
+  border-color: #91caff;
+}
+.cockpit-cat-parent .cc-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2744;
+}
+.cockpit-cat-parent .cc-code {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #8c8c8c;
+}
+.cockpit-cat-parent .cc-count {
+  font-size: 26px;
+}
+.cockpit-cat-children-label {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin: 4px 0 8px;
+}
 .cockpit-cat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
+  max-width: 100%;
+}
+@media (min-width: 900px) {
+  .cockpit-cat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 .cockpit-cat-card {
   border: 1px solid var(--border);
@@ -1016,6 +1049,21 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 }
 .cockpit-cat-card.empty .cc-bar span { background: #d9d9d9; }
 .cockpit-cat-card.warn .cc-bar span { background: var(--orange); }
+
+
+/* 在线率偏低：设备数>0 且 onlineRate < 70%（mock 硬编码阈值，FE 可配置） */
+.cockpit-project-card.low-online-rate {
+  border-color: #ff7875;
+  background: #fff2f0;
+  box-shadow: inset 3px 0 0 #ff4d4f;
+}
+.cockpit-project-card.low-online-rate:hover {
+  border-color: #ff4d4f;
+  background: #fff1f0;
+}
+.cockpit-project-card .cpr-low-rate-badge {
+  margin-left: 4px;
+}
 
 .cockpit-projects-panel {
   padding: 10px 12px 12px;

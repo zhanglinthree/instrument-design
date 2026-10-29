@@ -137,7 +137,7 @@ const DEVICES = [
   { id: 'D007', imei: 'MF20260928050', deviceSn: 'MF20260928050', aepStatus: 0, lastReportAt: '2026-09-28 16:40', name: '望江路井-待接入', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', categoryRuleId: 'R101', lifecycle: '待接入', aepDeviceId: '', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.155800, lat: 30.282100, address: '望江路与秋涛路交叉口', installDate: '2026-09-28', installer: '张伟', masterId: '', masterImei: '', slaves: [], photos: ['待装现场'], installParams: { well_depth: '7.2', pipe_diameter: '800', install_height: '0.3', well_no: 'JW-2026-050', cover_type: '复合材料' }, updatedAt: '2026-09-28 16:40' },
   { id: 'D008', imei: 'MF20260601022', deviceSn: 'MF20260601022', aepStatus: 1, lastReportAt: '2026-09-29 21:00', name: '南湖出口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', categoryRuleId: 'R201', lifecycle: '在线', aepDeviceId: 'AEP-DEV-20022', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.151100, lat: 30.258900, address: '南湖出水闸附近', installDate: '2026-06-08', installer: '刘洋', masterId: '', masterImei: '', slaves: [], photos: ['站房', '仪表盘'], installParams: { sample_depth: '0.8', station_code: 'NH-OUT-01' }, updatedAt: '2026-09-29 21:00' },
   { id: 'D009', imei: 'MF20261001001', deviceSn: 'MF20261001001', aepStatus: 1, lastReportAt: '2026-10-01 09:12', name: 'AEP自注册-液位-01', projectId: null, projectName: '未定义项目', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', categoryRuleId: 'R101', lifecycle: '在线', aepDeviceId: 'AEP-DEV-91001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.158200, lat: 30.289100, address: '待现场补录', installDate: '2026-10-01', installer: '', masterId: '', masterImei: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-01 09:12' },
-  { id: 'D010', imei: 'MF20261001088', deviceSn: 'MF20261001088', aepStatus: 0, lastReportAt: '2026-10-02 11:05', name: 'AEP自注册-未知协议', projectId: null, projectName: '未定义项目', categoryId: '', categoryName: '待归属', categoryMatch: 'none', categoryRuleId: '', lifecycle: '待接入', aepDeviceId: 'AEP-DEV-91088', model: 'UNKNOWN', firmware: '', lng: null, lat: null, address: '', installDate: '', installer: '', masterId: '', masterImei: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-02 11:05' },
+  { id: 'D010', imei: 'MF20261001088', deviceSn: 'MF20261001088', aepStatus: 0, lastReportAt: '2026-10-02 11:05', name: 'AEP自注册-未知协议', projectId: null, projectName: '未定义项目', categoryId: '', categoryName: '未分类', categoryMatch: 'none', categoryRuleId: '', lifecycle: '待接入', aepDeviceId: 'AEP-DEV-91088', model: 'UNKNOWN', firmware: '', lng: null, lat: null, address: '', installDate: '', installer: '', masterId: '', masterImei: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-02 11:05' },
   { id: 'D011', imei: 'AEP-AUTO-7721', deviceSn: 'AEP-AUTO-7721', aepStatus: 1, lastReportAt: '2026-10-03 14:30', name: '临时水质终端-7721', projectId: null, projectName: '未定义项目', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', categoryRuleId: 'R201', lifecycle: '在线', aepDeviceId: 'AEP-DEV-7721', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.149500, lat: 30.261000, address: '滨江临时点位', installDate: '2026-10-03', installer: '', masterId: '', masterImei: '', slaves: [], photos: [], installParams: { sample_depth: '1.0' }, updatedAt: '2026-10-03 14:30' },
   { id: 'D012', imei: 'MF20261005012', deviceSn: 'MF20261005012', aepStatus: 2, lastReportAt: '2026-10-05 08:40', name: 'AEP自注册-泵站探头', projectId: null, projectName: '未定义项目', categoryId: 'C004', categoryName: '泵站机组', categoryMatch: 'auto', categoryRuleId: 'fallback:0042', lifecycle: '离线', aepDeviceId: 'AEP-DEV-91200', model: 'MF-PU-300', firmware: '1.0.3', lng: 120.161000, lat: 30.292000, address: '', installDate: '2026-10-05', installer: '', masterId: '', masterImei: '', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-05 08:40' },
   { id: 'D013', imei: 'MF20261008013', deviceSn: 'MF20261008013', aepStatus: 1, lastReportAt: '2026-10-08 11:20', name: '庆春路侧壁-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C006', categoryName: '积水仪侧壁', categoryMatch: 'auto', categoryRuleId: 'R601', lifecycle: '在线', aepDeviceId: 'AEP-DEV-60013', model: 'MF-FS-60', firmware: '1.0.0', lng: 120.168200, lat: 30.278500, address: '庆春路与环城东路交叉口侧壁', installDate: '2026-08-18', installer: '张伟', masterId: '', masterImei: '', slaves: [], photos: ['侧壁安装'], installParams: { install_height: '0.2' }, updatedAt: '2026-10-08 11:20' },
@@ -169,7 +169,7 @@ const PJ_STATUS_TAG = { '进行中': 'tag-blue', '已完工': 'tag-green', '筹�
 /* ========== 驾驶舱 Mock ========== */
 const COCKPIT_TODOS = [
   { id: 'CT1', type: '未挂项目', title: 'AEP自注册-液位-01', imei: 'MF20261001001', detail: '例外池：SDK 缺产品映射，待人工改挂', severity: 'warn', target: 'unassignedDevices', time: '2026-10-01 09:12' },
-  { id: 'CT2', type: '未挂项目', title: 'AEP自注册-未知协议', imei: 'MF20261001088', detail: '例外池：品类待归属 + 未定义项目', severity: 'danger', target: 'unassignedDevices', time: '2026-10-02 11:05' },
+  { id: 'CT2', type: '未挂项目', title: 'AEP自注册-未知协议', imei: 'MF20261001088', detail: '例外池：品类未分类 + 未定义项目', severity: 'danger', target: 'unassignedDevices', time: '2026-10-02 11:05' },
   { id: 'CT3', type: '未挂项目', title: '临时水质终端-7721', imei: 'AEP-AUTO-7721', detail: '例外池：临时点位，待确认项目', severity: 'warn', target: 'unassignedDevices', time: '2026-10-03 14:30' },
   { id: 'CT4', type: '对账差异', title: 'AEP 多出 · 未知液位设备-9001', imei: 'AEP-ONLY-9001', detail: 'AEP 有、台账无，待接入或忽略', severity: 'warn', target: 'aepReconcile', time: '2026-10-09 08:00' },
   { id: 'CT5', type: '对账差异', title: '本地缺失 · 望江路井-待接入', imei: 'MF20260928050', detail: '本地已建档，AEP 尚未创建设备', severity: 'danger', target: 'aepReconcile', time: '2026-10-09 08:00' },
@@ -670,7 +670,14 @@ createApp({
         } else if (deviceProjectFilter.value && d.projectId !== deviceProjectFilter.value) {
           return false;
         }
-        if (deviceCategoryFilter.value && d.categoryId !== deviceCategoryFilter.value) return false;
+        if (deviceCategoryFilter.value === '__uncat__') {
+          if (d.categoryId) return false;
+        } else if (deviceCategoryFilter.value === 'aio') {
+          // 一体机：主机/hub（无 masterId 且非 probe:）
+          if (d.masterId || isProbeAepId(d.aepDeviceId)) return false;
+        } else if (deviceCategoryFilter.value && d.categoryId !== deviceCategoryFilter.value) {
+          return false;
+        }
         if (deviceLifecycleFilter.value && d.lifecycle !== deviceLifecycleFilter.value) return false;
         if (masterOnly && d.masterId !== masterOnly && d.id !== masterOnly) return false;
         if (kw && !(d.imei.includes(kw) || d.name.includes(kw) || (d.aepDeviceId || '').includes(kw))) return false;
@@ -1027,7 +1034,8 @@ createApp({
     const cockpitStats = computed(() => {
       const all = deviceList.value;
       const online = all.filter(d => d.lifecycle === '在线').length;
-      const offlineAbnormal = all.filter(d => ['离线', '待接入', '停用', '报废'].includes(d.lifecycle)).length;
+      const offline = all.filter(d => d.lifecycle === '离线').length;
+      const pending = all.filter(d => d.lifecycle === '待接入').length;
       const pendingDiff = aepDiffs.value.filter(d => d.action === 'pending').length;
       const packetCount = PROTOCOL_PACKETS.length;
       const samplePoints = MONITOR_ROWS.reduce((s, r) => s + (Number(r.actual24h) || 0), 0);
@@ -1036,7 +1044,8 @@ createApp({
       return {
         deviceTotal: all.length,
         online,
-        offlineAbnormal,
+        offline,
+        pending,
         onlineRate,
         projectCount: PROJECTS.length,
         unassigned: unassignedCount.value,
@@ -1048,38 +1057,60 @@ createApp({
       };
     });
 
-    /** 品类分布：仅展示 count > 0 的品类；空 categoryId 计为「待归属」（仅 count > 0 时显示） */
+    /**
+     * 品类分布（层级，对齐 BE overview）：
+     * - 父行「一体机」code=aio：无 masterId 且非 probe: 的主机/一体机台数
+     * - 子区：有 masterId（探头/子设备）按 categoryId 聚合；空 category →「未分类」uncategorized=true
+     * - hide-zero；点击一体机 → openDevicesForCategory('aio')（mock：仅主机）；子品类 → categoryId；未分类 → 空品类
+     */
     const cockpitCategoryDist = computed(() => {
       const all = deviceList.value;
+      const isHub = (d) => !d.masterId && !isProbeAepId(d.aepDeviceId);
+      const isChild = (d) => !!(d.masterId) || isProbeAepId(d.aepDeviceId);
+      const hubs = all.filter(isHub);
+      const children = all.filter(isChild);
+      const aio = {
+        id: 'aio',
+        code: 'aio',
+        name: '一体机',
+        count: hubs.length,
+        empty: hubs.length === 0,
+        role: 'parent',
+        pct: 100,
+      };
       const counts = {};
       let uncategorized = 0;
-      all.forEach(d => {
+      children.forEach(d => {
         if (!d.categoryId) uncategorized += 1;
         else counts[d.categoryId] = (counts[d.categoryId] || 0) + 1;
       });
-      const rows = CATEGORIES
+      const childRows = CATEGORIES
         .map(c => {
           const count = counts[c.id] || 0;
           return {
             id: c.id,
+            code: c.code,
             name: c.name,
             count,
             empty: false,
+            role: 'child',
           };
         })
         .filter(r => r.count > 0);
       if (uncategorized > 0) {
-        rows.push({
+        childRows.push({
           id: '__uncat__',
-          name: '待归属',
+          code: '',
+          name: '未分类',
           count: uncategorized,
           empty: false,
           uncategorized: true,
+          role: 'child',
         });
       }
-      const max = Math.max(...rows.map(r => r.count), 1);
-      rows.forEach(r => { r.pct = Math.round((r.count / max) * 100); });
-      return rows;
+      const max = Math.max(...childRows.map(r => r.count), 1);
+      childRows.forEach(r => { r.pct = Math.round((r.count / max) * 100); });
+      return { aio, children: childRows };
     });
 
     /** 按项目罗列：各项目在运行设备概况 */
@@ -1094,13 +1125,15 @@ createApp({
         const onlineRate = devices.length ? Math.round((online / devices.length) * 100) : 0;
         const catMap = {};
         devices.forEach(d => {
-          const name = d.categoryName || (d.categoryId ? d.categoryId : '待归属');
+          const name = d.categoryName || (d.categoryId ? d.categoryId : '未分类');
           catMap[name] = (catMap[name] || 0) + 1;
         });
         const topCategories = Object.entries(catMap)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3)
           .map(([name, count]) => ({ name, count }));
+        /* 在线率偏低阈值：mock 硬编码 70%；0 台设备不标（N/A） */
+        const lowOnlineRate = devices.length > 0 && onlineRate < 70;
         return {
           id: p.id,
           name: p.name,
@@ -1112,6 +1145,7 @@ createApp({
           pending,
           other,
           onlineRate,
+          lowOnlineRate,
           topCategories,
           project: p,
         };
@@ -1304,7 +1338,7 @@ createApp({
     function categoryMatchLabel(m) {
       if (m === 'auto') return '自动匹配';
       if (m === 'manual') return '人工改挂';
-      if (m === 'none') return '待归属';
+      if (m === 'none') return '未分类';
       return m || '—';
     }
     function isUnassigned(d) {
@@ -1397,15 +1431,41 @@ createApp({
       goDevices();
     }
 
-    /** 品类侧双向挂靠：从设备数跳转台账设备列表并按品类筛选 */
+    /**
+     * 品类侧双向挂靠：跳转台账并按品类筛选。
+     * - 普通品类 id → deviceCategoryFilter=id
+     * - 「未分类」/ __uncat__ / uncategorized → deviceCategoryFilter='__uncat__'（空 categoryId）
+     * - 一体机 aio / code=aio → deviceCategoryFilter='aio'（仅主机/hub，无 masterId 且非 probe）
+     */
     function openDevicesForCategory(c) {
-      const id = typeof c === 'string' ? c : (c && c.id);
-      deviceCategoryFilter.value = id || '';
+      const raw = typeof c === 'string' ? c : (c && (c.id || c.code));
+      const uncategorized = (typeof c === 'object' && c && c.uncategorized) || raw === '__uncat__' || raw === 'uncategorized';
+      deviceCategoryFilter.value = uncategorized ? '__uncat__' : (raw || '');
       deviceProjectFilter.value = '';
       deviceLifecycleFilter.value = '';
       deviceImeiSearch.value = '';
+      deviceMasterFilter.value = '';
+      /* 一体机/未分类需露出相关行；子品类点击时显示探头以便看到子设备 */
+      showProbeDevices.value = deviceCategoryFilter.value !== 'aio';
       selectedDeviceIds.value = [];
       goDevices();
+    }
+
+    /**
+     * 工作台生命周期下钻 → 设备台账。
+     * Mock 用中文 lifecycle；FE 对齐 BE list status：0=待接入 / 1=在线 / 2=离线。
+     */
+    const LIFECYCLE_TO_STATUS = { '待接入': 0, '在线': 1, '离线': 2 };
+    function openDevicesForLifecycle(lc) {
+      deviceLifecycleFilter.value = lc || '';
+      deviceProjectFilter.value = '';
+      deviceCategoryFilter.value = '';
+      deviceImeiSearch.value = '';
+      deviceMasterFilter.value = '';
+      selectedDeviceIds.value = [];
+      goDevices();
+      /* FE mirror: GET devices?status=LIFECYCLE_TO_STATUS[lc] */
+      return LIFECYCLE_TO_STATUS[lc];
     }
 
     function showToast(text, type) {
@@ -1688,7 +1748,7 @@ createApp({
           projectId: device.projectId,
           projectName: device.projectName || '未定义项目',
           categoryId: device.categoryId,
-          categoryName: device.categoryName || '待归属',
+          categoryName: device.categoryName || '未分类',
           online: device.lifecycle === '在线' ? '在线' : (device.lifecycle === '离线' ? '离线' : '未知'),
           lastReportAt: device.updatedAt || '—',
           firmware: device.firmware || '—',
@@ -1855,7 +1915,7 @@ createApp({
           projectId: deviceForm.projectId || null,
           projectName: deviceForm.projectId ? (proj ? proj.name : deviceForm.projectId) : UNASSIGNED_PROJECT_NAME,
           categoryId: deviceForm.categoryId || '',
-          categoryName: deviceForm.categoryId ? (cat ? cat.name : deviceForm.categoryId) : '待归属',
+          categoryName: deviceForm.categoryId ? (cat ? cat.name : deviceForm.categoryId) : '未分类',
           categoryMatch: showCategoryOverride.value ? 'manual' : (deviceForm.categoryMatch || 'auto'),
           categoryRuleId: showCategoryOverride.value ? '' : (deviceForm.categoryRuleId || ''),
           lifecycle: deviceForm.lifecycle,
@@ -1966,6 +2026,8 @@ createApp({
       return p ? p.name : id;
     }
     function categoryName(id) {
+      if (id === 'aio') return '一体机';
+      if (id === '__uncat__') return '未分类';
       const c = CATEGORIES.find(x => x.id === id);
       return c ? c.name : id;
     }
@@ -2017,7 +2079,7 @@ createApp({
         projectId: device.projectId,
         projectName: device.projectName || '未定义项目',
         categoryId: device.categoryId,
-        categoryName: device.categoryName || '待归属',
+        categoryName: device.categoryName || '未分类',
         online: device.lifecycle === '在线' ? '在线' : (device.lifecycle === '离线' ? '离线' : '未知'),
         lastReportAt: device.updatedAt || '—',
         firmware: device.firmware || '—',
@@ -2215,7 +2277,7 @@ createApp({
       UNASSIGNED_PROJECT_ID, UNASSIGNED_PROJECT_NAME,
       projectSearch, projectStatusFilter, filteredProjects,
       showProjectModal, projectModalMode, projectForm,
-      openCreateProject, openEditProject, saveProject, openDevicesForProject, openDevicesForCategory,
+      openCreateProject, openEditProject, saveProject, openDevicesForProject, openDevicesForCategory, openDevicesForLifecycle, LIFECYCLE_TO_STATUS,
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
       deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, showProbeDevices, isProbeAepId, displayAepDeviceId,
       filteredDevices, deviceStats, currentDevice, openDeviceDetail,
@@ -2321,15 +2383,19 @@ createApp({
 
           <!-- 次要状态条 -->
           <div class="cockpit-secondary-stats">
-            <div class="stat-chip ok" style="cursor:pointer" @click="jump('monitor')">
+            <div class="stat-chip ok" style="cursor:pointer" title="设备台账 · status=1 在线" @click="openDevicesForLifecycle('在线')">
               <div class="sc-label">在线</div>
               <div class="sc-value">{{ cockpitStats.online }}</div>
             </div>
-            <div class="stat-chip danger" style="cursor:pointer" @click="jump('devices')">
-              <div class="sc-label">离线 / 异常</div>
-              <div class="sc-value">{{ cockpitStats.offlineAbnormal }}</div>
+            <div class="stat-chip danger" style="cursor:pointer" title="设备台账 · status=2 离线" @click="openDevicesForLifecycle('离线')">
+              <div class="sc-label">离线</div>
+              <div class="sc-value">{{ cockpitStats.offline }}</div>
             </div>
-            <div class="stat-chip" style="cursor:pointer" @click="jump('monitor')">
+            <div class="stat-chip warn" style="cursor:pointer" title="设备台账 · status=0 待接入" @click="openDevicesForLifecycle('待接入')">
+              <div class="sc-label">待接入</div>
+              <div class="sc-value">{{ cockpitStats.pending }}</div>
+            </div>
+            <div class="stat-chip" style="cursor:pointer" @click="jump('monitor')" title="进入在线监控">
               <div class="sc-label">在线率</div>
               <div class="sc-value">{{ cockpitStats.onlineRate }}%</div>
             </div>
@@ -2343,20 +2409,32 @@ createApp({
             </div>
           </div>
 
-          <!-- 品类分布 -->
+          <!-- 品类分布：一体机(code=aio) 独占首行；下方为子设备按品类分布 -->
           <section class="cockpit-panel cockpit-category-panel">
             <div class="cockpit-panel-hd">
               <h3>品类分布</h3>
-              <span class="sub-nav-hint">按物模型品类统计 · 仅显示有设备的品类</span>
+              <span class="sub-nav-hint">一体机（aio）+ 子设备品类 · 仅显示有设备的项</span>
             </div>
+            <div
+              v-if="cockpitCategoryDist.aio && cockpitCategoryDist.aio.count > 0"
+              class="cockpit-cat-card cockpit-cat-parent"
+              style="cursor:pointer"
+              title="筛选一体机/主机（无 masterId）"
+              @click="openDevicesForCategory(cockpitCategoryDist.aio)"
+            >
+              <div class="cc-name">{{ cockpitCategoryDist.aio.name }} <span class="cc-code">code=aio</span></div>
+              <div class="cc-count">{{ cockpitCategoryDist.aio.count }}</div>
+              <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.aio.pct + '%' }"></span></div>
+            </div>
+            <div class="cockpit-cat-children-label" v-if="cockpitCategoryDist.children.length">子设备类型分布</div>
             <div class="cockpit-cat-grid">
               <div
-                v-for="c in cockpitCategoryDist"
+                v-for="c in cockpitCategoryDist.children"
                 :key="c.id"
                 class="cockpit-cat-card"
                 :class="{ empty: c.empty, warn: c.uncategorized && c.count > 0 }"
                 style="cursor:pointer"
-                @click="c.uncategorized ? jump('devices') : openDevicesForCategory(c.id)"
+                @click="openDevicesForCategory(c)"
               >
                 <div class="cc-name">{{ c.name }}</div>
                 <div class="cc-count">{{ c.count }}</div>
@@ -2376,12 +2454,14 @@ createApp({
                 v-for="row in cockpitProjectRows"
                 :key="row.id"
                 class="cockpit-project-card"
+                :class="{ 'low-online-rate': row.lowOnlineRate }"
                 @click="openDevicesForProject(row.project)"
               >
                 <div class="cpr-hd">
                   <div class="cpr-title">
                     <span class="cpr-name">{{ row.name }}</span>
                     <span class="tag" :class="PJ_STATUS_TAG[row.status] || 'tag-gray'">{{ row.status }}</span>
+                    <span v-if="row.lowOnlineRate" class="tag tag-red cpr-low-rate-badge" title="在线率 &lt; 70%（mock 阈值）">在线率偏低</span>
                   </div>
                 </div>
                 <div class="cpr-meta">{{ row.region || '—' }} · 设备 {{ row.deviceCount }} 台</div>
@@ -2487,7 +2567,7 @@ createApp({
           <div class="page-header">
             <div>
               <h1 class="page-title">物模型 · 品类管理</h1>
-              <p class="page-desc">物模型定义产品类型语义（测点 / 事件 / 阈值 / 安装模板 / 固件 / 指令）。AEP 完成设备数据解析后，由归属规则自动挂靠品类；未匹配进入「待归属」。</p>
+              <p class="page-desc">物模型定义产品类型语义（测点 / 事件 / 阈值 / 安装模板 / 固件 / 指令）。AEP 完成设备数据解析后，由归属规则自动挂靠品类；未匹配进入「未分类」。</p>
             </div>
             <button class="btn btn-primary" @click="openCreateCategory">＋ 新建品类</button>
           </div>
@@ -2552,7 +2632,7 @@ createApp({
               <button class="btn btn-primary" @click="detailTab='rules'">归属规则</button>
             </div>
           </div>
-          <div class="banner-tip" style="margin-bottom:12px">AEP 侧已完成设备数据解析；本平台通过归属规则自动挂靠品类。无需维护解析脚本。未匹配设备进入「待归属」。</div>
+          <div class="banner-tip" style="margin-bottom:12px">AEP 侧已完成设备数据解析；本平台通过归属规则自动挂靠品类。无需维护解析脚本。未匹配设备进入「未分类」。</div>
           <div class="tabs">
             <div class="tab" :class="{active: detailTab==='props'}" @click="detailTab='props'">上报属性</div>
             <div class="tab" :class="{active: detailTab==='events'}" @click="detailTab='events'">异常事件</div>
@@ -2693,7 +2773,7 @@ createApp({
                     </td>
                   </tr>
                   <tr v-if="!currentCategoryRules.length">
-                    <td colspan="8"><div class="empty-hint">暂无归属规则；未匹配设备将进入「待归属」</div></td>
+                    <td colspan="8"><div class="empty-hint">暂无归属规则；未匹配设备将进入「未分类」</div></td>
                   </tr>
                 </tbody>
               </table>
@@ -2842,7 +2922,9 @@ createApp({
             </select>
             <select class="select" v-model="deviceCategoryFilter">
               <option value="">全部品类</option>
+              <option value="aio">一体机（aio · 主机）</option>
               <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option value="__uncat__">未分类</option>
             </select>
             <select class="select" v-model="deviceLifecycleFilter">
               <option value="">全部生命周期</option>
@@ -2873,7 +2955,7 @@ createApp({
                     <span v-else>{{ d.projectName }}</span>
                   </td>
                   <td>
-                    <span v-if="!d.categoryId" class="tag tag-gray">待归属</span>
+                    <span v-if="!d.categoryId" class="tag tag-gray">未分类</span>
                     <span v-else>{{ d.categoryName }}</span>
                   </td>
                   <td><span class="tag" :class="d.categoryMatch==='auto'?'tag-blue':(d.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(d.categoryMatch) }}</span></td>
@@ -2924,7 +3006,7 @@ createApp({
                   <b v-else>{{ currentDevice.projectName }}</b>
                 </span>
                 <span>品类：
-                  <b v-if="!currentDevice.categoryId" style="color:#8c8c8c">待归属</b>
+                  <b v-if="!currentDevice.categoryId" style="color:#8c8c8c">未分类</b>
                   <b v-else>{{ currentDevice.categoryName }}</b>
                   <span class="tag" style="margin-left:6px" :class="currentDevice.categoryMatch==='auto'?'tag-blue':(currentDevice.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(currentDevice.categoryMatch) }}</span>
                 </span>
@@ -2952,7 +3034,7 @@ createApp({
             <div class="sticky-chip"><span class="sk">名称</span><b>{{ currentDevice.name }}</b></div>
             <div class="sticky-chip"><span class="sk">IMEI</span><code>{{ currentDevice.imei }}</code></div>
             <div class="sticky-chip"><span class="sk">设备序列号</span><code>{{ currentDevice.deviceSn || '—' }}</code></div>
-            <div class="sticky-chip"><span class="sk">品类</span><b>{{ currentDevice.categoryName || '待归属' }}</b></div>
+            <div class="sticky-chip"><span class="sk">品类</span><b>{{ currentDevice.categoryName || '未分类' }}</b></div>
             <div class="sticky-chip"><span class="sk">AEP状态</span>
               <span class="tag" :class="aepStatusTag(currentDevice.aepStatus)">{{ aepStatusLabel(currentDevice.aepStatus) }}</span>
             </div>
@@ -2998,7 +3080,7 @@ createApp({
                 </template>
                 <template v-else>{{ currentDevice.aepDeviceId || '—' }}</template>
               </div>
-              <div class="k">物模型品类</div><div class="v">{{ currentDevice.categoryName || '待归属' }} <span class="tag" :class="currentDevice.categoryMatch==='auto'?'tag-blue':(currentDevice.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(currentDevice.categoryMatch) }}</span></div>
+              <div class="k">物模型品类</div><div class="v">{{ currentDevice.categoryName || '未分类' }} <span class="tag" :class="currentDevice.categoryMatch==='auto'?'tag-blue':(currentDevice.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(currentDevice.categoryMatch) }}</span></div>
               <div class="k">挂靠规则 ID</div><div class="v"><code v-if="currentDevice.categoryRuleId">{{ currentDevice.categoryRuleId }}</code><span v-else>—</span> <span class="sub-nav-hint">解绑品类时清空；型号兜底形如 fallback:0042</span></div>
               <div class="k">所属项目</div><div class="v">{{ displayProjectName(currentDevice) }}</div>
               <div class="k">硬件型号</div><div class="v">{{ currentDevice.model }}</div>
@@ -3119,7 +3201,7 @@ createApp({
                       <span v-else>{{ s.aepDeviceId || '—' }}</span>
                     </td>
                     <td><span class="tag" :class="LC_TAG[s.lifecycle]">{{ s.lifecycle }}</span></td>
-                    <td>{{ s.categoryName || '待归属' }}</td>
+                    <td>{{ s.categoryName || '未分类' }}</td>
                     <td class="actions">
                       <button class="btn-link btn" @click="openDeviceDetail(s)">档案</button>
                       <button class="btn-link btn" @click="openMonitorForDevice(s)">曲线</button>
@@ -3193,7 +3275,7 @@ createApp({
 
           <template v-else-if="deviceDetailTab==='dispatch'">
             <div class="banner-muted">指令点发：从本品类物模型指令（kind=service）选取并组包。真正下发走 <b>AEP CreateCommand</b> 透传 hex，dataType=2。物模型「指令」Tab 仅定义，不在此点发。历史见「设备发送记录」。</div>
-            <div v-if="!currentDevice.categoryId" class="empty-hint">设备待归属品类，无法加载指令</div>
+            <div v-if="!currentDevice.categoryId" class="empty-hint">设备未分类，无法加载指令</div>
             <div v-else-if="!deviceDispatchCommands.length" class="empty-hint">本品类暂无启用指令；请先在物模型「指令」Tab 配置</div>
             <template v-else>
               <div class="toolbar" style="margin-bottom:8px">
@@ -3316,7 +3398,7 @@ createApp({
             </div>
             <div class="form-item"><label>品类（自动匹配）</label>
               <div v-if="!showCategoryOverride">
-                <input class="input input-full" :value="(CATEGORIES.find(c=>c.id===deviceForm.categoryId)||{}).name || '待归属'" disabled />
+                <input class="input input-full" :value="(CATEGORIES.find(c=>c.id===deviceForm.categoryId)||{}).name || '未分类'" disabled />
                 <div class="hint">
                   由归属规则自动挂靠 · {{ categoryMatchLabel(deviceForm.categoryMatch) }}
                   <a class="btn-link btn" style="padding:0;margin-left:8px" @click="showCategoryOverride=true">改挂</a>
@@ -3324,7 +3406,7 @@ createApp({
               </div>
               <div v-else>
                 <select class="select input-full" v-model="deviceForm.categoryId">
-                  <option value="">待归属</option>
+                  <option value="">未分类</option>
                   <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
                 <div class="hint">例外处理：人工改挂品类；保存后标记为「人工改挂」（非主路径）</div>
