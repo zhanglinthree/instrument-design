@@ -884,7 +884,7 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .miss-bad { color: var(--error); font-weight: 600; }
 .miss-ok { color: #198754; }
 
-/* ========== 驾驶舱 / 工作台 ========== */
+/* ========== 工作台（原驾驶舱首页） ========== */
 .cockpit-hero {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

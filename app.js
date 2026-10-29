@@ -968,7 +968,7 @@ createApp({
 
     const breadcrumb = computed(() => {
       if (module.value === 'cockpit') {
-        return { parent: '设备管控', current: '驾驶舱' };
+        return { parent: '设备管控', current: '工作台' };
       }
       if (module.value === 'monitor') {
         if (screen.value === 'monitorList') return { parent: '设备管控', current: '在线监控 · 设备数据' };
@@ -1007,7 +1007,7 @@ createApp({
     });
 
     const topbarHint = computed(() => {
-      if (module.value === 'cockpit') return '一期原型 · 驾驶舱 / 工作台';
+      if (module.value === 'cockpit') return '一期原型 · 工作台';
       if (module.value === 'ledger') return '一期原型 · 设备台账';
       if (module.value === 'monitor') return '一期原型 · 在线监控';
       return '一期原型 · 物模型';
@@ -2261,7 +2261,7 @@ createApp({
       </div>
       <nav class="sidebar-nav">
         <div class="nav-group-title">设备管控</div>
-        <div class="nav-item" :class="{active: module==='cockpit'}" @click="jump('cockpit')"><span class="dot"></span>驾驶舱 / 工作台</div>
+        <div class="nav-item" :class="{active: module==='cockpit'}" @click="jump('cockpit')"><span class="dot"></span>工作台</div>
         <div class="nav-item" :class="{active: module==='ledger'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
         <div class="nav-item" :class="{active: module==='monitor'}" @click="jump('monitor')"><span class="dot"></span>在线监控</div>
         <div class="nav-item" :class="{active: module==='thing'}" @click="jump('list')"><span class="dot"></span>物模型</div>
@@ -2290,11 +2290,11 @@ createApp({
       </header>
 
       <main class="content">
-        <!-- ===== 驾驶舱 / 工作台 ===== -->
+        <!-- ===== 工作台（原驾驶舱首页） ===== -->
         <div v-if="module==='cockpit'" class="page-card cockpit-page" data-screen="cockpit">
           <div class="page-header">
             <div>
-              <h1 class="page-title">驾驶舱</h1>
+              <h1 class="page-title">工作台</h1>
               <p class="page-desc">平台核心数据总览：设备规模、项目分布、品类构成与累计数据量；下方按项目查看在运行设备情况。AEP 对账与例外处理见底部运维区。</p>
             </div>
             <button class="btn" @click="jump('aepReconcile')">同步自 AEP</button>
