@@ -2,13 +2,45 @@ const { createApp, ref, computed, reactive, watch, nextTick } = Vue;
 
 /* ========== 物模型 Mock ========== */
 const CATEGORIES = [
-  { id: 'C001', name: '积水仪地埋', code: 'flood_buried', industry: '市政排水', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用', ruleCount: 3 },
-  { id: 'C006', name: '积水仪侧壁', code: 'flood_sidewall', industry: '市政排水', deviceCount: 64, modelVersion: 'v1.0.0', updatedAt: '2026-10-08 10:15', status: '启用', ruleCount: 1 },
-  { id: 'C002', name: '水质监测站', code: 'water_quality', industry: '环保监测', deviceCount: 56, modelVersion: 'v2.0.1', updatedAt: '2026-09-26 09:10', status: '启用', ruleCount: 2 },
-  { id: 'C003', name: '管网压力表', code: 'pipe_pressure', industry: '供水', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿', ruleCount: 2 },
-  { id: 'C004', name: '泵站机组', code: 'pump_unit', industry: '市政排水', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用', ruleCount: 2 },
-  { id: 'C005', name: '雨量计', code: 'rain_gauge', industry: '气象水文', deviceCount: 12, modelVersion: 'v1.1.0', updatedAt: '2026-09-12 08:05', status: '停用', ruleCount: 2 },
+  { id: 'C001', name: '积水仪地埋', code: 'flood_buried', icon: 'flood_buried', industry: '市政排水', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用', ruleCount: 3 },
+  { id: 'C006', name: '积水仪侧壁', code: 'flood_sidewall', icon: 'flood_sidewall', industry: '市政排水', deviceCount: 64, modelVersion: 'v1.0.0', updatedAt: '2026-10-08 10:15', status: '启用', ruleCount: 1 },
+  { id: 'C002', name: '水质监测站', code: 'water_quality', icon: 'water_quality', industry: '环保监测', deviceCount: 56, modelVersion: 'v2.0.1', updatedAt: '2026-09-26 09:10', status: '启用', ruleCount: 2 },
+  { id: 'C003', name: '管网压力表', code: 'pipe_pressure', icon: 'pipe_pressure', industry: '供水', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿', ruleCount: 2 },
+  { id: 'C004', name: '泵站机组', code: 'pump_unit', icon: 'pump_unit', industry: '市政排水', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用', ruleCount: 2 },
+  { id: 'C005', name: '雨量计', code: 'rain_gauge', icon: 'rain_gauge', industry: '气象水文', deviceCount: 12, modelVersion: 'v1.1.0', updatedAt: '2026-09-12 08:05', status: '停用', ruleCount: 2 },
 ];
+
+/* Mock 用静态 icon(=品类 code)；FE/BE 日后可在物模型品类上挂 icon。
+ * code/icon → 图：aio；flood_buried；flood_sidewall；water_quality；pipe_pressure；pump_unit；rain_gauge；
+ * flow_doppler / water_cod（预留）；probe（子设备兜底）；uncategorized；未知→device */
+const CATEGORY_ICON_PATHS = {
+  aio: 'M4 8h16v10H4zM8 8V6a4 4 0 0 1 8 0v2M9 13h2M13 13h2',
+  flood_buried: 'M12 3v6M8 9h8l-1.5 9h-5L8 9zM6 21h12M9 14h6',
+  flood_sidewall: 'M5 4v16M5 8h7a3 3 0 0 1 0 6H5M14 11h3M17 9v4',
+  water_quality: 'M12 3c0 0-6 7-6 11a6 6 0 0 0 12 0c0-4-6-11-6-11zM10 14h4',
+  pipe_pressure: 'M12 20V12M7 16a7 7 0 1 1 10 0M12 12l4-3',
+  pump_unit: 'M12 4v2M12 18v2M4 12h2M18 12h2M8.5 8.5l1.2 1.2M14.3 14.3l1.2 1.2M15.5 8.5l-1.2 1.2M9.7 14.3l-1.2 1.2M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z',
+  rain_gauge: 'M8 4h8l-1 5H9L8 4zM9 9v8a3 3 0 0 0 6 0V9M6 6l1.5 2M18 6l-1.5 2',
+  flow_doppler: 'M4 8c2 0 2 4 4 4s2-4 4-4 2 4 4 4 2-4 4-4M4 14c2 0 2 4 4 4s2-4 4-4 2 4 4 4 2-4 4-4',
+  water_cod: 'M9 3h6v3l2 3v8a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3V9l2-3V3zM9 12h6',
+  probe: 'M12 3v11M9 14a3 3 0 1 0 6 0M10 7h4',
+  uncategorized: 'M5 7h14v10H5zM9 12h.01M12 12h.01M15 12h.01',
+  device: 'M6 5h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM9 17h6M12 9v3',
+};
+
+/** 名称兜底 → code/iconKey（短尾兼容，无 code 时） */
+const CATEGORY_ICON_BY_NAME = {
+  '一体机': 'aio',
+  '积水仪地埋': 'flood_buried',
+  '积水仪侧壁': 'flood_sidewall',
+  '水质监测站': 'water_quality',
+  '管网压力表': 'pipe_pressure',
+  '泵站机组': 'pump_unit',
+  '雨量计': 'rain_gauge',
+  '多普勒流量计': 'flow_doppler',
+  'COD 水质': 'water_cod',
+  '未分类': 'uncategorized',
+};
 
 /* 归属规则：通用规则默认匹配；特殊处理规则优先级更高。AEP 侧已完成解析，本侧只做品类自动挂靠。 */
 const CATEGORY_RULES = [
@@ -1088,6 +1120,8 @@ createApp({
       const aio = {
         id: 'aio',
         code: 'aio',
+        icon: 'aio',
+        iconKey: 'aio',
         name: '一体机',
         count: hubDevices.length,
         empty: hubDevices.length === 0,
@@ -1107,6 +1141,8 @@ createApp({
           return {
             id: c.id,
             code: c.code,
+            icon: c.icon || c.code,
+            iconKey: c.icon || c.code,
             name: c.name,
             count,
             empty: false,
@@ -1118,6 +1154,8 @@ createApp({
         childRows.push({
           id: '__child_uncat__',
           code: '',
+          icon: 'uncategorized',
+          iconKey: 'uncategorized',
           name: '未分类',
           count: childUncat,
           empty: false,
@@ -1137,6 +1175,8 @@ createApp({
           return {
             id: c.id,
             code: c.code,
+            icon: c.icon || c.code,
+            iconKey: c.icon || c.code,
             name: c.name,
             count,
             empty: false,
@@ -1148,6 +1188,8 @@ createApp({
       const uncategorized = uncatDevices.length > 0 ? {
         id: '__uncat__',
         code: '',
+        icon: 'uncategorized',
+        iconKey: 'uncategorized',
         name: '未分类',
         count: uncatDevices.length,
         empty: false,
@@ -2139,6 +2181,26 @@ createApp({
       return c ? c.name : id;
     }
 
+    /** 解析品类图标 key：优先 icon / code，其次名称表，合成桶 aio / uncategorized，兜底 device */
+    function resolveCategoryIconKey(c) {
+      if (!c) return 'device';
+      if (typeof c === 'string') {
+        if (c === 'aio' || c === '__uncat__' || c === 'uncategorized') return c === 'aio' ? 'aio' : 'uncategorized';
+        const byId = CATEGORIES.find(x => x.id === c);
+        if (byId) return byId.icon || byId.code || CATEGORY_ICON_BY_NAME[byId.name] || 'device';
+        return CATEGORY_ICON_PATHS[c] ? c : (CATEGORY_ICON_BY_NAME[c] || 'device');
+      }
+      if (c.uncategorized || c.id === '__uncat__' || c.id === '__child_uncat__' || c.role === 'uncategorized') return 'uncategorized';
+      if (c.id === 'aio' || c.code === 'aio' || c.role === 'parent') return 'aio';
+      const key = c.icon || c.code || CATEGORY_ICON_BY_NAME[c.name];
+      if (key && CATEGORY_ICON_PATHS[key]) return key;
+      if (c.role === 'child' && !key) return 'probe';
+      return 'device';
+    }
+    function categoryIconPath(key) {
+      return CATEGORY_ICON_PATHS[key] || CATEGORY_ICON_PATHS.device;
+    }
+
     /* ---- 在线监控 actions ---- */
     function goMonitorList() { module.value = 'monitor'; screen.value = 'monitorList'; }
     function goMonitorOnlineRate() { module.value = 'monitor'; screen.value = 'monitorOnlineRate'; }
@@ -2405,7 +2467,7 @@ createApp({
       showTransferModal, transferForm, transferLogs, currentDeviceTransferLogs,
       openTransferModal, confirmTransfer,
       aepDiffTab, aepLastSyncedAt, filteredAepDiffs, aepCounts, resolveAepDiff, syncFromAep,
-      projectName, categoryName,
+      projectName, categoryName, resolveCategoryIconKey, categoryIconPath, CATEGORY_ICON_PATHS,
       // monitor
       MONITOR_ROWS, TRUST_TAG, TRUST_LABEL, ONLINE_TAG,
       monProjectFilter, monCategoryFilter, monOnlineFilter, monAlarmFilter, monSearch,
@@ -2531,7 +2593,10 @@ createApp({
                 title="筛选一体机/主机（无 masterId 且非 probe）"
                 @click="openDevicesForCategory(cockpitCategoryDist.aio)"
               >
-                <div class="cc-name">{{ cockpitCategoryDist.aio.name }} <span class="cc-code">code=aio</span></div>
+                <div class="cc-name">
+                  <svg class="cat-icon cat-icon-card" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(cockpitCategoryDist.aio.iconKey)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span class="cc-name-text">{{ cockpitCategoryDist.aio.name }} <span class="cc-code">code=aio</span></span>
+                </div>
                 <div class="cc-count">{{ cockpitCategoryDist.aio.count }}</div>
                 <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.aio.pct + '%' }"></span></div>
                 <div
@@ -2547,7 +2612,10 @@ createApp({
                 :title="'筛选独立品类主机：' + c.name"
                 @click="openDevicesForCategory(c)"
               >
-                <div class="cc-name">{{ c.name }}</div>
+                <div class="cc-name">
+                  <svg class="cat-icon cat-icon-card" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(c.iconKey || resolveCategoryIconKey(c))" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span class="cc-name-text">{{ c.name }}</span>
+                </div>
                 <div class="cc-count">{{ c.count }}</div>
                 <div class="cc-bar"><span :style="{ width: c.pct + '%' }"></span></div>
               </div>
@@ -2558,7 +2626,10 @@ createApp({
                 title="筛选未分类（空 categoryId）"
                 @click="openDevicesForCategory(cockpitCategoryDist.uncategorized)"
               >
-                <div class="cc-name">{{ cockpitCategoryDist.uncategorized.name }}</div>
+                <div class="cc-name">
+                  <svg class="cat-icon cat-icon-card" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(cockpitCategoryDist.uncategorized.iconKey)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span class="cc-name-text">{{ cockpitCategoryDist.uncategorized.name }}</span>
+                </div>
                 <div class="cc-count">{{ cockpitCategoryDist.uncategorized.count }}</div>
                 <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.uncategorized.pct + '%' }"></span></div>
               </div>
@@ -2579,6 +2650,7 @@ createApp({
                   :title="'筛选一体机下该子设备类型：' + c.name"
                   @click="openDevicesForCategory(c)"
                 >
+                  <svg class="cat-icon cat-icon-chip" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(c.iconKey || resolveCategoryIconKey(c))" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   <span class="chip-name">{{ c.name }}</span>
                   <span class="chip-count">{{ c.count }}</span>
                 </button>
@@ -2736,7 +2808,12 @@ createApp({
               <tbody>
                 <tr v-for="c in filteredCategories" :key="c.id">
                   <td>{{ c.id }}</td>
-                  <td><a class="btn-link btn" style="padding:0" @click="openDetail(c)">{{ c.name }}</a></td>
+                  <td>
+                    <a class="btn-link btn cat-name-cell" style="padding:0" @click="openDetail(c)">
+                      <svg class="cat-icon cat-icon-list" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(c.icon || c.code || resolveCategoryIconKey(c))" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      <span>{{ c.name }}</span>
+                    </a>
+                  </td>
                   <td><code>{{ c.code }}</code></td>
                   <td>{{ c.industry }}</td>
                   <td><span class="tag tag-blue">{{ categoryRules.filter(r => r.categoryId===c.id).length }} 条</span></td>
