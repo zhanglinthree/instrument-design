@@ -965,17 +965,27 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   color: #8c8c8c;
 }
 
-/* Row A 大品类同级网格：一体机 / 独立品类 / 未分类等高校；子设备在 Row B 条带 */
+/* Row A 大品类同级网格：一体机 / 独立品类 / 未分类等高校；子设备在 Row B 条带
+   固定少量卡片用 flex 等分整行，避免 auto-fill/固定列数右侧留空 gutter */
 .cockpit-cat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 12px;
   max-width: 100%;
   align-items: stretch;
 }
-@media (min-width: 900px) {
+.cockpit-cat-grid > .cockpit-cat-card {
+  flex: 1 1 0;
+  min-width: 0;
+}
+@media (max-width: 720px) {
   .cockpit-cat-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    flex-wrap: wrap;
+  }
+  .cockpit-cat-grid > .cockpit-cat-card {
+    flex: 1 1 calc(50% - 6px);
+    width: auto;
+    min-width: calc(50% - 6px);
   }
 }
 .cockpit-cat-card {
