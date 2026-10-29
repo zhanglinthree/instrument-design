@@ -1058,25 +1058,31 @@ createApp({
     });
 
     /**
-     * 品类分布（层级，对齐 BE overview / tip 闭环）：
-     * 每台设备恰好落入一个桶（禁止双重计数）：
+     * 品类分布（层级，对齐 BE tip 5cdbaa5a 闭环）：
+     * 顶层桶（参与闭环；探头/子设备不进顶层合计）：
      * 1) aio（code=aio）：无 masterId 且非 probe:、且有 categoryId → 仅主机/hub 台数（不含探头）
-     * 2) aio.children：有 masterId 或 aepDeviceId 以 probe: 开头 → 按 categoryId 聚合；不计入 aio.count，不进顶层 flat
-     * 3) others：非 hub、非 probe、品类不在 aio-children 集合内的独立设备 → 顶层 flat（本 mock 暂无，预留）
-     * 4) 未分类：categoryId 为空 → 顶层「未分类」（不用「待归属」）
-     * 闭环：aio.count + Σ children.count + Σ others.count + uncategorized.count === deviceTotal
-     * 下钻：aio→category=aio；child/other→categoryId；未分类→__uncat__（空品类）
+     * 2) others：非 hub 顶层独立品类 flat（本 mock 有品类非探头均进 aio，故为空；预留）
+     * 3) 未分类：顶层空 categoryId →「未分类」（不用「待归属」）
+     * 明细（不进闭环合计）：
+     *    aio.children：masterId 或 probe:，按 categoryId 聚合，仅展示
+     * 闭环（禁止把 children 加进合计）：
+     *    aio.count + Σ(others[].count) + uncategorized.count === deviceTotal
+     *    此处 deviceTotal = 与顶层同批（排除 probe/子设备）
+     * 下钻：aio→category=aio；child/other→categoryId；未分类→__uncat__
      */
     const cockpitCategoryDist = computed(() => {
       const all = deviceList.value;
-      const deviceTotal = all.length;
       const isChildDev = (d) => !!(d.masterId) || isProbeAepId(d.aepDeviceId);
       const isHubDev = (d) => !d.masterId && !isProbeAepId(d.aepDeviceId);
 
-      const uncatDevices = all.filter(d => !d.categoryId);
-      const childDevices = all.filter(d => d.categoryId && isChildDev(d));
-      const hubDevices = all.filter(d => d.categoryId && isHubDev(d));
-      /* others：预留。当前口径下有品类的非探头全部进 aio，故为空。 */
+      /* 闭环批次 = 顶层设备（排除探头/子设备），与合计分母一致 */
+      const topLevelDevices = all.filter(d => !isChildDev(d));
+      const deviceTotal = topLevelDevices.length;
+      const childDevices = all.filter(isChildDev);
+
+      const uncatDevices = topLevelDevices.filter(d => !d.categoryId);
+      const hubDevices = topLevelDevices.filter(d => !!d.categoryId && isHubDev(d));
+      /* others：顶层独立品类预留。当前有品类非探头全部进 aio。 */
       const otherDevices = [];
 
       const aio = {
@@ -1091,9 +1097,9 @@ createApp({
 
       const childCounts = {};
       childDevices.forEach(d => {
+        if (!d.categoryId) return;
         childCounts[d.categoryId] = (childCounts[d.categoryId] || 0) + 1;
       });
-      const childCategoryIds = new Set(Object.keys(childCounts));
       const childRows = CATEGORIES
         .map(c => {
           const count = childCounts[c.id] || 0;
@@ -1110,7 +1116,7 @@ createApp({
 
       const otherCounts = {};
       otherDevices.forEach(d => {
-        if (childCategoryIds.has(d.categoryId)) return; /* 不与 children 重复 */
+        if (!d.categoryId) return;
         otherCounts[d.categoryId] = (otherCounts[d.categoryId] || 0) + 1;
       });
       const otherRows = CATEGORIES
@@ -1138,6 +1144,7 @@ createApp({
       } : null;
 
       const barMax = Math.max(
+        aio.count,
         ...childRows.map(r => r.count),
         ...otherRows.map(r => r.count),
         uncategorized ? uncategorized.count : 0,
@@ -1147,8 +1154,8 @@ createApp({
       otherRows.forEach(r => { r.pct = Math.round((r.count / barMax) * 100); });
       if (uncategorized) uncategorized.pct = Math.round((uncategorized.count / barMax) * 100);
 
+      /* 顶层合计：不含 aio.children */
       const distSum = aio.count
-        + childRows.reduce((s, r) => s + r.count, 0)
         + otherRows.reduce((s, r) => s + r.count, 0)
         + (uncategorized ? uncategorized.count : 0);
       return {
@@ -2500,7 +2507,7 @@ createApp({
           <section class="cockpit-panel cockpit-category-panel">
             <div class="cockpit-panel-hd">
               <h3>品类分布</h3>
-              <span class="sub-nav-hint">一体机（aio）+ 子设备 / 独立品类 · 仅显示有设备的项 · 闭环对齐设备总数</span>
+              <span class="sub-nav-hint">一体机（aio）+ 子设备明细 / 独立品类 · 顶层闭环不含 children</span>
             </div>
             <div
               v-if="cockpitCategoryDist.aio && cockpitCategoryDist.aio.count > 0"
@@ -2557,7 +2564,7 @@ createApp({
             <div
               class="cockpit-cat-footer"
               :class="{ mismatch: !cockpitCategoryDist.closedLoopOk }"
-              :title="cockpitCategoryDist.closedLoopOk ? '闭环：aio + children + others + 未分类 = 设备总数' : '分布合计与设备总数不一致'"
+              :title="cockpitCategoryDist.closedLoopOk ? '闭环：aio + others + 未分类 = 设备总数（不含 children）' : '顶层合计与设备总数不一致'"
             >
               合计 {{ cockpitCategoryDist.distSum }} / 设备总数 {{ cockpitCategoryDist.deviceTotal }}
               <span v-if="!cockpitCategoryDist.closedLoopOk" class="cockpit-cat-footer-warn"> · 不一致</span>
