@@ -1048,7 +1048,7 @@ createApp({
       };
     });
 
-    /** 品类分布：展示全部 CATEGORIES（含 0），另计空 categoryId 为「待归属」 */
+    /** 品类分布：仅展示 count > 0 的品类；空 categoryId 计为「待归属」（仅 count > 0 时显示） */
     const cockpitCategoryDist = computed(() => {
       const all = deviceList.value;
       const counts = {};
@@ -1057,25 +1057,28 @@ createApp({
         if (!d.categoryId) uncategorized += 1;
         else counts[d.categoryId] = (counts[d.categoryId] || 0) + 1;
       });
-      const max = Math.max(uncategorized, ...CATEGORIES.map(c => counts[c.id] || 0), 1);
-      const rows = CATEGORIES.map(c => {
-        const count = counts[c.id] || 0;
-        return {
-          id: c.id,
-          name: c.name,
-          count,
-          pct: Math.round((count / max) * 100),
-          empty: count === 0,
-        };
-      });
-      rows.push({
-        id: '__uncat__',
-        name: '待归属',
-        count: uncategorized,
-        pct: Math.round((uncategorized / max) * 100),
-        empty: uncategorized === 0,
-        uncategorized: true,
-      });
+      const rows = CATEGORIES
+        .map(c => {
+          const count = counts[c.id] || 0;
+          return {
+            id: c.id,
+            name: c.name,
+            count,
+            empty: false,
+          };
+        })
+        .filter(r => r.count > 0);
+      if (uncategorized > 0) {
+        rows.push({
+          id: '__uncat__',
+          name: '待归属',
+          count: uncategorized,
+          empty: false,
+          uncategorized: true,
+        });
+      }
+      const max = Math.max(...rows.map(r => r.count), 1);
+      rows.forEach(r => { r.pct = Math.round((r.count / max) * 100); });
       return rows;
     });
 
@@ -2344,7 +2347,7 @@ createApp({
           <section class="cockpit-panel cockpit-category-panel">
             <div class="cockpit-panel-hd">
               <h3>品类分布</h3>
-              <span class="sub-nav-hint">按物模型品类统计 · 含 0 台品类与待归属</span>
+              <span class="sub-nav-hint">按物模型品类统计 · 仅显示有设备的品类</span>
             </div>
             <div class="cockpit-cat-grid">
               <div
