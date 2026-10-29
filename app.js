@@ -1063,8 +1063,8 @@ createApp({
      * 1) aio（code=aio）：无 masterId 且非 probe:、且有 categoryId → 仅主机/hub 台数（不含探头）
      * 2) others：非 hub 顶层独立品类 flat（本 mock 有品类非探头均进 aio，故为空；预留）
      * 3) 未分类：顶层空 categoryId →「未分类」（不用「待归属」）
-     * 明细（不进闭环合计）：
-     *    aio.children：masterId 或 probe:，按 categoryId 聚合，仅展示
+     * 明细（不进闭环合计；UI 放 Row B 条带，不嵌套进 aio 卡）：
+     *    children：masterId 或 probe:，按 categoryId 聚合；空品类归「未分类」
      * 闭环（禁止把 children 加进合计）：
      *    aio.count + Σ(others[].count) + uncategorized.count === deviceTotal
      *    此处 deviceTotal = 与顶层同批（排除 probe/子设备）
@@ -1096,8 +1096,9 @@ createApp({
       };
 
       const childCounts = {};
+      let childUncat = 0;
       childDevices.forEach(d => {
-        if (!d.categoryId) return;
+        if (!d.categoryId) { childUncat += 1; return; }
         childCounts[d.categoryId] = (childCounts[d.categoryId] || 0) + 1;
       });
       const childRows = CATEGORIES
@@ -1113,6 +1114,17 @@ createApp({
           };
         })
         .filter(r => r.count > 0);
+      if (childUncat > 0) {
+        childRows.push({
+          id: '__child_uncat__',
+          code: '',
+          name: '未分类',
+          count: childUncat,
+          empty: false,
+          uncategorized: true,
+          role: 'child',
+        });
+      }
 
       const otherCounts = {};
       otherDevices.forEach(d => {
@@ -1143,16 +1155,17 @@ createApp({
         role: 'uncategorized',
       } : null;
 
+      /* 进度条只比顶层大品类，不含子设备明细 */
       const barMax = Math.max(
         aio.count,
-        ...childRows.map(r => r.count),
         ...otherRows.map(r => r.count),
         uncategorized ? uncategorized.count : 0,
         1,
       );
-      childRows.forEach(r => { r.pct = Math.round((r.count / barMax) * 100); });
+      aio.pct = Math.round((aio.count / barMax) * 100);
       otherRows.forEach(r => { r.pct = Math.round((r.count / barMax) * 100); });
       if (uncategorized) uncategorized.pct = Math.round((uncategorized.count / barMax) * 100);
+      childRows.forEach(r => { r.pct = 0; });
 
       /* 顶层合计：不含 aio.children */
       const distSum = aio.count
@@ -2503,12 +2516,13 @@ createApp({
             </div>
           </div>
 
-          <!-- 品类分布：大品类 peer grid（一体机 / 独立品类 / 未分类同级）；子设备仅嵌套于一体机卡片内 -->
+          <!-- 品类分布：Row A 大品类同级卡片；Row B 一体机子设备类型条带（不嵌套进 aio 卡） -->
           <section class="cockpit-panel cockpit-category-panel">
             <div class="cockpit-panel-hd">
               <h3>品类分布</h3>
-              <span class="sub-nav-hint">一体机 · 独立品类 · 未分类同级 peer · 子设备嵌套于一体机内 · 顶层闭环不含 children</span>
+              <span class="sub-nav-hint">一体机 · 独立品类 · 未分类同级 · 子设备见下方条带 · 顶层闭环不含子设备</span>
             </div>
+            <!-- Row A：大品类同级等高校 -->
             <div class="cockpit-cat-grid cockpit-cat-peers">
               <div
                 v-if="cockpitCategoryDist.aio && cockpitCategoryDist.aio.count > 0"
@@ -2522,31 +2536,15 @@ createApp({
                 <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.aio.pct + '%' }"></span></div>
                 <div
                   v-if="cockpitCategoryDist.children.length"
-                  class="cockpit-cat-nested"
-                  @click.stop
-                >
-                  <div class="cockpit-cat-children-label">子设备类型</div>
-                  <div class="cockpit-cat-chips">
-                    <button
-                      v-for="c in cockpitCategoryDist.children"
-                      :key="'child-' + c.id"
-                      type="button"
-                      class="cockpit-cat-chip"
-                      :class="{ empty: c.empty }"
-                      title="筛选该品类（含探头子设备）"
-                      @click="openDevicesForCategory(c)"
-                    >
-                      <span class="chip-name">{{ c.name }}</span>
-                      <span class="chip-count">{{ c.count }}</span>
-                    </button>
-                  </div>
-                </div>
+                  class="cc-aio-hint"
+                >含 {{ cockpitCategoryDist.children.length }} 类子设备</div>
               </div>
               <div
                 v-for="c in (cockpitCategoryDist.others || [])"
                 :key="'other-' + c.id"
                 class="cockpit-cat-card"
                 style="cursor:pointer"
+                :title="'筛选独立品类主机：' + c.name"
                 @click="openDevicesForCategory(c)"
               >
                 <div class="cc-name">{{ c.name }}</div>
@@ -2565,10 +2563,31 @@ createApp({
                 <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.uncategorized.pct + '%' }"></span></div>
               </div>
             </div>
+            <!-- Row B：一体机子设备类型（从属条带，非同级卡片） -->
+            <div
+              v-if="cockpitCategoryDist.children.length"
+              class="cockpit-cat-children-band"
+            >
+              <div class="cockpit-cat-children-band-title">一体机 · 子设备类型</div>
+              <div class="cockpit-cat-chips">
+                <button
+                  v-for="c in cockpitCategoryDist.children"
+                  :key="'child-' + c.id"
+                  type="button"
+                  class="cockpit-cat-chip"
+                  :class="{ empty: c.empty, warn: c.uncategorized }"
+                  :title="'筛选一体机下该子设备类型：' + c.name"
+                  @click="openDevicesForCategory(c)"
+                >
+                  <span class="chip-name">{{ c.name }}</span>
+                  <span class="chip-count">{{ c.count }}</span>
+                </button>
+              </div>
+            </div>
             <div
               class="cockpit-cat-footer"
               :class="{ mismatch: !cockpitCategoryDist.closedLoopOk }"
-              :title="cockpitCategoryDist.closedLoopOk ? '闭环：aio + others + 未分类 = 设备总数（不含 children）' : '顶层合计与设备总数不一致'"
+              :title="cockpitCategoryDist.closedLoopOk ? '闭环：一体机 + 独立品类 + 未分类 = 设备总数（不含子设备）' : '顶层合计与设备总数不一致'"
             >
               合计 {{ cockpitCategoryDist.distSum }} / 设备总数 {{ cockpitCategoryDist.deviceTotal }}
               <span v-if="!cockpitCategoryDist.closedLoopOk" class="cockpit-cat-footer-warn"> · 不一致</span>
