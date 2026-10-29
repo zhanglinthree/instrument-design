@@ -965,38 +965,13 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   color: #8c8c8c;
 }
 
-/* 一体机父行：独占整行；子品类仍用下方 denser grid（最多约 4 列） */
-.cockpit-cat-parent {
-  display: block;
-  width: 100%;
-  margin-bottom: 10px;
-  background: linear-gradient(180deg, #f0f5ff 0%, #fafbfc 100%);
-  border-color: #91caff;
-}
-.cockpit-cat-parent .cc-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a2744;
-}
-.cockpit-cat-parent .cc-code {
-  margin-left: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #8c8c8c;
-}
-.cockpit-cat-parent .cc-count {
-  font-size: 26px;
-}
-.cockpit-cat-children-label {
-  font-size: 12px;
-  color: #8c8c8c;
-  margin: 4px 0 8px;
-}
+/* 大品类 peer grid：一体机 / 独立品类 / 未分类同级同权；子设备仅嵌套在一体机卡片内 */
 .cockpit-cat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
   max-width: 100%;
+  align-items: start;
 }
 @media (min-width: 900px) {
   .cockpit-cat-grid {
@@ -1033,8 +1008,70 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   border-color: #ffd591;
 }
 .cockpit-cat-card.warn .cc-count { color: var(--orange); }
+
+/* 一体机：与 peer 同卡风格；有 children 时卡片变高，不独占整行 */
+.cockpit-cat-aio {
+  background: linear-gradient(180deg, #f0f5ff 0%, #fafbfc 100%);
+  border-color: #91caff;
+}
+.cockpit-cat-aio .cc-name {
+  font-weight: 600;
+  color: #1a2744;
+}
+.cockpit-cat-aio .cc-code {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #8c8c8c;
+}
+.cockpit-cat-nested {
+  margin-top: 10px;
+  padding: 8px 0 0 10px;
+  border-left: 2px solid #91caff;
+}
+.cockpit-cat-children-label {
+  font-size: 11px;
+  color: #8c8c8c;
+  margin: 0 0 6px;
+  letter-spacing: 0.02em;
+}
+.cockpit-cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cockpit-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid #d6e4ff;
+  border-radius: 999px;
+  background: #fff;
+  color: #595959;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.cockpit-cat-chip:hover {
+  border-color: var(--primary);
+  background: rgba(13,110,253,.06);
+  color: #1a2744;
+}
+.cockpit-cat-chip .chip-name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-cat-chip .chip-count {
+  font-weight: 600;
+  color: #1a2744;
+}
+.cockpit-cat-chip.empty .chip-count { color: #bfbfbf; font-weight: 500; }
 .cockpit-cat-uncat {
-  max-width: 220px;
+  /* peer 同宽，不再单独限宽 */
 }
 .cockpit-cat-footer {
   margin-top: 12px;

@@ -2503,43 +2503,47 @@ createApp({
             </div>
           </div>
 
-          <!-- 品类分布：aio 独占首行 → 子设备 → 独立品类 → 未分类；脚注闭环校验 -->
+          <!-- 品类分布：大品类 peer grid（一体机 / 独立品类 / 未分类同级）；子设备仅嵌套于一体机卡片内 -->
           <section class="cockpit-panel cockpit-category-panel">
             <div class="cockpit-panel-hd">
               <h3>品类分布</h3>
-              <span class="sub-nav-hint">一体机（aio）+ 子设备明细 / 独立品类 · 顶层闭环不含 children</span>
+              <span class="sub-nav-hint">一体机 · 独立品类 · 未分类同级 peer · 子设备嵌套于一体机内 · 顶层闭环不含 children</span>
             </div>
-            <div
-              v-if="cockpitCategoryDist.aio && cockpitCategoryDist.aio.count > 0"
-              class="cockpit-cat-card cockpit-cat-parent"
-              style="cursor:pointer"
-              title="筛选一体机/主机（无 masterId 且非 probe）"
-              @click="openDevicesForCategory(cockpitCategoryDist.aio)"
-            >
-              <div class="cc-name">{{ cockpitCategoryDist.aio.name }} <span class="cc-code">code=aio</span></div>
-              <div class="cc-count">{{ cockpitCategoryDist.aio.count }}</div>
-              <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.aio.pct + '%' }"></span></div>
-            </div>
-            <div class="cockpit-cat-children-label" v-if="cockpitCategoryDist.children.length">子设备类型分布</div>
-            <div class="cockpit-cat-grid" v-if="cockpitCategoryDist.children.length">
+            <div class="cockpit-cat-grid cockpit-cat-peers">
               <div
-                v-for="c in cockpitCategoryDist.children"
-                :key="'child-' + c.id"
-                class="cockpit-cat-card"
-                :class="{ empty: c.empty }"
+                v-if="cockpitCategoryDist.aio && cockpitCategoryDist.aio.count > 0"
+                class="cockpit-cat-card cockpit-cat-aio"
                 style="cursor:pointer"
-                title="筛选该品类（含探头子设备）"
-                @click="openDevicesForCategory(c)"
+                title="筛选一体机/主机（无 masterId 且非 probe）"
+                @click="openDevicesForCategory(cockpitCategoryDist.aio)"
               >
-                <div class="cc-name">{{ c.name }}</div>
-                <div class="cc-count">{{ c.count }}</div>
-                <div class="cc-bar"><span :style="{ width: c.pct + '%' }"></span></div>
+                <div class="cc-name">{{ cockpitCategoryDist.aio.name }} <span class="cc-code">code=aio</span></div>
+                <div class="cc-count">{{ cockpitCategoryDist.aio.count }}</div>
+                <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.aio.pct + '%' }"></span></div>
+                <div
+                  v-if="cockpitCategoryDist.children.length"
+                  class="cockpit-cat-nested"
+                  @click.stop
+                >
+                  <div class="cockpit-cat-children-label">子设备类型</div>
+                  <div class="cockpit-cat-chips">
+                    <button
+                      v-for="c in cockpitCategoryDist.children"
+                      :key="'child-' + c.id"
+                      type="button"
+                      class="cockpit-cat-chip"
+                      :class="{ empty: c.empty }"
+                      title="筛选该品类（含探头子设备）"
+                      @click="openDevicesForCategory(c)"
+                    >
+                      <span class="chip-name">{{ c.name }}</span>
+                      <span class="chip-count">{{ c.count }}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="cockpit-cat-children-label" v-if="cockpitCategoryDist.others && cockpitCategoryDist.others.length">独立品类</div>
-            <div class="cockpit-cat-grid" v-if="cockpitCategoryDist.others && cockpitCategoryDist.others.length">
               <div
-                v-for="c in cockpitCategoryDist.others"
+                v-for="c in (cockpitCategoryDist.others || [])"
                 :key="'other-' + c.id"
                 class="cockpit-cat-card"
                 style="cursor:pointer"
@@ -2549,17 +2553,17 @@ createApp({
                 <div class="cc-count">{{ c.count }}</div>
                 <div class="cc-bar"><span :style="{ width: c.pct + '%' }"></span></div>
               </div>
-            </div>
-            <div
-              v-if="cockpitCategoryDist.uncategorized && cockpitCategoryDist.uncategorized.count > 0"
-              class="cockpit-cat-card warn cockpit-cat-uncat"
-              style="cursor:pointer;margin-top:10px"
-              title="筛选未分类（空 categoryId）"
-              @click="openDevicesForCategory(cockpitCategoryDist.uncategorized)"
-            >
-              <div class="cc-name">{{ cockpitCategoryDist.uncategorized.name }}</div>
-              <div class="cc-count">{{ cockpitCategoryDist.uncategorized.count }}</div>
-              <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.uncategorized.pct + '%' }"></span></div>
+              <div
+                v-if="cockpitCategoryDist.uncategorized && cockpitCategoryDist.uncategorized.count > 0"
+                class="cockpit-cat-card warn cockpit-cat-uncat"
+                style="cursor:pointer"
+                title="筛选未分类（空 categoryId）"
+                @click="openDevicesForCategory(cockpitCategoryDist.uncategorized)"
+              >
+                <div class="cc-name">{{ cockpitCategoryDist.uncategorized.name }}</div>
+                <div class="cc-count">{{ cockpitCategoryDist.uncategorized.count }}</div>
+                <div class="cc-bar"><span :style="{ width: cockpitCategoryDist.uncategorized.pct + '%' }"></span></div>
+              </div>
             </div>
             <div
               class="cockpit-cat-footer"
