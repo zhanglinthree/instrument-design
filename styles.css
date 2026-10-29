@@ -1018,28 +1018,28 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .cockpit-cat-card.warn .cc-bar span { background: var(--orange); }
 
 .cockpit-projects-panel {
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px;
   margin-bottom: 12px;
 }
 .cockpit-projects-panel .cockpit-panel-hd {
-  margin-bottom: 8px;
-  gap: 8px;
+  margin-bottom: 6px;
+  gap: 6px;
 }
 .cockpit-projects-panel .cockpit-panel-hd h3 {
-  font-size: 14px;
+  font-size: 13px;
 }
 .cockpit-project-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px;
 }
 .cockpit-project-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 5px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: #fafbfc;
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s, background .15s;
@@ -1048,7 +1048,7 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .cockpit-project-card:hover {
   border-color: var(--primary);
   background: #fff;
-  box-shadow: 0 2px 8px rgba(13,110,253,.1);
+  box-shadow: 0 1px 6px rgba(13,110,253,.1);
 }
 .cockpit-project-card.aside {
   background: #fffaf3;
@@ -1057,7 +1057,7 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 }
 .cockpit-project-card.aside:hover {
   border-color: var(--orange);
-  box-shadow: 0 2px 8px rgba(231,130,18,.12);
+  box-shadow: 0 1px 6px rgba(231,130,18,.12);
 }
 .cockpit-project-card.aside .cpr-name {
   color: #8c6a3a;
@@ -1066,70 +1066,70 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 .cpr-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  line-height: 1.35;
+  line-height: 1.3;
   min-width: 0;
 }
 .cpr-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 650;
   color: #1a2744;
 }
 .cpr-meta {
-  margin-top: 2px;
-  font-size: 11px;
+  margin-top: 0;
+  font-size: 10px;
   color: #8c8c8c;
   font-weight: 400;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 .cpr-cats {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
 }
 .cpr-cats.muted {
-  font-size: 11px;
+  font-size: 10px;
   color: #bfbfbf;
 }
 .cpr-cat-pill {
   font-size: 10px;
-  padding: 0 6px;
-  line-height: 18px;
-  border-radius: 9px;
+  padding: 0 5px;
+  line-height: 16px;
+  border-radius: 8px;
   background: rgba(13,110,253,.08);
   color: #2a3550;
 }
 .cpr-stats {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 6px;
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 5px;
   border-top: 1px dashed #eef0f5;
 }
 .cpr-stat {
   text-align: center;
-  min-width: 36px;
+  min-width: 30px;
 }
 .cpr-stat .k {
   display: block;
-  font-size: 10px;
+  font-size: 9px;
   color: #8c8c8c;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .cpr-stat .v {
   display: block;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 650;
   color: #1a2744;
-  margin-top: 1px;
-  line-height: 1.2;
+  margin-top: 0;
+  line-height: 1.15;
 }
 .cpr-stat.ok .v { color: #198754; }
 .cpr-stat.warn .v { color: var(--orange); }
@@ -1139,21 +1139,21 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   text-align: right;
 }
 .cpr-rate-label {
-  font-size: 10px;
+  font-size: 9px;
   color: #8c8c8c;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .cpr-rate-value {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 650;
   color: #1a2744;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .cpr-rate-bar {
-  height: 4px;
+  height: 3px;
   background: #eef0f5;
   border-radius: 2px;
-  margin-top: 4px;
+  margin-top: 3px;
   overflow: hidden;
 }
 .cpr-rate-bar span {
