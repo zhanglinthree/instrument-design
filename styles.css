@@ -1018,11 +1018,11 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .cockpit-cat-card.warn .cc-bar span { background: var(--orange); }
 
 .cockpit-projects-panel {
-  padding: 8px 10px 10px;
+  padding: 10px 12px 12px;
   margin-bottom: 12px;
 }
 .cockpit-projects-panel .cockpit-panel-hd {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   gap: 6px;
 }
 .cockpit-projects-panel .cockpit-panel-hd h3 {
@@ -1030,16 +1030,16 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 }
 .cockpit-project-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 8px;
 }
 .cockpit-project-card {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 7px;
   background: #fafbfc;
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s, background .15s;
@@ -1108,28 +1108,28 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .cpr-stats {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   margin-top: auto;
-  padding-top: 5px;
+  padding-top: 6px;
   border-top: 1px dashed #eef0f5;
 }
 .cpr-stat {
   text-align: center;
-  min-width: 30px;
+  min-width: 32px;
 }
 .cpr-stat .k {
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   color: #8c8c8c;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 .cpr-stat .v {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 650;
   color: #1a2744;
   margin-top: 0;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 .cpr-stat.ok .v { color: #198754; }
 .cpr-stat.warn .v { color: var(--orange); }
@@ -1139,18 +1139,18 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   text-align: right;
 }
 .cpr-rate-label {
-  font-size: 9px;
+  font-size: 10px;
   color: #8c8c8c;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 .cpr-rate-value {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   color: #1a2744;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 .cpr-rate-bar {
-  height: 3px;
+  height: 4px;
   background: #eef0f5;
   border-radius: 2px;
   margin-top: 3px;
