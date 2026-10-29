@@ -2,6 +2,8 @@
 
 替代 Figma 限额，可本地直接打开。Vue 3 CDN + 自研 Ant Design 风格 CSS，1440 管理后台壳。
 
+**品类图标：** Iconify（`mdi:*` id 存 `category.icon`；空则 `DEFAULT_CODE_TO_ICONIFY[code]`）。规范见 [`docs/ICON_SPEC.md`](docs/ICON_SPEC.md)。
+
 ## 打开方式
 
 **文件路径：**

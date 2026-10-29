@@ -2,34 +2,38 @@ const { createApp, ref, computed, reactive, watch, nextTick } = Vue;
 
 /* ========== 物模型 Mock ========== */
 const CATEGORIES = [
-  { id: 'C001', name: '积水仪地埋', code: 'flood_buried', icon: 'flood_buried', industry: '市政排水', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用', ruleCount: 3 },
-  { id: 'C006', name: '积水仪侧壁', code: 'flood_sidewall', icon: 'flood_sidewall', industry: '市政排水', deviceCount: 64, modelVersion: 'v1.0.0', updatedAt: '2026-10-08 10:15', status: '启用', ruleCount: 1 },
-  { id: 'C002', name: '水质监测站', code: 'water_quality', icon: 'water_quality', industry: '环保监测', deviceCount: 56, modelVersion: 'v2.0.1', updatedAt: '2026-09-26 09:10', status: '启用', ruleCount: 2 },
-  { id: 'C003', name: '管网压力表', code: 'pipe_pressure', icon: 'pipe_pressure', industry: '供水', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿', ruleCount: 2 },
-  { id: 'C004', name: '泵站机组', code: 'pump_unit', icon: 'pump_unit', industry: '市政排水', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用', ruleCount: 2 },
-  { id: 'C005', name: '雨量计', code: 'rain_gauge', icon: 'rain_gauge', industry: '气象水文', deviceCount: 12, modelVersion: 'v1.1.0', updatedAt: '2026-09-12 08:05', status: '停用', ruleCount: 2 },
+  { id: 'C001', name: '积水仪地埋', code: 'flood_buried', icon: 'mdi:pipe', industry: '市政排水', deviceCount: 128, modelVersion: 'v1.2.0', updatedAt: '2026-09-28 14:22', status: '启用', ruleCount: 3 },
+  { id: 'C006', name: '积水仪侧壁', code: 'flood_sidewall', icon: 'mdi:wall', industry: '市政排水', deviceCount: 64, modelVersion: 'v1.0.0', updatedAt: '2026-10-08 10:15', status: '启用', ruleCount: 1 },
+  { id: 'C002', name: '水质监测站', code: 'water_quality', icon: 'mdi:water-check', industry: '环保监测', deviceCount: 56, modelVersion: 'v2.0.1', updatedAt: '2026-09-26 09:10', status: '启用', ruleCount: 2 },
+  { id: 'C003', name: '管网压力表', code: 'pipe_pressure', icon: 'mdi:gauge', industry: '供水', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿', ruleCount: 2 },
+  { id: 'C004', name: '泵站机组', code: 'pump_unit', icon: 'mdi:pump', industry: '市政排水', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用', ruleCount: 2 },
+  { id: 'C005', name: '雨量计', code: 'rain_gauge', icon: 'mdi:weather-pouring', industry: '气象水文', deviceCount: 12, modelVersion: 'v1.1.0', updatedAt: '2026-09-12 08:05', status: '停用', ruleCount: 2 },
 ];
 
-/* Mock 用静态 icon(=品类 code)；FE/BE 日后可在物模型品类上挂 icon。
- * code/icon → 图：aio；flood_buried；flood_sidewall；water_quality；pipe_pressure；pump_unit；rain_gauge；
- * flow_doppler / water_cod（预留）；probe（子设备兜底）；uncategorized；未知→device */
-const CATEGORY_ICON_PATHS = {
-  aio: 'M4 8h16v10H4zM8 8V6a4 4 0 0 1 8 0v2M9 13h2M13 13h2',
-  flood_buried: 'M12 3v6M8 9h8l-1.5 9h-5L8 9zM6 21h12M9 14h6',
-  flood_sidewall: 'M5 4v16M5 8h7a3 3 0 0 1 0 6H5M14 11h3M17 9v4',
-  water_quality: 'M12 3c0 0-6 7-6 11a6 6 0 0 0 12 0c0-4-6-11-6-11zM10 14h4',
-  pipe_pressure: 'M12 20V12M7 16a7 7 0 1 1 10 0M12 12l4-3',
-  pump_unit: 'M12 4v2M12 18v2M4 12h2M18 12h2M8.5 8.5l1.2 1.2M14.3 14.3l1.2 1.2M15.5 8.5l-1.2 1.2M9.7 14.3l-1.2 1.2M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z',
-  rain_gauge: 'M8 4h8l-1 5H9L8 4zM9 9v8a3 3 0 0 0 6 0V9M6 6l1.5 2M18 6l-1.5 2',
-  flow_doppler: 'M4 8c2 0 2 4 4 4s2-4 4-4 2 4 4 4 2-4 4-4M4 14c2 0 2 4 4 4s2-4 4-4 2 4 4 4 2-4 4-4',
-  water_cod: 'M9 3h6v3l2 3v8a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3V9l2-3V3zM9 12h6',
-  probe: 'M12 3v11M9 14a3 3 0 1 0 6 0M10 7h4',
-  uncategorized: 'M5 7h14v10H5zM9 12h.01M12 12h.01M15 12h.01',
-  device: 'M6 5h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM9 17h6M12 9v3',
+/* ========== 品类图标（Iconify）==========
+ * 详见 docs/ICON_SPEC.md
+ * - category.icon 直接存 Iconify id（如 mdi:water）；空则走 DEFAULT_CODE_TO_ICONIFY[code]
+ * - 短期 FE：本地 DEFAULT_CODE_TO_ICONIFY + 推荐表；中期 BE：iot_category.icon
+ * - 库：Iconify（本 mock 用 iconify-icon Web Component + Material Design Icons `mdi`）
+ */
+/** code → Iconify id 兜底（icon 为空时） */
+const DEFAULT_CODE_TO_ICONIFY = {
+  aio: 'mdi:monitor-dashboard',
+  flood_buried: 'mdi:pipe',
+  flood_sidewall: 'mdi:wall',
+  water_quality: 'mdi:water-check',
+  pipe_pressure: 'mdi:gauge',
+  pump_unit: 'mdi:pump',
+  rain_gauge: 'mdi:weather-pouring',
+  flow_doppler: 'mdi:waves',
+  water_cod: 'mdi:flask-outline',
+  probe: 'mdi:antenna',
+  uncategorized: 'mdi:help-box-outline',
+  device: 'mdi:devices',
 };
 
-/** 名称兜底 → code/iconKey（短尾兼容，无 code 时） */
-const CATEGORY_ICON_BY_NAME = {
+/** 名称 → code 短尾兼容（无 code / 合成桶时） */
+const CATEGORY_CODE_BY_NAME = {
   '一体机': 'aio',
   '积水仪地埋': 'flood_buried',
   '积水仪侧壁': 'flood_sidewall',
@@ -41,6 +45,43 @@ const CATEGORY_ICON_BY_NAME = {
   'COD 水质': 'water_cod',
   '未分类': 'uncategorized',
 };
+
+/**
+ * 推荐图标目录（品类新建/编辑 IconPicker 网格）。
+ * id = Iconify 完整 id（prefix:name）；无业务 key 白名单层——落库即此字符串。
+ */
+const ICON_CATALOG = [
+  { id: 'mdi:devices', labelZh: '通用设备' },
+  { id: 'mdi:monitor-dashboard', labelZh: '一体机/仪表盘' },
+  { id: 'mdi:pipe', labelZh: '管道/地埋' },
+  { id: 'mdi:wall', labelZh: '侧壁/墙装' },
+  { id: 'mdi:water', labelZh: '水' },
+  { id: 'mdi:water-check', labelZh: '水质' },
+  { id: 'mdi:gauge', labelZh: '压力表' },
+  { id: 'mdi:pump', labelZh: '泵站/泵' },
+  { id: 'mdi:weather-pouring', labelZh: '雨量' },
+  { id: 'mdi:waves', labelZh: '流量/波' },
+  { id: 'mdi:flask-outline', labelZh: 'COD/化验' },
+  { id: 'mdi:antenna', labelZh: '探头/天线' },
+  { id: 'mdi:help-box-outline', labelZh: '未分类' },
+  { id: 'mdi:valve', labelZh: '阀门' },
+  { id: 'mdi:gate', labelZh: '闸门' },
+  { id: 'mdi:cctv', labelZh: '摄像头' },
+  { id: 'mdi:weather-partly-cloudy', labelZh: '气象站' },
+  { id: 'mdi:battery-outline', labelZh: '电池' },
+  { id: 'mdi:signal', labelZh: '信号' },
+  { id: 'mdi:thermometer', labelZh: '温度' },
+  { id: 'mdi:hydraulic-oil-level', labelZh: '液位' },
+  { id: 'mdi:server-network', labelZh: '网关' },
+  { id: 'mdi:access-point', labelZh: '接入点' },
+  { id: 'mdi:chip', labelZh: '传感器芯片' },
+  { id: 'mdi:map-marker-radius', labelZh: '位置/井点' },
+  { id: 'mdi:alert-circle-outline', labelZh: '告警' },
+  { id: 'mdi:lightning-bolt', labelZh: '电力' },
+  { id: 'mdi:fan', labelZh: '风机' },
+];
+
+const FALLBACK_ICONIFY = DEFAULT_CODE_TO_ICONIFY.device;
 
 /* 归属规则：通用规则默认匹配；特殊处理规则优先级更高。AEP 侧已完成解析，本侧只做品类自动挂靠。 */
 const CATEGORY_RULES = [
@@ -502,7 +543,7 @@ createApp({
 
     const showCategoryModal = ref(false);
     const categoryModalMode = ref('create');
-    const categoryForm = reactive({ id: '', name: '', code: '', industry: '市政排水', desc: '', status: '启用' });
+    const categoryForm = reactive({ id: '', name: '', code: '', icon: '', industry: '市政排水', desc: '', status: '启用' });
 
     const showRuleModal = ref(false);
     const ruleModalMode = ref('create');
@@ -1142,7 +1183,7 @@ createApp({
             id: c.id,
             code: c.code,
             icon: c.icon || c.code,
-            iconKey: c.icon || c.code,
+            iconKey: c.icon || DEFAULT_CODE_TO_ICONIFY[c.code] || c.code,
             name: c.name,
             count,
             empty: false,
@@ -1176,7 +1217,7 @@ createApp({
             id: c.id,
             code: c.code,
             icon: c.icon || c.code,
-            iconKey: c.icon || c.code,
+            iconKey: c.icon || DEFAULT_CODE_TO_ICONIFY[c.code] || c.code,
             name: c.name,
             count,
             empty: false,
@@ -1304,18 +1345,61 @@ createApp({
 
     function openCreateCategory() {
       categoryModalMode.value = 'create';
-      Object.assign(categoryForm, { id: '', name: '', code: '', industry: '市政排水', desc: '', status: '启用' });
+      Object.assign(categoryForm, {
+        id: '', name: '', code: '', icon: FALLBACK_ICONIFY,
+        industry: '市政排水', desc: '', status: '启用'
+      });
       showCategoryModal.value = true;
     }
     function openEditCategory(cat) {
       categoryModalMode.value = 'edit';
       Object.assign(categoryForm, {
-        id: cat.id, name: cat.name, code: cat.code, industry: cat.industry,
-        desc: cat.desc || '', status: cat.status
+        id: cat.id, name: cat.name, code: cat.code,
+        icon: cat.icon || DEFAULT_CODE_TO_ICONIFY[cat.code] || FALLBACK_ICONIFY,
+        industry: cat.industry, desc: cat.desc || '', status: cat.status
       });
       showCategoryModal.value = true;
     }
-    function saveCategory() { showCategoryModal.value = false; }
+    function pickCategoryIcon(id) {
+      categoryForm.icon = id || '';
+    }
+    function saveCategory() {
+      const iconVal = (categoryForm.icon || '').trim();
+      if (categoryModalMode.value === 'create') {
+        const id = 'C' + Date.now().toString().slice(-4);
+        CATEGORIES.push({
+          id,
+          name: categoryForm.name || '未命名品类',
+          code: categoryForm.code || id.toLowerCase(),
+          icon: iconVal,
+          industry: categoryForm.industry,
+          desc: categoryForm.desc || '',
+          deviceCount: 0,
+          modelVersion: 'v0.1.0',
+          updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          status: categoryForm.status || '草稿',
+          ruleCount: 0,
+        });
+      } else {
+        const idx = CATEGORIES.findIndex(x => x.id === categoryForm.id);
+        if (idx >= 0) {
+          const prev = CATEGORIES[idx];
+          CATEGORIES.splice(idx, 1, {
+            ...prev,
+            name: categoryForm.name,
+            icon: iconVal,
+            industry: categoryForm.industry,
+            desc: categoryForm.desc || '',
+            status: categoryForm.status,
+            updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          });
+          if (currentCategory.value && currentCategory.value.id === categoryForm.id) {
+            currentCategory.value = CATEGORIES[idx];
+          }
+        }
+      }
+      showCategoryModal.value = false;
+    }
 
     function openCreateRule() {
       ruleModalMode.value = 'create';
@@ -2183,24 +2267,48 @@ createApp({
       return c ? c.name : id;
     }
 
-    /** 解析品类图标 key：优先 icon / code，其次名称表，合成桶 aio / uncategorized，兜底 device */
-    function resolveCategoryIconKey(c) {
-      if (!c) return 'device';
+    /**
+     * 解析品类 Iconify id：
+     * 1) category.icon（已是 Iconify id，如 mdi:water）
+     * 2) DEFAULT_CODE_TO_ICONIFY[code]（icon 空）
+     * 3) 名称→code→表 / 合成桶 aio|uncategorized|probe
+     * 4) FALLBACK_ICONIFY（mdi:devices）
+     */
+    function resolveCategoryIcon(c) {
+      if (!c) return FALLBACK_ICONIFY;
       if (typeof c === 'string') {
-        if (c === 'aio' || c === '__uncat__' || c === 'uncategorized') return c === 'aio' ? 'aio' : 'uncategorized';
+        if (c.includes(':')) return c; /* 已是 Iconify id */
+        if (c === 'aio' || c === '__uncat__' || c === 'uncategorized') {
+          const code = c === 'aio' ? 'aio' : 'uncategorized';
+          return DEFAULT_CODE_TO_ICONIFY[code] || FALLBACK_ICONIFY;
+        }
         const byId = CATEGORIES.find(x => x.id === c);
-        if (byId) return byId.icon || byId.code || CATEGORY_ICON_BY_NAME[byId.name] || 'device';
-        return CATEGORY_ICON_PATHS[c] ? c : (CATEGORY_ICON_BY_NAME[c] || 'device');
+        if (byId) {
+          if (byId.icon) return byId.icon;
+          return DEFAULT_CODE_TO_ICONIFY[byId.code] || FALLBACK_ICONIFY;
+        }
+        if (DEFAULT_CODE_TO_ICONIFY[c]) return DEFAULT_CODE_TO_ICONIFY[c];
+        const codeFromName = CATEGORY_CODE_BY_NAME[c];
+        if (codeFromName) return DEFAULT_CODE_TO_ICONIFY[codeFromName] || FALLBACK_ICONIFY;
+        return FALLBACK_ICONIFY;
       }
-      if (c.uncategorized || c.id === '__uncat__' || c.id === '__child_uncat__' || c.role === 'uncategorized') return 'uncategorized';
-      if (c.id === 'aio' || c.code === 'aio' || c.role === 'parent') return 'aio';
-      const key = c.icon || c.code || CATEGORY_ICON_BY_NAME[c.name];
-      if (key && CATEGORY_ICON_PATHS[key]) return key;
-      if (c.role === 'child' && !key) return 'probe';
-      return 'device';
+      if (c.icon) return c.icon;
+      if (c.uncategorized || c.id === '__uncat__' || c.id === '__child_uncat__' || c.role === 'uncategorized') {
+        return DEFAULT_CODE_TO_ICONIFY.uncategorized;
+      }
+      if (c.id === 'aio' || c.code === 'aio' || c.role === 'parent') {
+        return DEFAULT_CODE_TO_ICONIFY.aio;
+      }
+      const code = c.code || CATEGORY_CODE_BY_NAME[c.name];
+      if (code && DEFAULT_CODE_TO_ICONIFY[code]) return DEFAULT_CODE_TO_ICONIFY[code];
+      if (c.role === 'child') return DEFAULT_CODE_TO_ICONIFY.probe;
+      return FALLBACK_ICONIFY;
     }
-    function categoryIconPath(key) {
-      return CATEGORY_ICON_PATHS[key] || CATEGORY_ICON_PATHS.device;
+    /** @deprecated 兼容旧调用名 → Iconify id */
+    function resolveCategoryIconKey(c) { return resolveCategoryIcon(c); }
+    /** 工作台等处若仍传业务 code，归一成 Iconify id */
+    function categoryIconifyId(keyOrCat) {
+      return resolveCategoryIcon(keyOrCat);
     }
 
     /* ---- 在线监控 actions ---- */
@@ -2469,7 +2577,8 @@ createApp({
       showTransferModal, transferForm, transferLogs, currentDeviceTransferLogs,
       openTransferModal, confirmTransfer,
       aepDiffTab, aepLastSyncedAt, filteredAepDiffs, aepCounts, resolveAepDiff, syncFromAep,
-      projectName, categoryName, resolveCategoryIconKey, categoryIconPath, CATEGORY_ICON_PATHS,
+      projectName, categoryName, resolveCategoryIcon, resolveCategoryIconKey, categoryIconifyId,
+      ICON_CATALOG, DEFAULT_CODE_TO_ICONIFY, FALLBACK_ICONIFY, pickCategoryIcon,
       // monitor
       MONITOR_ROWS, TRUST_TAG, TRUST_LABEL, ONLINE_TAG,
       monProjectFilter, monCategoryFilter, monOnlineFilter, monAlarmFilter, monSearch,
@@ -2596,7 +2705,7 @@ createApp({
                 @click="openDevicesForCategory(cockpitCategoryDist.aio)"
               >
                 <div class="cc-name">
-                  <svg class="cat-icon cat-icon-card" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(cockpitCategoryDist.aio.iconKey)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <iconify-icon class="cat-icon cat-icon-card" :icon="resolveCategoryIcon(cockpitCategoryDist.aio.iconKey || 'aio')" width="24" height="24" aria-hidden="true"></iconify-icon>
                   <span class="cc-name-text">{{ cockpitCategoryDist.aio.name }} <span class="cc-code">code=aio</span></span>
                 </div>
                 <div class="cc-count">{{ cockpitCategoryDist.aio.count }}</div>
@@ -2615,7 +2724,7 @@ createApp({
                 @click="openDevicesForCategory(c)"
               >
                 <div class="cc-name">
-                  <svg class="cat-icon cat-icon-card" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(c.iconKey || resolveCategoryIconKey(c))" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <iconify-icon class="cat-icon cat-icon-card" :icon="resolveCategoryIcon(c)" width="24" height="24" aria-hidden="true"></iconify-icon>
                   <span class="cc-name-text">{{ c.name }}</span>
                 </div>
                 <div class="cc-count">{{ c.count }}</div>
@@ -2629,7 +2738,7 @@ createApp({
                 @click="openDevicesForCategory(cockpitCategoryDist.uncategorized)"
               >
                 <div class="cc-name">
-                  <svg class="cat-icon cat-icon-card" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(cockpitCategoryDist.uncategorized.iconKey)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <iconify-icon class="cat-icon cat-icon-card" :icon="resolveCategoryIcon(cockpitCategoryDist.uncategorized.iconKey || 'uncategorized')" width="24" height="24" aria-hidden="true"></iconify-icon>
                   <span class="cc-name-text">{{ cockpitCategoryDist.uncategorized.name }}</span>
                 </div>
                 <div class="cc-count">{{ cockpitCategoryDist.uncategorized.count }}</div>
@@ -2652,7 +2761,7 @@ createApp({
                   :title="'筛选一体机下该子设备类型：' + c.name"
                   @click="openDevicesForCategory(c)"
                 >
-                  <svg class="cat-icon cat-icon-chip" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(c.iconKey || resolveCategoryIconKey(c))" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <iconify-icon class="cat-icon cat-icon-chip" :icon="resolveCategoryIcon(c)" width="20" height="20" aria-hidden="true"></iconify-icon>
                   <span class="chip-name">{{ c.name }}</span>
                   <span class="chip-count">{{ c.count }}</span>
                 </button>
@@ -2812,7 +2921,7 @@ createApp({
                   <td>{{ c.id }}</td>
                   <td>
                     <a class="btn-link btn cat-name-cell" style="padding:0" @click="openDetail(c)">
-                      <svg class="cat-icon cat-icon-list" viewBox="0 0 24 24" aria-hidden="true"><path :d="categoryIconPath(c.icon || c.code || resolveCategoryIconKey(c))" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      <iconify-icon class="cat-icon cat-icon-list" :icon="resolveCategoryIcon(c)" width="18" height="18" aria-hidden="true"></iconify-icon>
                       <span>{{ c.name }}</span>
                     </a>
                   </td>
@@ -4195,6 +4304,36 @@ createApp({
           </div>
           <div class="form-row">
             <div class="form-item"><label>状态</label><select class="select input-full" v-model="categoryForm.status"><option>启用</option><option>草稿</option><option>停用</option></select></div>
+          </div>
+          <div class="form-item">
+            <label>设备类型图标</label>
+            <div class="icon-picker-current">
+              <iconify-icon class="cat-icon cat-icon-card" :icon="categoryForm.icon || FALLBACK_ICONIFY" width="28" height="28" aria-hidden="true"></iconify-icon>
+              <code class="icon-picker-id">{{ categoryForm.icon || '（空 → 按编码兜底）' }}</code>
+            </div>
+            <div class="icon-picker-grid" role="listbox" aria-label="推荐图标">
+              <button
+                type="button"
+                class="icon-picker-cell"
+                v-for="ic in ICON_CATALOG"
+                :key="ic.id"
+                :class="{ active: categoryForm.icon === ic.id }"
+                :title="ic.labelZh + ' · ' + ic.id"
+                @click="pickCategoryIcon(ic.id)"
+              >
+                <iconify-icon :icon="ic.id" width="22" height="22" aria-hidden="true"></iconify-icon>
+                <span class="icon-picker-label">{{ ic.labelZh }}</span>
+              </button>
+            </div>
+            <div class="icon-picker-free">
+              <label class="icon-picker-free-label">自由填写 Iconify id</label>
+              <input
+                class="input input-full"
+                v-model.trim="categoryForm.icon"
+                placeholder="例如 mdi:water / mdi:pump（prefix:name）"
+              />
+              <div class="hint">存库字段 <code>icon</code> = Iconify id 字符串；留空则按品类编码走 DEFAULT_CODE_TO_ICONIFY。详见 docs/ICON_SPEC.md。</div>
+            </div>
           </div>
           <div class="form-item"><label>品类说明</label><textarea class="textarea input-full" v-model="categoryForm.desc" placeholder="产品类型语义说明；测点/事件/阈值/安装模板/固件在详情中配置"></textarea></div>
           <div class="hint">品类不再绑定 AEP 产品。AEP 解析后由「归属规则」自动挂靠；规则在品类详情中维护。</div>

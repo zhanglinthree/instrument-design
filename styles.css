@@ -1155,6 +1155,83 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   align-items: center;
   gap: 8px;
 }
+/* Iconify web component 与原 svg.cat-icon 对齐 */
+iconify-icon.cat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary, #1677ff);
+  vertical-align: middle;
+}
+
+/* 品类新建/编辑 · IconPicker */
+.icon-picker-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  background: #f5f8ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+}
+.icon-picker-id {
+  font-size: 12px;
+  color: #334155;
+  word-break: break-all;
+}
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 4px 2px 8px;
+  margin-bottom: 8px;
+}
+.icon-picker-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 8px 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  color: var(--primary, #1677ff);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.icon-picker-cell:hover {
+  border-color: #91caff;
+  background: #f0f7ff;
+}
+.icon-picker-cell.active {
+  border-color: var(--primary, #1677ff);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+  background: #e6f4ff;
+}
+.icon-picker-label {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.2;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-picker-free {
+  margin-top: 4px;
+}
+.icon-picker-free-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
 .cockpit-cat-card.warn .cat-icon,
 .cockpit-cat-chip.warn .cat-icon {
   color: var(--orange);
