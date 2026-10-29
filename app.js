@@ -16,20 +16,45 @@ const CATEGORIES = [
  * - 短期 FE：本地 DEFAULT_CODE_TO_ICONIFY + 推荐表；中期 BE：iot_category.icon
  * - 库：Iconify（本 mock 用 iconify-icon Web Component + Material Design Icons `mdi`）
  */
-/** code → Iconify id 兜底（icon 为空时） */
+/** code → Iconify id 兜底（icon 为空时）
+ * 含真实 BE 品类 code；旧 mock / 工业角色 code 作别名。
+ * 与 FE resolveCategoryIcon.ts 工业默认对齐（pipe-leak / water-pump / gauge-full / sine-wave / test-tube 等）。
+ */
 const DEFAULT_CODE_TO_ICONIFY = {
+  // —— 真实 BE category.code ——
   aio: 'mdi:monitor-dashboard',
-  flood_buried: 'mdi:pipe',
-  flood_sidewall: 'mdi:wall',
-  water_quality: 'mdi:water-check',
-  pipe_pressure: 'mdi:gauge',
-  pump_unit: 'mdi:pump',
+  flow_doppler: 'mdi:sine-wave',
+  flow_vel_level: 'mdi:waves-arrow-up',
+  level_pressure: 'mdi:gauge-full',
+  level_static: 'mdi:hydraulic-oil-level',
+  manhole_cover: 'mdi:cylinder',
+  ng_flood_buried: 'mdi:pipe-leak',
+  ng_flood_sidewall: 'mdi:waves-arrow-up',
+  water_cod: 'mdi:test-tube',
+  water_nh3n: 'mdi:molecule',
+  water_ph: 'mdi:ph',
+  water_sdt: 'mdi:water-opacity',
+  // —— 旧 mock 别名（与 FE 工业默认同图） ——
+  flood_buried: 'mdi:pipe-leak',
+  flood_sidewall: 'mdi:waves-arrow-up',
+  water_quality: 'mdi:water-opacity',
+  pipe_pressure: 'mdi:gauge-full',
+  pump_unit: 'mdi:water-pump',
   rain_gauge: 'mdi:weather-pouring',
-  flow_doppler: 'mdi:waves',
-  water_cod: 'mdi:flask-outline',
-  probe: 'mdi:antenna',
+  probe: 'mdi:thermometer-lines',
   uncategorized: 'mdi:help-box-outline',
-  device: 'mdi:devices',
+  device: 'mdi:chip',
+  // —— FE 工业角色别名 ——
+  gateway: 'mdi:router-wireless',
+  valve: 'mdi:pipe-valve',
+  meter: 'mdi:meter-electric',
+  sensor: 'mdi:access-point',
+  camera: 'mdi:cctv',
+  cabinet: 'mdi:server',
+  fan: 'mdi:fan',
+  boiler: 'mdi:water-boiler',
+  tank: 'mdi:barrel',
+  generator: 'mdi:engine',
 };
 
 /** 名称 → code 短尾兼容（无 code / 合成桶时） */
@@ -37,12 +62,21 @@ const CATEGORY_CODE_BY_NAME = {
   '一体机': 'aio',
   '积水仪地埋': 'flood_buried',
   '积水仪侧壁': 'flood_sidewall',
+  '新一代积水仪地埋': 'ng_flood_buried',
+  '新一代积水仪侧壁': 'ng_flood_sidewall',
   '水质监测站': 'water_quality',
   '管网压力表': 'pipe_pressure',
   '泵站机组': 'pump_unit',
   '雨量计': 'rain_gauge',
   '多普勒流量计': 'flow_doppler',
+  '流速水位计': 'flow_vel_level',
+  '压力液位': 'level_pressure',
+  '静压液位': 'level_static',
+  '井盖监测': 'manhole_cover',
   'COD 水质': 'water_cod',
+  '氨氮水质': 'water_nh3n',
+  'pH 水质': 'water_ph',
+  '浊度水质': 'water_sdt',
   '未分类': 'uncategorized',
 };
 
@@ -79,6 +113,50 @@ const ICON_CATALOG = [
   { id: 'mdi:alert-circle-outline', labelZh: '告警' },
   { id: 'mdi:lightning-bolt', labelZh: '电力' },
   { id: 'mdi:fan', labelZh: '风机' },
+  // —— 工业 / 市政 / IoT 扩展 ——
+  { id: 'mdi:pipe-valve', labelZh: '管道阀门' },
+  { id: 'mdi:pipe-disconnected', labelZh: '管道断开' },
+  { id: 'mdi:pipe-leak', labelZh: '管道泄漏' },
+  { id: 'mdi:leak', labelZh: '泄漏' },
+  { id: 'mdi:water-pump', labelZh: '水泵' },
+  { id: 'mdi:water-boiler', labelZh: '锅炉' },
+  { id: 'mdi:water-well', labelZh: '水井' },
+  { id: 'mdi:waves-arrow-up', labelZh: '流速/水位升' },
+  { id: 'mdi:fire-hydrant', labelZh: '消防栓' },
+  { id: 'mdi:hydraulic-oil-temperature', labelZh: '油温/液压温' },
+  { id: 'mdi:meter-electric', labelZh: '电表' },
+  { id: 'mdi:speedometer', labelZh: '转速/流速表' },
+  { id: 'mdi:turbine', labelZh: '涡轮' },
+  { id: 'mdi:air-filter', labelZh: '过滤器' },
+  { id: 'mdi:smoke-detector', labelZh: '烟感' },
+  { id: 'mdi:electric-switch', labelZh: '电气开关' },
+  { id: 'mdi:current-ac', labelZh: '交流电' },
+  { id: 'mdi:sine-wave', labelZh: '波形' },
+  { id: 'mdi:transmission-tower', labelZh: '输电塔' },
+  { id: 'mdi:router-wireless', labelZh: '无线路由' },
+  { id: 'mdi:access-point-network', labelZh: '网络接入点' },
+  { id: 'mdi:radio-tower', labelZh: '无线电塔' },
+  { id: 'mdi:camera-outline', labelZh: '摄像头(线框)' },
+  { id: 'mdi:chart-timeline-variant', labelZh: '时序曲线' },
+  { id: 'mdi:database', labelZh: '数据库' },
+  { id: 'mdi:cloud-sync', labelZh: '云同步' },
+  { id: 'mdi:robot-industrial', labelZh: '工业机器人' },
+  { id: 'mdi:factory', labelZh: '工厂' },
+  { id: 'mdi:warehouse', labelZh: '仓库' },
+  { id: 'mdi:barrel', labelZh: '桶罐' },
+  { id: 'mdi:propane-tank', labelZh: '储罐' },
+  { id: 'mdi:cylinder', labelZh: '井盖/柱体' },
+  { id: 'mdi:molecule', labelZh: '分子/氨氮' },
+  { id: 'mdi:ph', labelZh: 'pH' },
+  { id: 'mdi:water-opacity', labelZh: '浊度/透明度' },
+  // —— 与 FE INDUSTRIAL_ICON_PRESETS 对齐补齐 ——
+  { id: 'mdi:gauge-full', labelZh: '满量程压力表' },
+  { id: 'mdi:test-tube', labelZh: '试管/COD' },
+  { id: 'mdi:thermometer-lines', labelZh: '多路温度探头' },
+  { id: 'mdi:server', labelZh: '机柜/服务器' },
+  { id: 'mdi:engine', labelZh: '发电机/引擎' },
+  { id: 'mdi:battery-charging-wireless', labelZh: '无线充电/电池' },
+  { id: 'mdi:water-alert', labelZh: '水质告警' },
 ];
 
 const FALLBACK_ICONIFY = DEFAULT_CODE_TO_ICONIFY.device;
