@@ -1072,6 +1072,11 @@ table.data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   margin: 0 0 10px;
   letter-spacing: 0.02em;
 }
+.cockpit-cat-children-band-title-count {
+  font-weight: 500;
+  color: #8c8c8c;
+  letter-spacing: 0;
+}
 .cockpit-cat-chips {
   display: flex;
   flex-wrap: wrap;

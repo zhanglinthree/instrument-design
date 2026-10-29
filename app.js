@@ -1213,9 +1213,11 @@ createApp({
       const distSum = aio.count
         + otherRows.reduce((s, r) => s + r.count, 0)
         + (uncategorized ? uncategorized.count : 0);
+      const childrenTotal = childRows.reduce((s, r) => s + r.count, 0);
       return {
         aio,
         children: childRows,
+        childrenTotal,
         others: otherRows,
         uncategorized,
         distSum,
@@ -2639,7 +2641,7 @@ createApp({
               v-if="cockpitCategoryDist.children.length"
               class="cockpit-cat-children-band"
             >
-              <div class="cockpit-cat-children-band-title">一体机 · 子设备类型</div>
+              <div class="cockpit-cat-children-band-title">一体机 · 子设备类型<span class="cockpit-cat-children-band-title-count">（{{ cockpitCategoryDist.childrenTotal }}）</span></div>
               <div class="cockpit-cat-chips">
                 <button
                   v-for="c in cockpitCategoryDist.children"
