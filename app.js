@@ -678,6 +678,16 @@ createApp({
     const deviceMasterFilter = ref('');
     const showProbeDevices = ref(false);
     function isProbeAepId(id) { return !!(id && String(id).startsWith('probe:')); }
+    /** 子设备：挂父一体机（有 masterId）或 aepDeviceId 为 probe: 合成键 */
+    function isChildDevice(d) {
+      if (!d) return false;
+      return !!(d.masterId) || isProbeAepId(d.aepDeviceId);
+    }
+    /** 一体机/主机：无 masterId、非 probe，且存在挂靠其子设备 */
+    function isHubDevice(d) {
+      if (!d || isChildDevice(d)) return false;
+      return deviceList.value.some(x => x.masterId === d.id);
+    }
     function displayAepDeviceId(id) {
       if (!id) return '—';
       if (isProbeAepId(id)) return id + '（合成键，非真 AEP ID）';
@@ -2636,7 +2646,7 @@ createApp({
       showProjectModal, projectModalMode, projectForm,
       openCreateProject, openEditProject, saveProject, openAllDevices, openDevicesForProject, openDevicesForProjectLifecycle, openDevicesForCategory, openDevicesForLifecycle, LIFECYCLE_TO_STATUS,
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
-      deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, showProbeDevices, isProbeAepId, displayAepDeviceId,
+      deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, showProbeDevices, isProbeAepId, isChildDevice, isHubDevice, displayAepDeviceId,
       filteredDevices, deviceStats, currentDevice, openDeviceDetail,
       deviceDetailTab, setDeviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
       dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
@@ -3366,7 +3376,11 @@ createApp({
                 <tr v-for="d in filteredDevices" :key="d.id">
                   <td><input type="checkbox" :checked="selectedDeviceIds.includes(d.id)" @change="toggleSelectDevice(d.id)" /></td>
                   <td><code>{{ d.imei }}</code></td>
-                  <td><a class="btn-link btn" style="padding:0" @click="openDeviceDetail(d)">{{ d.name }}</a></td>
+                  <td>
+                    <a class="btn-link btn" style="padding:0" @click="openDeviceDetail(d)">{{ d.name }}</a>
+                    <span v-if="isChildDevice(d)" class="tag tag-blue" style="margin-left:6px" title="挂靠父一体机的子设备/探头">子设备</span>
+                    <span v-else-if="isHubDevice(d)" class="tag tag-green" style="margin-left:6px" title="一体机主机，可查看其下子设备">一体机</span>
+                  </td>
                   <td>
                     <span v-if="!d.projectId" class="tag tag-orange">未定义项目</span>
                     <span v-else>{{ d.projectName }}</span>
@@ -3407,7 +3421,7 @@ createApp({
             <button class="page-btn active">1</button>
             <button class="page-btn">›</button>
           </div>
-          <div class="table-note">品类默认由归属规则自动匹配；「挂靠规则」列=categoryRuleId（含 fallback:型号）。列表默认隐藏 aepDeviceId 以 probe: 开头的探头子设备（选主机或勾选「显示探头」可见）。probe:{SN} 为合成键，真 AEP ID 看父一体机。</div>
+          <div class="table-note">品类默认由归属规则自动匹配；「挂靠规则」列=categoryRuleId（含 fallback:型号）。列表默认隐藏 aepDeviceId 以 probe: 开头的探头子设备（选主机或勾选「显示探头」可见）；露出后名称旁标「子设备」，一体机主机标「一体机」。probe:{SN} 为合成键，真 AEP ID 看父一体机。</div>
         </div>
 
         <!-- ===== 设备台账：设备档案详情 ===== -->
@@ -3415,7 +3429,11 @@ createApp({
           <button class="back-link" @click="goDevices">← 返回设备列表</button>
           <div class="detail-top">
             <div>
-              <h1 class="page-title">{{ currentDevice.name }}</h1>
+              <h1 class="page-title" style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span>{{ currentDevice.name }}</span>
+                <span v-if="isChildDevice(currentDevice)" class="tag tag-blue" title="挂靠父一体机的子设备/探头">子设备</span>
+                <span v-else-if="isHubDevice(currentDevice)" class="tag tag-green" title="一体机主机">一体机</span>
+              </h1>
               <div class="detail-meta">
                 <span>IMEI：<b>{{ currentDevice.imei }}</b></span>
                 <span>项目：
@@ -3448,7 +3466,10 @@ createApp({
           </div>
 
           <div class="device-sticky-bar" title="切 Tab 时置顶可见">
-            <div class="sticky-chip"><span class="sk">名称</span><b>{{ currentDevice.name }}</b></div>
+            <div class="sticky-chip"><span class="sk">名称</span><b>{{ currentDevice.name }}</b>
+              <span v-if="isChildDevice(currentDevice)" class="tag tag-blue" style="margin-left:6px">子设备</span>
+              <span v-else-if="isHubDevice(currentDevice)" class="tag tag-green" style="margin-left:6px">一体机</span>
+            </div>
             <div class="sticky-chip"><span class="sk">IMEI</span><code>{{ currentDevice.imei }}</code></div>
             <div class="sticky-chip"><span class="sk">设备序列号</span><code>{{ currentDevice.deviceSn || '—' }}</code></div>
             <div class="sticky-chip"><span class="sk">品类</span><b>{{ currentDevice.categoryName || '未分类' }}</b></div>
@@ -3612,7 +3633,7 @@ createApp({
                 <tbody>
                   <tr v-for="s in currentDeviceSlaves" :key="s.id">
                     <td><code>{{ s.imei }}</code></td>
-                    <td>{{ s.name }}</td>
+                    <td>{{ s.name }} <span class="tag tag-blue" style="margin-left:4px">子设备</span></td>
                     <td>
                       <span v-if="isProbeAepId(s.aepDeviceId)" class="tag tag-gray">{{ s.aepDeviceId }}</span>
                       <span v-else>{{ s.aepDeviceId || '—' }}</span>
