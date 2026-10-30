@@ -279,7 +279,7 @@ const PROJECTS = [
 ];
 
 const DEVICES = [
-  { id: 'D001', imei: 'MF20260901001', deviceSn: 'MF20260901001', aepStatus: 1, lastReportAt: '2026-09-29 18:20', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', categoryRuleId: 'R101', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153576, lat: 30.287459, address: '杭州市上城区东湖路与环城东路交叉口东南侧检查井', installDate: '2026-04-12', installer: '张伟', masterId: '', masterImei: '', slaves: ['D002', 'D015'], photos: ['现场全景', '井内安装', '铭牌特写'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.3', well_no: 'JW-2026-001', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
+  { id: 'D001', imei: 'MF20260901001', deviceSn: 'MF20260901001', aepStatus: 1, lastReportAt: '2026-09-29 18:20', name: '东湖路井-01', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', categoryRuleId: 'R101', lifecycle: '在线', aepDeviceId: 'AEP-DEV-10001', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153576, lat: 30.287459, address: '杭州市上城区东湖路与环城东路交叉口东南侧检查井', installDate: '2026-04-12', installer: '张伟', masterId: '', masterImei: '', slaves: ['D002', 'D015', 'D016'], photos: ['现场全景', '井内安装', '铭牌特写'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.3', well_no: 'JW-2026-001', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
   { id: 'D002', imei: 'MF20260901002', deviceSn: 'MF20260901002', aepStatus: 1, lastReportAt: '2026-09-29 18:20', name: '东湖路井-01从机', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', categoryRuleId: 'R101', lifecycle: '在线', aepDeviceId: 'probe:MF20260901002', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153610, lat: 30.287480, address: '杭州市上城区东湖路检查井（从机）', installDate: '2026-04-12', installer: '张伟', masterId: 'D001', masterImei: 'MF20260901001', slaves: [], photos: ['从机安装'], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.5', well_no: 'JW-2026-001-S', cover_type: '铸铁' }, updatedAt: '2026-09-29 18:20' },
   { id: 'D003', imei: 'MF20260520011', deviceSn: 'MF20260520011', aepStatus: 2, lastReportAt: '2026-09-28 09:11', name: '南湖入口站', projectId: 'PJ02', projectName: '南湖水质专项', categoryId: 'C002', categoryName: '水质监测站', categoryMatch: 'auto', categoryRuleId: 'R201', lifecycle: '离线', aepDeviceId: 'AEP-DEV-20011', model: 'MF-WQ-200', firmware: '2.0.1', lng: 120.148220, lat: 30.265110, address: '南湖公园北门入湖口', installDate: '2026-06-01', installer: '刘洋', masterId: '', masterImei: '', slaves: [], photos: ['站房外观', '采水口'], installParams: { sample_depth: '1.2', station_code: 'NH-IN-01' }, updatedAt: '2026-09-28 09:11' },
   { id: 'D004', imei: 'MF20251108088', deviceSn: 'MF20251108088', aepStatus: 9, lastReportAt: '2026-08-10 14:00', name: '解放路压力-12', projectId: 'PJ03', projectName: '老城供水管网', categoryId: 'C003', categoryName: '管网压力表', categoryMatch: 'manual', categoryRuleId: '', lifecycle: '停用', aepDeviceId: '', model: 'MF-PP-50', firmware: '0.9.0', lng: 120.165001, lat: 30.274880, address: '解放路 88 号门前阀门井', installDate: '2025-12-05', installer: '孙磊', masterId: '', masterImei: '', slaves: [], photos: [], installParams: { pipe_diameter: '300', install_depth: '1.5' }, updatedAt: '2026-08-10 14:00' },
@@ -485,6 +485,7 @@ const DEVICE_SEND_LOGS = [
     success: 1, dryRun: 0,
     sendTime: '2026-10-14 09:20:11'
   },
+  { id: 'D016', imei: 'MF20260901004', deviceSn: 'MF20260901004', aepStatus: 1, lastReportAt: '2026-10-30 10:00', name: '东湖路井-01探头·未分类', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: '', categoryName: '未分类', categoryMatch: 'none', categoryRuleId: '', lifecycle: '在线', aepDeviceId: 'probe:MF20260901004', model: 'UNKNOWN', firmware: '', lng: 120.153630, lat: 30.287500, address: '东湖路检查井（未归类探头）', installDate: '2026-10-30', installer: '张伟', masterId: 'D001', masterImei: 'MF20260901001', slaves: [], photos: [], installParams: {}, updatedAt: '2026-10-30 10:00' },
   {
     id: 'SL002', deviceId: 'D001',
     identifiers: 'sampleInterval',
@@ -677,6 +678,8 @@ createApp({
     const deviceImeiSearch = ref('');
     const deviceMasterFilter = ref('');
     const showProbeDevices = ref(false);
+    /** 子设备条带下钻：筛「其下有该子品类/未分类探头」的一体机；''=不启用 */
+    const deviceSlaveCategoryFilter = ref('');
     function isProbeAepId(id) { return !!(id && String(id).startsWith('probe:')); }
     /** 子设备：挂父一体机（有 masterId）或 aepDeviceId 为 probe: 合成键 */
     function isChildDevice(d) {
@@ -838,6 +841,13 @@ createApp({
           if (d.masterId || isProbeAepId(d.aepDeviceId)) return false;
         } else if (deviceCategoryFilter.value && d.categoryId !== deviceCategoryFilter.value) {
           return false;
+        }
+        /* 子设备条带：仅保留「其下有对应品类/未分类子设备」的一体机 */
+        if (deviceSlaveCategoryFilter.value) {
+          const want = deviceSlaveCategoryFilter.value;
+          const kids = deviceList.value.filter(x => x.masterId === d.id || (isProbeAepId(x.aepDeviceId) && x.masterId === d.id));
+          const hit = kids.some(x => want === '__uncat__' ? !x.categoryId : x.categoryId === want);
+          if (!hit) return false;
         }
         if (deviceLifecycleFilter.value && d.lifecycle !== deviceLifecycleFilter.value) return false;
         if (masterOnly && d.masterId !== masterOnly && d.id !== masterOnly) return false;
@@ -1714,6 +1724,7 @@ createApp({
       deviceLifecycleFilter.value = '';
       deviceImeiSearch.value = '';
       deviceMasterFilter.value = '';
+      deviceSlaveCategoryFilter.value = '';
       showProbeDevices.value = false;
       selectedDeviceIds.value = [];
       goDevices();
@@ -1726,6 +1737,7 @@ createApp({
       deviceLifecycleFilter.value = '';
       deviceImeiSearch.value = '';
       deviceMasterFilter.value = '';
+      deviceSlaveCategoryFilter.value = '';
       selectedDeviceIds.value = [];
       goDevices();
     }
@@ -1750,6 +1762,7 @@ createApp({
       deviceCategoryFilter.value = '';
       deviceImeiSearch.value = '';
       deviceMasterFilter.value = '';
+      deviceSlaveCategoryFilter.value = '';
       selectedDeviceIds.value = [];
       goDevices();
     }
@@ -1757,20 +1770,30 @@ createApp({
     /**
      * 品类侧双向挂靠：跳转台账并按品类筛选。
      * - 普通品类 id → deviceCategoryFilter=id
-     * - 「未分类」/ __uncat__ / uncategorized → deviceCategoryFilter='__uncat__'（空 categoryId）
-     * - 一体机 aio / code=aio → deviceCategoryFilter='aio'（仅主机/hub，无 masterId 且非 probe）
+     * - 顶层「未分类」→ deviceCategoryFilter='__uncat__'（空 categoryId 设备）
+     * - 一体机 aio → deviceCategoryFilter='aio'（仅主机）
+     * - 子设备条带 role=child：进一体机列表，并按「其下有该子品类/未分类探头」筛主机（deviceSlaveCategoryFilter）
      */
     function openDevicesForCategory(c) {
       const raw = typeof c === 'string' ? c : (c && (c.id || c.code));
-      const uncategorized = (typeof c === 'object' && c && c.uncategorized) || raw === '__uncat__' || raw === 'uncategorized';
-      deviceCategoryFilter.value = uncategorized ? '__uncat__' : (raw || '');
+      const role = (typeof c === 'object' && c && c.role) || '';
+      const uncategorized = (typeof c === 'object' && c && c.uncategorized) || raw === '__uncat__' || raw === 'uncategorized' || raw === '__child_uncat__';
       deviceProjectFilter.value = '';
       deviceLifecycleFilter.value = '';
       deviceImeiSearch.value = '';
       deviceMasterFilter.value = '';
-      /* 一体机/未分类需露出相关行；子品类点击时显示探头以便看到子设备 */
-      showProbeDevices.value = deviceCategoryFilter.value !== 'aio';
       selectedDeviceIds.value = [];
+      if (role === 'child') {
+        /* 点子类型/未分类 → 有对应子设备的一体机父列表，再进详情看探头 */
+        deviceCategoryFilter.value = 'aio';
+        deviceSlaveCategoryFilter.value = uncategorized ? '__uncat__' : (raw || '');
+        showProbeDevices.value = false;
+        goDevices();
+        return;
+      }
+      deviceSlaveCategoryFilter.value = '';
+      deviceCategoryFilter.value = uncategorized ? '__uncat__' : (raw || '');
+      showProbeDevices.value = deviceCategoryFilter.value !== 'aio';
       goDevices();
     }
 
@@ -1785,6 +1808,7 @@ createApp({
       deviceCategoryFilter.value = '';
       deviceImeiSearch.value = '';
       deviceMasterFilter.value = '';
+      deviceSlaveCategoryFilter.value = '';
       selectedDeviceIds.value = [];
       goDevices();
       /* FE mirror: GET devices?status=LIFECYCLE_TO_STATUS[lc] */
@@ -2646,7 +2670,7 @@ createApp({
       showProjectModal, projectModalMode, projectForm,
       openCreateProject, openEditProject, saveProject, openAllDevices, openDevicesForProject, openDevicesForProjectLifecycle, openDevicesForCategory, openDevicesForLifecycle, LIFECYCLE_TO_STATUS,
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
-      deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, showProbeDevices, isProbeAepId, isChildDevice, isHubDevice, displayAepDeviceId,
+      deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, deviceSlaveCategoryFilter, showProbeDevices, isProbeAepId, isChildDevice, isHubDevice, displayAepDeviceId,
       filteredDevices, deviceStats, currentDevice, openDeviceDetail,
       deviceDetailTab, setDeviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
       dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
@@ -2846,7 +2870,7 @@ createApp({
                   type="button"
                   class="cockpit-cat-chip"
                   :class="{ empty: c.empty, warn: c.uncategorized }"
-                  :title="'筛选一体机下该子设备类型：' + c.name"
+                  :title="'查看拥有该子类型探头的一体机：' + c.name"
                   @click="openDevicesForCategory(c)"
                 >
                   <iconify-icon class="cat-icon cat-icon-chip" :icon="resolveCategoryIcon(c)" width="20" height="20" aria-hidden="true"></iconify-icon>
@@ -3321,7 +3345,7 @@ createApp({
           <div class="page-header">
             <div>
               <button class="back-link" @click="goProjects">← 返回项目列表</button>
-              <h1 class="page-title">{{ deviceProjectFilter===UNASSIGNED_PROJECT_ID ? '例外池 · 未定义项目' : (deviceCategoryFilter ? ('设备列表 · ' + categoryName(deviceCategoryFilter)) : '设备列表') }}</h1>
+              <h1 class="page-title">{{ deviceProjectFilter===UNASSIGNED_PROJECT_ID ? '例外池 · 未定义项目' : (deviceSlaveCategoryFilter ? ('一体机列表 · 含子设备「' + categoryName(deviceSlaveCategoryFilter) + '」') : (deviceCategoryFilter ? ('设备列表 · ' + categoryName(deviceCategoryFilter)) : '设备列表')) }}</h1>
               <p class="page-desc" v-if="deviceProjectFilter===UNASSIGNED_PROJECT_ID">例外池：SDK 缺产品 / 临时设备等；非主路径。主路径为 OpenAPI 绑定自动创建项目与设备（仅 projectId 为空时写入）。人工改挂为例外处理。</p>
               <p class="page-desc" v-else-if="deviceCategoryFilter">已按物模型品类「{{ categoryName(deviceCategoryFilter) }}」筛选（双向挂靠）。品类匹配标签见「匹配」列；多数为自动匹配。</p>
               <p class="page-desc" v-else>按项目 / 品类 / 生命周期筛选。主路径 OpenAPI 绑定自动建档；例外池与人工改挂仅用于异常场景。支持导入导出与 AEP 对账。</p>
@@ -3362,7 +3386,7 @@ createApp({
             <label class="hint" style="display:inline-flex;align-items:center;gap:4px;margin:0;white-space:nowrap">
               <input type="checkbox" v-model="showProbeDevices" /> 显示探头子设备
             </label>
-            <button class="btn" @click="deviceProjectFilter=''; deviceCategoryFilter=''; deviceLifecycleFilter=''; deviceImeiSearch=''; deviceMasterFilter=''; showProbeDevices=false; selectedDeviceIds=[]">重置</button>
+            <button class="btn" @click="deviceProjectFilter=''; deviceCategoryFilter=''; deviceLifecycleFilter=''; deviceImeiSearch=''; deviceMasterFilter=''; deviceSlaveCategoryFilter=''; showProbeDevices=false; selectedDeviceIds=[]">重置</button>
           </div>
           <div class="table-wrap">
             <table class="data-table">
