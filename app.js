@@ -276,7 +276,7 @@ const COMMANDS = [
     params: { value: { label: '开启角度', min: 0, max: 180, unit: '°', default: 35 } } },
   { id: 'CMD71', categoryId: 'C007', code: 'changeDeviceSn', name: '更改设备号', hasParam: 1, bitIndex: 23, payloadOffset: 74, dataType: 'string', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 23；内容起始字节 74–80（7 字节设备号）；params.value',
     params: { value: { label: '新设备号', min: null, max: null, unit: '', len: 7 } } },
-  { id: 'CMD72', categoryId: 'C007', code: 'installBaselinePose', name: '记录安装基准(补偿)姿态', hasParam: 0, bitIndex: 24, payloadOffset: 81, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 24；内容起始字节 81（0xF0 记录补偿姿态 / 0x0F 清除）', params: null },
+  { id: 'CMD72', categoryId: 'C007', code: 'recordInstallAttitude', name: '记录安装基准(补偿)姿态', hasParam: 0, bitIndex: 24, payloadOffset: 81, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 24；内容起始字节 81（0xF0 记录补偿姿态 / 0x0F 清除）', params: null },
   { id: 'CMD73', categoryId: 'C007', code: 'bootUpgrade', name: 'BOOT升级', hasParam: 0, bitIndex: 25, payloadOffset: 82, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 25；内容起始字节 82（0xF0 升级 BOOT / 0x0F 不升级）', params: null },
 ];
 
