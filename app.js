@@ -8,6 +8,7 @@ const CATEGORIES = [
   { id: 'C003', name: '管网压力表', code: 'pipe_pressure', icon: 'mdi:gauge', industry: '供水', deviceCount: 0, modelVersion: 'v0.9.0', updatedAt: '2026-09-20 16:45', status: '草稿', ruleCount: 2 },
   { id: 'C004', name: '泵站机组', code: 'pump_unit', icon: 'mdi:pump', industry: '市政排水', deviceCount: 34, modelVersion: 'v1.0.3', updatedAt: '2026-09-18 11:30', status: '启用', ruleCount: 2 },
   { id: 'C005', name: '雨量计', code: 'rain_gauge', icon: 'mdi:weather-pouring', industry: '气象水文', deviceCount: 12, modelVersion: 'v1.1.0', updatedAt: '2026-09-12 08:05', status: '停用', ruleCount: 2 },
+  { id: 'C007', name: '智能井盖', code: 'manhole_cover', icon: 'mdi:cylinder', industry: '市政排水', deviceCount: 0, modelVersion: 'v0.1.0', updatedAt: '2026-10-30 18:00', status: '草稿', ruleCount: 1 },
 ];
 
 /* ========== 品类图标（Iconify）==========
@@ -175,6 +176,7 @@ const CATEGORY_RULES = [
   { id: 'R402', categoryId: 'C004', name: '变频柜例外', type: '特殊', matchAepProduct: 'AEP-PU-3012-VFD', matchProtocol: 'Modbus-TCP / vfd', priority: 12, enabled: true, note: '变频柜优先特殊规则' },
   { id: 'R501', categoryId: 'C005', name: '雨量计通用匹配', type: '通用', matchAepProduct: 'AEP-RG-5001', matchProtocol: 'MQTT / rain-gauge', priority: 100, enabled: true, note: '默认匹配雨量产品' },
   { id: 'R502', categoryId: 'C005', name: '翻斗式例外', type: '特殊', matchAepProduct: 'AEP-RG-5001-T', matchProtocol: 'RS485 / tipping-bucket', priority: 18, enabled: true, note: '翻斗式雨量计特殊处理' },
+  { id: 'R701', categoryId: 'C007', name: '智能井盖 · 标准产品通用匹配', type: '通用', matchAepProduct: 'AEP-MC-7001', matchProtocol: 'MQTT / manhole-cmd-v1', priority: 100, enabled: true, note: '智能井盖命令包（含开启角度/改号/补偿姿态/BOOT）' },
 ];
 
 /* 上报属性（kind=property）：按品类挂靠，在线监控动态列取自本品类定义 */
@@ -230,6 +232,7 @@ const FIRMWARES = [
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
  * 积水仪 FAFA…ADAD：字节17–24 为命令开关（bitIndex 1-based，bit=1 执行；位 9 空缺）；
+ * 智能井盖：命令位 17/23/24/25；内容区字节 73（角度）/74–80（设备号）/81（补偿姿态）/82（BOOT）。
  * payloadOffset 为内容区 1-based 绝对起始字节（内容从该字节起写入）。
  * 字段对齐后端 kind=service：bitIndex / payloadOffset / hasParam / paramMin / paramMax + identifier·name·dataType·unit·required·access。
  * 真正下发走 AEP CreateCommand（透传 hex，dataType=2） */
@@ -267,6 +270,14 @@ const COMMANDS = [
       midMin: { label: '中', min: 1, max: 255, unit: 'min' },
       shortMin: { label: '短', min: 1, max: 255, unit: 'min' }
     } },
+
+  /* 智能井盖 C007：命令代码 17/23/24/25；内容区字节 73–82 */
+  { id: 'CMD70', categoryId: 'C007', code: 'openAngleDeg', name: '修改判断开启角度', hasParam: 1, bitIndex: 17, payloadOffset: 73, dataType: 'int', unit: '°', required: true, access: 'w', paramMin: 0, paramMax: 180, enabled: true, desc: '命令位 17；内容起始字节 73（1 字节，0°–180°，默认 35°）；params.value',
+    params: { value: { label: '开启角度', min: 0, max: 180, unit: '°', default: 35 } } },
+  { id: 'CMD71', categoryId: 'C007', code: 'changeDeviceNo', name: '更改设备号', hasParam: 1, bitIndex: 23, payloadOffset: 74, dataType: 'string', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 23；内容起始字节 74–80（7 字节设备号）；params.value',
+    params: { value: { label: '新设备号', min: null, max: null, unit: '', len: 7 } } },
+  { id: 'CMD72', categoryId: 'C007', code: 'installBaselinePose', name: '记录安装基准(补偿)姿态', hasParam: 0, bitIndex: 24, payloadOffset: 81, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 24；内容起始字节 81（0xF0 记录补偿姿态 / 0x0F 清除）', params: null },
+  { id: 'CMD73', categoryId: 'C007', code: 'bootUpgrade', name: 'BOOT升级', hasParam: 0, bitIndex: 25, payloadOffset: 82, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 25；内容起始字节 82（0xF0 升级 BOOT / 0x0F 不升级）', params: null },
 ];
 
 /* ========== 设备台账 Mock ========== */
@@ -1876,6 +1887,8 @@ createApp({
     }
 
     function defaultParamsForCommand(cmd) {
+      if (cmd && cmd.code === 'openAngleDeg') return { value: 35 };
+      if (cmd && cmd.code === 'changeDeviceNo') return { value: '' };
       const fields = getCommandParamFields(cmd);
       const out = {};
       for (const f of fields) {
