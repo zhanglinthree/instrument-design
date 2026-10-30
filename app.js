@@ -272,9 +272,9 @@ const COMMANDS = [
     } },
 
   /* 智能井盖 C007：命令代码 17/23/24/25；内容区字节 73–82 */
-  { id: 'CMD70', categoryId: 'C007', code: 'openAngleDeg', name: '修改判断开启角度', hasParam: 1, bitIndex: 17, payloadOffset: 73, dataType: 'int', unit: '°', required: true, access: 'w', paramMin: 0, paramMax: 180, enabled: true, desc: '命令位 17；内容起始字节 73（1 字节，0°–180°，默认 35°）；params.value',
+  { id: 'CMD70', categoryId: 'C007', code: 'openAngle', name: '修改判断开启角度', hasParam: 1, bitIndex: 17, payloadOffset: 73, dataType: 'int', unit: '°', required: true, access: 'w', paramMin: 0, paramMax: 180, enabled: true, desc: '命令位 17；内容起始字节 73（1 字节，0°–180°，默认 35°）；params.value',
     params: { value: { label: '开启角度', min: 0, max: 180, unit: '°', default: 35 } } },
-  { id: 'CMD71', categoryId: 'C007', code: 'changeDeviceNo', name: '更改设备号', hasParam: 1, bitIndex: 23, payloadOffset: 74, dataType: 'string', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 23；内容起始字节 74–80（7 字节设备号）；params.value',
+  { id: 'CMD71', categoryId: 'C007', code: 'changeDeviceSn', name: '更改设备号', hasParam: 1, bitIndex: 23, payloadOffset: 74, dataType: 'string', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 23；内容起始字节 74–80（7 字节设备号）；params.value',
     params: { value: { label: '新设备号', min: null, max: null, unit: '', len: 7 } } },
   { id: 'CMD72', categoryId: 'C007', code: 'installBaselinePose', name: '记录安装基准(补偿)姿态', hasParam: 0, bitIndex: 24, payloadOffset: 81, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 24；内容起始字节 81（0xF0 记录补偿姿态 / 0x0F 清除）', params: null },
   { id: 'CMD73', categoryId: 'C007', code: 'bootUpgrade', name: 'BOOT升级', hasParam: 0, bitIndex: 25, payloadOffset: 82, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 25；内容起始字节 82（0xF0 升级 BOOT / 0x0F 不升级）', params: null },
@@ -322,6 +322,13 @@ const TRANSFER_LOGS = [
   { id: 'TL1', deviceId: 'D001', imei: 'MF20260901001', deviceName: '东湖路井-01', fromProjectId: null, fromProjectName: '未定义项目', toProjectId: 'PJ01', toProjectName: '城东排涝一期', operator: '王建国', time: '2026-04-12 10:20', note: '例外处理：现场确认后人工改挂至城东项目' },
   { id: 'TL2', deviceId: 'D003', imei: 'MF20260520011', deviceName: '南湖入口站', fromProjectId: 'PJ04', fromProjectName: '滨江泵站改造', toProjectId: 'PJ02', toProjectName: '南湖水质专项', operator: '李敏', time: '2026-06-02 15:40', note: '例外处理：项目范围调整，人工改挂' },
 ];
+
+/* 设备号变更记录 · 更改设备号指令成功后落库，便于追溯 */
+const DEVICE_SN_CHANGE_LOGS = [
+  { id: 'SN1', deviceId: 'D001', oldSn: 'MF20260901001', newSn: 'MF20260901999', operator: '张伟', time: '2026-10-28 14:22', source: '指令下发', commandId: 'AEP-CMD-SN-001', commandCode: 'changeDeviceSn', result: '成功', note: '现场铭牌与台账不一致，改号对齐' },
+  { id: 'SN2', deviceId: 'D001', oldSn: 'MF20260901999', newSn: 'MF20260901001', operator: '王建国', time: '2026-10-29 09:05', source: '指令下发', commandId: 'AEP-CMD-SN-002', commandCode: 'changeDeviceSn', result: '成功', note: '回滚为原设备号' },
+];
+
 
 const LIFECYCLES = ['待接入', '在线', '离线', '停用', '报废'];
 const LC_CLASS = { '待接入': 'lc-pending', '在线': 'lc-online', '离线': 'lc-offline', '停用': 'lc-disabled', '报废': 'lc-scrapped' };
@@ -720,10 +727,11 @@ createApp({
       targetProjectId: 'PJ01', note: '', operator: '张三', deviceIds: []
     });
     const transferLogs = ref(TRANSFER_LOGS.map(t => ({ ...t })));
+    const deviceSnChangeLogs = ref(typeof DEVICE_SN_CHANGE_LOGS !== 'undefined' ? DEVICE_SN_CHANGE_LOGS.map(t => ({ ...t })) : []);
     const showCategoryOverride = ref(false);
 
     /* ---- 设备档案 · Tab：档案 / 本机数据 / 指令 / 设备发送记录 / 子设备 ---- */
-    const deviceDetailTab = ref('profile'); // profile | localData | dispatch | sendLog | children
+    const deviceDetailTab = ref('profile'); // profile | localData | dispatch | sendLog | snChange | children
     const packetTypeFilter = ref(''); // '' | message* | data* | upgrade65535 | command
     const expandedPacketIds = ref([]); // hex 展开行
     const dispatchSelected = ref([]); // command ids
@@ -877,6 +885,14 @@ createApp({
       const d = currentDevice.value;
       if (!d) return [];
       return transferLogs.value.filter(t => t.deviceId === d.id || t.imei === d.imei);
+    });
+    const currentDeviceSnChangeLogs = computed(() => {
+      const d = currentDevice.value;
+      if (!d) return [];
+      return deviceSnChangeLogs.value
+        .filter(t => t.deviceId === d.id)
+        .slice()
+        .sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
     });
 
     const deviceStats = computed(() => {
@@ -1179,6 +1195,7 @@ createApp({
             localData: '本机数据',
             dispatch: '指令',
             sendLog: '设备发送记录',
+            snChange: '设备号变更',
             children: '子设备',
           })[deviceDetailTab.value] || '档案';
           return { parent: '设备台账', current: name + ' · ' + tabLabel };
@@ -1887,8 +1904,8 @@ createApp({
     }
 
     function defaultParamsForCommand(cmd) {
-      if (cmd && cmd.code === 'openAngleDeg') return { value: 35 };
-      if (cmd && cmd.code === 'changeDeviceNo') return { value: '' };
+      if (cmd && cmd.code === 'openAngle') return { value: 35 };
+      if (cmd && cmd.code === 'changeDeviceSn') return { value: '' };
       const fields = getCommandParamFields(cmd);
       const out = {};
       for (const f of fields) {
@@ -2135,7 +2152,7 @@ createApp({
       // packets 旧 hash 并入 localData（本机数据 = 报文列表）；commandLog 旧名 → sendLog
       if (tab === 'packets') tab = 'localData';
       if (tab === 'commandLog') tab = 'sendLog';
-      const allowed = ['profile', 'localData', 'dispatch', 'sendLog', 'children'];
+      const allowed = ['profile', 'localData', 'dispatch', 'sendLog', 'snChange', 'children'];
       let next = allowed.includes(tab) ? tab : 'profile';
       // ?tab=children 无真实子设备时回落档案，避免空表长期挂着
       if (next === 'children') {
@@ -2699,7 +2716,7 @@ createApp({
       categoryMatchLabel, isUnassigned, displayProjectName,
       showDisableConfirm, openDisableDevice, doDisableDevice,
       showImportModal, importMode, openImportModal, openExportModal,
-      showTransferModal, transferForm, transferLogs, currentDeviceTransferLogs,
+      showTransferModal, transferForm, transferLogs, currentDeviceTransferLogs, deviceSnChangeLogs, currentDeviceSnChangeLogs,
       openTransferModal, confirmTransfer,
       aepDiffTab, aepLastSyncedAt, filteredAepDiffs, aepCounts, resolveAepDiff, syncFromAep,
       projectName, categoryName, resolveCategoryIcon, resolveCategoryIconKey, categoryIconifyId,
@@ -3535,6 +3552,7 @@ createApp({
             <div class="tab" :class="{active: deviceDetailTab==='localData'}" @click="setDeviceDetailTab('localData')">本机数据</div>
             <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="setDeviceDetailTab('dispatch')">指令</div>
             <div class="tab" :class="{active: deviceDetailTab==='sendLog'}" @click="setDeviceDetailTab('sendLog')">设备发送记录</div>
+            <div class="tab" :class="{active: deviceDetailTab==='snChange'}" @click="setDeviceDetailTab('snChange')">设备号变更</div>
             <div class="tab" v-if="canShowChildDevices" :class="{active: deviceDetailTab==='children'}" @click="setDeviceDetailTab('children')">子设备</div>
           </div>
 
@@ -3810,6 +3828,34 @@ createApp({
               </div>
               <div class="table-note">请求体对齐后端：commands[].params 为对象键（如 resendRange→start/end；sampleInterval→longMin/midMin/shortMin；高度类→value）。dryRun 仍预览 contentHex；真正下发 mock toast。AEP CreateCommand 透传 hex dataType=2。</div>
             </template>
+          </template>
+
+
+          <template v-else-if="deviceDetailTab==='snChange'">
+            <div class="banner-muted">设备号变更记录：执行「更改设备号」指令成功后写入，便于对账与排障。字段：旧号 / 新号 / 操作人 / 时间 / 来源 / commandId / 结果。</div>
+            <div class="table-wrap" v-if="currentDeviceSnChangeLogs.length">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>时间</th><th>旧设备号</th><th>新设备号</th><th>操作人</th><th>来源</th><th>commandId</th><th>结果</th><th>备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in currentDeviceSnChangeLogs" :key="row.id">
+                    <td>{{ row.time }}</td>
+                    <td><code>{{ row.oldSn }}</code></td>
+                    <td><code>{{ row.newSn }}</code></td>
+                    <td>{{ row.operator || '—' }}</td>
+                    <td>{{ row.source || '—' }}</td>
+                    <td><code style="font-size:12px">{{ row.commandId || '—' }}</code></td>
+                    <td><span class="tag" :class="row.result==='成功'?'tag-green':'tag-red'">{{ row.result || '—' }}</span></td>
+                    <td>{{ row.note || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="empty-hint">暂无设备号变更记录</div>
+            <div class="table-note">与发送记录区分：发送记录看整包下发；本 Tab 只留「号变更」审计链。后端建议表 iot_device_sn_change_log，指令 changeDeviceSn 成功回调写入。</div>
           </template>
 
           <template v-else-if="deviceDetailTab==='sendLog'">
