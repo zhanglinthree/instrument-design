@@ -26,6 +26,7 @@ python3 -m http.server 8877
 
 ### 物模型
 - 物模型定义**产品类型语义**（测点 / 事件 / 阈值 / 安装模板 / 固件 / **指令**）。
+- 上报属性（`kind=property`）含 **`showInMonitor`**（布尔，默认 true）：文案「监控展示」；关闭后监控详情最新值 / 曲线 / 上报明细（及列表测点列）同源过滤，不展示该测点。
 - **指令 Tab** = 配置该品类「能下什么」：**命令位（开关）** vs **内容载荷**；**不是**实时点发。字段对齐后端 `kind=service`：`bitIndex`（**1-based 命令位**）、`payloadOffset`（**1-based 内容起始字节**）、`hasParam`（0/1）、`paramMin`/`paramMax`（可空），并复用 `identifier`/`name`/`dataType`/`unit`/`required`/`access`。积水仪 `FAFA…ADAD`：字节17–24 开关（位 1–8、10–12，位 9 空缺）；内容如 reboot→字节25·`bool`·`F0/0F`，高度/对时等从各自 `payloadOffset` 起写。组包时选中指令自动置对应 bit。真正下发走 AEP CreateCommand（透传 hex，dataType=2），应答另解析入库。
 - **不再**在品类上直接绑定 AEP 产品/型号；无「绑定 AEP 产品」主流程。
 - **无解析脚本 UI**：AEP 侧已完成设备数据解析。
@@ -91,7 +92,7 @@ python3 -m http.server 8877
 
 - **数据向列表**：侧栏「在线监控」进入；强调**看测点 / 设备数据**，不做档案管理。主筛 **项目 + 品类**；品类为空时提示「选择品类以展开测点列」。
 - **列聚焦运行态**：设备名/IMEI（项目·品类作次要 meta）、在线态 chip、最近上报、动态测点或「最新数据」摘要、告警；**不含**生命周期 / AEP / 匹配 / 型号（那些在设备台账）。
-- **测点列随品类动态变化**：选品类后，列头取该品类物模型 `kind=property` 的 `identifier` / `name` / `unit`，单元格取 `latest_json[identifier]`。
+- **测点列随品类动态变化**：选品类后，列头取该品类物模型 `kind=property` 且 `showInMonitor !== false` 的 `identifier` / `name` / `unit`，单元格取 `latest_json[identifier]`（与详情最新值/曲线/上报明细同源过滤）。
 - 行操作仅 **查看数据** / **曲线**（无改挂、编辑档案）。
 - 点击行 → **设备数据详情**：顶栏展示 device_id / AEP_ID / IMEI·deviceSn / 品类·项目 / AEP status；Tab「最新与曲线」+「上报明细」（逐条 mock 采样）；曲线看趋势、上报明细看逐条，报文 hex 仍在台账本机数据。台账「数据」按钮跳入同一详情。
 - **设备对比**：侧栏「设备对比」或列表勾选后点「对比」；锁定同品类，属性多选自 `PROPERTIES`，叠加 mock 曲线（设备名图例），无新 BE API。

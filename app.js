@@ -181,26 +181,35 @@ const CATEGORY_RULES = [
 
 /* 上报属性（kind=property）：按品类挂靠，在线监控动态列取自本品类定义 */
 const PROPERTIES = [
-  /* 积水仪地埋 C001 */
-  { id: 'P1', categoryId: 'C001', kind: 'property', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true },
-  { id: 'P2', categoryId: 'C001', kind: 'property', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true },
-  { id: 'P3', categoryId: 'C001', kind: 'property', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true },
-  { id: 'P4', categoryId: 'C001', kind: 'property', identifier: 'dianya', name: '电池电压', dataType: 'float', unit: 'V', access: '只读', reportCycle: '300s', required: false },
+  /* 积水仪地埋 C001；showInMonitor 默认 true，关闭后不进监控详情最新值/曲线/上报明细 */
+  { id: 'P1', categoryId: 'C001', kind: 'property', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
+  { id: 'P2', categoryId: 'C001', kind: 'property', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true, showInMonitor: true },
+  { id: 'P3', categoryId: 'C001', kind: 'property', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
+  { id: 'P4', categoryId: 'C001', kind: 'property', identifier: 'dianya', name: '电池电压', dataType: 'float', unit: 'V', access: '只读', reportCycle: '300s', required: false, showInMonitor: false },
   /* 积水仪侧壁 C006：同测点标识，独立品类物模型 */
-  { id: 'P61', categoryId: 'C006', kind: 'property', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true },
-  { id: 'P62', categoryId: 'C006', kind: 'property', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true },
-  { id: 'P63', categoryId: 'C006', kind: 'property', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true },
+  { id: 'P61', categoryId: 'C006', kind: 'property', identifier: 'yewei', name: '液位', dataType: 'float', unit: 'm', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
+  { id: 'P62', categoryId: 'C006', kind: 'property', identifier: 'wendu', name: '温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '120s', required: true, showInMonitor: true },
+  { id: 'P63', categoryId: 'C006', kind: 'property', identifier: 'yaqiang', name: '压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
   /* 水质监测站 C002：测点集与积水仪不同 */
-  { id: 'P21', categoryId: 'C002', kind: 'property', identifier: 'ph', name: 'pH', dataType: 'float', unit: '', access: '只读', reportCycle: '300s', required: true },
-  { id: 'P22', categoryId: 'C002', kind: 'property', identifier: 'do', name: '溶解氧', dataType: 'float', unit: 'mg/L', access: '只读', reportCycle: '300s', required: true },
-  { id: 'P23', categoryId: 'C002', kind: 'property', identifier: 'turb', name: '浊度', dataType: 'float', unit: 'NTU', access: '只读', reportCycle: '300s', required: false },
+  { id: 'P21', categoryId: 'C002', kind: 'property', identifier: 'ph', name: 'pH', dataType: 'float', unit: '', access: '只读', reportCycle: '300s', required: true, showInMonitor: true },
+  { id: 'P22', categoryId: 'C002', kind: 'property', identifier: 'do', name: '溶解氧', dataType: 'float', unit: 'mg/L', access: '只读', reportCycle: '300s', required: true, showInMonitor: true },
+  { id: 'P23', categoryId: 'C002', kind: 'property', identifier: 'turb', name: '浊度', dataType: 'float', unit: 'NTU', access: '只读', reportCycle: '300s', required: false, showInMonitor: true },
   /* 管网压力表 C003 */
-  { id: 'P31', categoryId: 'C003', kind: 'property', identifier: 'yaqiang', name: '管网压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '900s', required: true },
+  { id: 'P31', categoryId: 'C003', kind: 'property', identifier: 'yaqiang', name: '管网压强', dataType: 'float', unit: 'kPa', access: '只读', reportCycle: '900s', required: true, showInMonitor: true },
   /* 泵站机组 C004 */
-  { id: 'P41', categoryId: 'C004', kind: 'property', identifier: 'cur', name: '运行电流', dataType: 'float', unit: 'A', access: '只读', reportCycle: '120s', required: true },
-  { id: 'P42', categoryId: 'C004', kind: 'property', identifier: 'vib', name: '振动', dataType: 'float', unit: 'mm/s', access: '只读', reportCycle: '120s', required: true },
+  { id: 'P41', categoryId: 'C004', kind: 'property', identifier: 'cur', name: '运行电流', dataType: 'float', unit: 'A', access: '只读', reportCycle: '120s', required: true, showInMonitor: true },
+  { id: 'P42', categoryId: 'C004', kind: 'property', identifier: 'vib', name: '振动', dataType: 'float', unit: 'mm/s', access: '只读', reportCycle: '120s', required: true, showInMonitor: true },
   /* 雨量计 C005 */
-  { id: 'P51', categoryId: 'C005', kind: 'property', identifier: 'rain', name: '雨量', dataType: 'float', unit: 'mm', access: '只读', reportCycle: '1800s', required: true },
+  { id: 'P51', categoryId: 'C005', kind: 'property', identifier: 'rain', name: '雨量', dataType: 'float', unit: 'mm', access: '只读', reportCycle: '1800s', required: true, showInMonitor: true },
+  /* 智能井盖 C007：属性较多，次要字段演示 showInMonitor=false 收列 */
+  { id: 'P71', categoryId: 'C007', kind: 'property', identifier: 'openAngle', name: '开启角度', dataType: 'float', unit: '°', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
+  { id: 'P72', categoryId: 'C007', kind: 'property', identifier: 'openStatus', name: '开盖状态', dataType: 'enum', unit: '-', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
+  { id: 'P73', categoryId: 'C007', kind: 'property', identifier: 'tiltX', name: '倾角 X', dataType: 'float', unit: '°', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
+  { id: 'P74', categoryId: 'C007', kind: 'property', identifier: 'tiltY', name: '倾角 Y', dataType: 'float', unit: '°', access: '只读', reportCycle: '60s', required: true, showInMonitor: true },
+  { id: 'P75', categoryId: 'C007', kind: 'property', identifier: 'dianya', name: '电池电压', dataType: 'float', unit: 'V', access: '只读', reportCycle: '300s', required: false, showInMonitor: true },
+  { id: 'P76', categoryId: 'C007', kind: 'property', identifier: 'rssi', name: '信号强度', dataType: 'int', unit: 'dBm', access: '只读', reportCycle: '300s', required: false, showInMonitor: false },
+  { id: 'P77', categoryId: 'C007', kind: 'property', identifier: 'humidity', name: '腔内湿度', dataType: 'float', unit: '%RH', access: '只读', reportCycle: '600s', required: false, showInMonitor: false },
+  { id: 'P78', categoryId: 'C007', kind: 'property', identifier: 'wendu', name: '腔内温度', dataType: 'float', unit: '℃', access: '只读', reportCycle: '600s', required: false, showInMonitor: false },
 ];
 
 const EVENTS = [
@@ -393,10 +402,21 @@ function aepStatusTag(s) {
 }
 
 
-/** 按品类取物模型上报属性（kind=property），供监控动态列 / 详情卡片使用 */
-function getCategoryProperties(categoryId) {
+/** 按品类取物模型上报属性（kind=property）；监控展示过滤见 getCategoryMonitorProperties */
+function getCategoryProperties(categoryId, list) {
   if (!categoryId) return [];
-  return PROPERTIES.filter(p => p.categoryId === categoryId && (p.kind || 'property') === 'property');
+  const src = list || PROPERTIES;
+  return src.filter(p => p.categoryId === categoryId && (p.kind || 'property') === 'property');
+}
+
+/** 未定义 showInMonitor 时默认展示（兼容存量）；仅 false 时从监控收列 */
+function isShowInMonitor(p) {
+  return !p || p.showInMonitor !== false;
+}
+
+/** 监控列表测点列 / 详情最新值·曲线·上报明细同源：只保留 showInMonitor !== false */
+function getCategoryMonitorProperties(categoryId, list) {
+  return getCategoryProperties(categoryId, list).filter(isShowInMonitor);
 }
 
 /** 兼容旧引用：积水仪地埋主测点标识 */
@@ -719,6 +739,13 @@ createApp({
       paramMin: null, paramMax: null, enabled: true
     });
     const commandList = ref(COMMANDS.map(c => ({ ...c })));
+    const propertyList = ref(PROPERTIES.map(p => ({ ...p, showInMonitor: p.showInMonitor !== false })));
+    const showPropertyModal = ref(false);
+    const propertyModalMode = ref('create');
+    const propertyForm = reactive({
+      id: '', categoryId: '', identifier: '', name: '', dataType: 'float', unit: '',
+      access: '只读', reportCycle: '60s', required: true, showInMonitor: true
+    });
 
     /* ---- 品类 · 批量下发 ---- */
     const batchCmdId = ref('');
@@ -1110,16 +1137,16 @@ createApp({
       };
     });
 
-    /** 当前物模型详情品类的上报属性（kind=property） */
+    /** 当前物模型详情品类的上报属性（kind=property）；含全部，含未勾选监控展示的 */
     const currentCategoryProperties = computed(() => {
-      return getCategoryProperties(currentCategory.value?.id);
+      return getCategoryProperties(currentCategory.value?.id, propertyList.value);
     });
 
-    /** 监控列表：选中品类时的动态测点列（来自该品类物模型 property） */
+    /** 监控列表：选中品类时的动态测点列（同源过滤 showInMonitor） */
     const monMetricColumns = computed(() => {
       const cid = monCategoryFilter.value;
       if (!cid) return [];
-      return getCategoryProperties(cid);
+      return getCategoryMonitorProperties(cid, propertyList.value);
     });
 
     const monHasCategoryFilter = computed(() => !!monCategoryFilter.value);
@@ -1139,7 +1166,7 @@ createApp({
     const monLatestPoints = computed(() => {
       const row = currentMonitor.value;
       if (!row || !row.categoryId) return [];
-      const defs = getCategoryProperties(row.categoryId);
+      const defs = getCategoryMonitorProperties(row.categoryId, propertyList.value);
       if (!defs.length) return [];
       const pts = (row.id && MONITOR_POINTS[row.id]) ? MONITOR_POINTS[row.id] : [];
       const byCode = Object.fromEntries(pts.map(p => [p.code, p]));
@@ -1173,7 +1200,8 @@ createApp({
       const row = currentMonitor.value;
       if (!row) return '暂无测点数据';
       if (!row.categoryId) return '设备未关联品类，无法按物模型展示指标';
-      if (!getCategoryProperties(row.categoryId).length) return '该品类未配置上报属性，无法按物模型展示指标';
+      if (!getCategoryProperties(row.categoryId, propertyList.value).length) return '该品类未配置上报属性，无法按物模型展示指标';
+      if (!getCategoryMonitorProperties(row.categoryId, propertyList.value).length) return '本品类上报属性均未勾选「监控展示」';
       return '暂无测点数据';
     });
 
@@ -1182,7 +1210,8 @@ createApp({
       const row = currentMonitor.value;
       if (!row) return '所选时间范围内暂无可用历史曲线数据';
       if (!row.categoryId) return '设备未关联品类，无法按物模型展示曲线';
-      if (!getCategoryProperties(row.categoryId).length) return '该品类未配置上报属性，无法按物模型展示曲线';
+      if (!getCategoryProperties(row.categoryId, propertyList.value).length) return '该品类未配置上报属性，无法按物模型展示曲线';
+      if (!getCategoryMonitorProperties(row.categoryId, propertyList.value).length) return '本品类上报属性均未勾选「监控展示」';
       return '所选时间范围内暂无可用历史曲线数据';
     });
 
@@ -1828,6 +1857,56 @@ createApp({
     function toggleCommandEnabled(c) {
       const idx = commandList.value.findIndex(x => x.id === c.id);
       if (idx >= 0) commandList.value.splice(idx, 1, { ...c, enabled: !c.enabled });
+    }
+    function openCreateProperty() {
+      if (!currentCategory.value) return;
+      propertyModalMode.value = 'create';
+      Object.assign(propertyForm, {
+        id: '', categoryId: currentCategory.value.id, identifier: '', name: '', dataType: 'float', unit: '',
+        access: '只读', reportCycle: '60s', required: true, showInMonitor: true
+      });
+      showPropertyModal.value = true;
+    }
+    function openEditProperty(p) {
+      propertyModalMode.value = 'edit';
+      Object.assign(propertyForm, {
+        id: p.id, categoryId: p.categoryId, identifier: p.identifier, name: p.name,
+        dataType: p.dataType || 'float', unit: p.unit || '', access: p.access || '只读',
+        reportCycle: p.reportCycle || '60s', required: !!p.required,
+        showInMonitor: p.showInMonitor !== false
+      });
+      showPropertyModal.value = true;
+    }
+    function saveProperty() {
+      const ident = (propertyForm.identifier || '').trim();
+      const name = (propertyForm.name || '').trim();
+      if (!ident || !name) { showToast('请填写标识符与名称', 'warn'); return; }
+      const payload = {
+        id: propertyForm.id || ('P' + Date.now().toString().slice(-6)),
+        categoryId: propertyForm.categoryId || currentCategory.value?.id,
+        kind: 'property',
+        identifier: ident,
+        name,
+        dataType: propertyForm.dataType || 'float',
+        unit: (propertyForm.unit || '').trim(),
+        access: propertyForm.access || '只读',
+        reportCycle: propertyForm.reportCycle || '60s',
+        required: !!propertyForm.required,
+        showInMonitor: propertyForm.showInMonitor !== false
+      };
+      if (propertyModalMode.value === 'create') {
+        propertyList.value.push(payload);
+      } else {
+        const idx = propertyList.value.findIndex(x => x.id === propertyForm.id);
+        if (idx >= 0) propertyList.value.splice(idx, 1, payload);
+      }
+      showPropertyModal.value = false;
+    }
+    function togglePropertyShowInMonitor(p) {
+      const idx = propertyList.value.findIndex(x => x.id === p.id);
+      if (idx < 0) return;
+      const next = !(p.showInMonitor !== false);
+      propertyList.value.splice(idx, 1, { ...p, showInMonitor: next });
     }
     function categoryMatchLabel(m) {
       if (m === 'auto') return '自动匹配';
@@ -2528,7 +2607,7 @@ createApp({
           latest_json: {},
         };
       }
-      const defs = getCategoryProperties(currentMonitor.value.categoryId);
+      const defs = getCategoryMonitorProperties(currentMonitor.value.categoryId, propertyList.value);
       const pts = MONITOR_POINTS[currentMonitor.value.id] || [];
       const code = defs.length ? defs[0].identifier : (pts.length ? pts[0].code : '');
       if (code) monCurvePointCode.value = code;
@@ -2848,7 +2927,7 @@ createApp({
     function goMonitorOnlineRate() { module.value = 'monitor'; screen.value = 'monitorOnlineRate'; }
     function openMonitorDetail(row) {
       currentMonitor.value = row;
-      const defs = getCategoryProperties(row.categoryId);
+      const defs = getCategoryMonitorProperties(row.categoryId, propertyList.value);
       const pts = MONITOR_POINTS[row.id] || [];
       monCurvePointCode.value = defs.length ? defs[0].identifier : (pts.length ? pts[0].code : '');
       monCurveRange.value = 7;
@@ -2896,7 +2975,7 @@ createApp({
     }
     function openMonitorCurve(row, pointCode) {
       if (row) currentMonitor.value = row;
-      const defs = getCategoryProperties(currentMonitor.value.categoryId);
+      const defs = getCategoryMonitorProperties(currentMonitor.value.categoryId, propertyList.value);
       const pts = MONITOR_POINTS[currentMonitor.value.id] || [];
       monCurvePointCode.value = pointCode || (defs.length ? defs[0].identifier : (pts.length ? pts[0].code : ''));
       monCurveRange.value = 7;
@@ -2945,7 +3024,7 @@ createApp({
     /** 按品类 property 定义拼测点条目；无定义时回退 latest_json / MONITOR_POINTS */
     function latestPointEntries(row) {
       if (!row) return [];
-      const defs = getCategoryProperties(row.categoryId);
+      const defs = getCategoryMonitorProperties(row.categoryId, propertyList.value);
       const lj = row.latest_json || {};
       const pts = MONITOR_POINTS[row.id] || [];
       const byCode = Object.fromEntries(pts.map(p => [p.code, p]));
@@ -3017,7 +3096,7 @@ createApp({
 
     /* ---- 设备对比 ---- */
     const CMP_MAX = 8;
-    const cmpCategoryProps = computed(() => getCategoryProperties(cmpCategoryId.value));
+    const cmpCategoryProps = computed(() => getCategoryMonitorProperties(cmpCategoryId.value, propertyList.value));
     const cmpSelectedDevices = computed(() => {
       const set = new Set(cmpDeviceIds.value);
       return MONITOR_ROWS.filter(d => set.has(d.id));
@@ -3142,7 +3221,7 @@ createApp({
       return props.length ? props : (cmpPrimaryProp.value ? [cmpPrimaryProp.value] : []);
     });
     function syncCmpPropsForCategory() {
-      const props = getCategoryProperties(cmpCategoryId.value);
+      const props = getCategoryMonitorProperties(cmpCategoryId.value, propertyList.value);
       if (!props.length) { cmpPropIds.value = []; return; }
       const keep = cmpPropIds.value.filter(id => props.some(p => p.identifier === id));
       cmpPropIds.value = keep.length ? keep : [props[0].identifier];
@@ -3348,7 +3427,7 @@ createApp({
 
     window.__protoApp = {
       jump, screen, module, detailTab,
-      showCategoryModal, showRuleModal, showCommandModal, showDeleteConfirm, showProjectModal, showImportModal, showDisableConfirm, showTransferModal
+      showCategoryModal, showRuleModal, showCommandModal, showPropertyModal, showDeleteConfirm, showProjectModal, showImportModal, showDisableConfirm, showTransferModal
     };
 
     return {
@@ -3356,7 +3435,9 @@ createApp({
       goCockpit, cockpitStats, cockpitCategoryDist, cockpitProjectRows, cockpitUnassignedRow, cockpitSyncStatus, COCKPIT_TODOS, COCKPIT_ACTIVITIES, formatPlatformCount,
       filteredCategories, industries, breadcrumb, topbarHint, currentCategory,
       CATEGORIES, PROPERTIES, EVENTS, POINTS, INSTALL_FIELDS, FIRMWARES, COMMANDS,
-      currentCategoryProperties, getCategoryProperties,
+      currentCategoryProperties, getCategoryProperties, getCategoryMonitorProperties, isShowInMonitor,
+      propertyList, showPropertyModal, propertyModalMode, propertyForm,
+      openCreateProperty, openEditProperty, saveProperty, togglePropertyShowInMonitor,
       CATEGORY_RULES, categoryRules, currentCategoryRules,
       commandList, currentCategoryCommands, COMMAND_DATA_TYPES, COMMAND_ACCESS_OPTS,
       onCommandHasParamChange,
@@ -3829,11 +3910,26 @@ createApp({
             <div class="tab" :class="{active: detailTab==='rules'}" @click="detailTab='rules'">归属规则</div>
           </div>
           <div v-if="detailTab==='props'">
-            <div class="toolbar"><span style="color:#666;font-size:13px">设备按周期上报的属性定义（与 AEP 解析后的属性对齐）</span><div class="spacer"></div><button class="btn btn-primary btn-sm">＋ 添加属性</button></div>
-            <div class="table-wrap"><table class="data-table"><thead><tr><th>标识符</th><th>名称</th><th>数据类型</th><th>单位</th><th>访问</th><th>上报周期</th><th>必报</th><th>操作</th></tr></thead>
+            <div class="toolbar"><span style="color:#666;font-size:13px">设备按周期上报的属性定义（与 AEP 解析后的属性对齐）</span><div class="spacer"></div><button class="btn btn-primary btn-sm" @click="openCreateProperty">＋ 添加属性</button></div>
+            <div class="table-note">「监控展示」关闭后不出现在监控详情「最新值 / 曲线 / 上报明细」（及列表测点列）。字段暂名 <code>showInMonitor</code>，默认开，兼容存量。</div>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>标识符</th><th>名称</th><th>数据类型</th><th>单位</th><th>访问</th><th>上报周期</th><th>必报</th><th>监控展示</th><th>操作</th></tr></thead>
               <tbody>
-                <tr v-for="p in currentCategoryProperties" :key="p.id"><td><code>{{ p.identifier }}</code></td><td>{{ p.name }}</td><td>{{ p.dataType }}</td><td>{{ p.unit || '—' }}</td><td>{{ p.access }}</td><td>{{ p.reportCycle }}</td><td><span class="tag" :class="p.required?'tag-blue':'tag-gray'">{{ p.required?'是':'否' }}</span></td><td class="actions"><button class="btn-link btn">编辑</button><button class="btn-link btn danger" @click="confirmDelete('上报属性', p.id, p.name)">删除</button></td></tr>
-                <tr v-if="!currentCategoryProperties.length"><td colspan="8"><div class="empty-hint">本品类暂无上报属性（kind=property）</div></td></tr>
+                <tr v-for="p in currentCategoryProperties" :key="p.id">
+                  <td><code>{{ p.identifier }}</code></td>
+                  <td>{{ p.name }}</td>
+                  <td>{{ p.dataType }}</td>
+                  <td>{{ p.unit || '—' }}</td>
+                  <td>{{ p.access }}</td>
+                  <td>{{ p.reportCycle }}</td>
+                  <td><span class="tag" :class="p.required?'tag-blue':'tag-gray'">{{ p.required?'是':'否' }}</span></td>
+                  <td>
+                    <button type="button" class="btn-link btn" @click="togglePropertyShowInMonitor(p)" :title="'切换监控展示'">
+                      <span class="tag" :class="p.showInMonitor !== false ? 'tag-green' : 'tag-gray'">{{ p.showInMonitor !== false ? '开' : '关' }}</span>
+                    </button>
+                  </td>
+                  <td class="actions"><button class="btn-link btn" @click="openEditProperty(p)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('上报属性', p.id, p.name)">删除</button></td>
+                </tr>
+                <tr v-if="!currentCategoryProperties.length"><td colspan="9"><div class="empty-hint">本品类暂无上报属性（kind=property）</div></td></tr>
               </tbody></table></div>
           </div>
           <div v-else-if="detailTab==='events'">
@@ -4932,7 +5028,7 @@ createApp({
             <button class="btn" @click="monSearch=''; monProjectFilter=''; monCategoryFilter=''; monOnlineFilter=''; monAlarmFilter=''">重置</button>
           </div>
           <div class="banner-tip mon-hint" v-if="monHasCategoryFilter">
-            已选品类「{{ monSelectedCategoryName }}」· 测点列 {{ monMetricColumns.length }} 个（
+            已选品类「{{ monSelectedCategoryName }}」· 测点列 {{ monMetricColumns.length }} 个（仅「监控展示」勾选 ·
             <template v-for="(col, idx) in monMetricColumns" :key="col.id"><code>{{ col.identifier }}</code><span v-if="idx < monMetricColumns.length - 1"> · </span></template>）
           </div>
           <div class="banner-muted mon-hint" v-else>选择品类以展开测点列</div>
@@ -5065,8 +5161,9 @@ createApp({
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">最新数据 <span class="sub-nav-hint">指标源=品类 kind=property 属性（顺序同物模型）· 值取 MONITOR_POINTS / latest_json[identifier] · 无有效数值的属性不参与下方曲线</span></div>
-            <div class="banner-muted" style="margin-bottom:10px">仅展示本设备品类物模型 property；未关联品类或品类无属性时不扫 history / latest_json 全字段。</div>
+            <div class="info-section-title">最新数据 <span class="sub-nav-hint">仅展示物模型属性中勾选「监控展示」的测点 · 顺序同物模型 · 值取 MONITOR_POINTS / latest_json[identifier]</span></div>
+            <div class="banner-muted" style="margin-bottom:10px">仅展示本设备品类物模型 property 且 <code>showInMonitor !== false</code>；未关联品类或品类无属性时不扫 history / latest_json 全字段。</div>
+            <div class="table-note" style="margin-bottom:10px">仅展示物模型属性中勾选「监控展示」的测点。</div>
             <div class="point-card-grid" v-if="monLatestPoints.length">
               <div
                 class="point-card"
@@ -5187,7 +5284,8 @@ createApp({
 
           <template v-else-if="monDetailTab==='reports'">
             <div class="info-section">
-              <div class="info-section-title">上报明细 <span class="sub-nav-hint">逐条采样 · 属性来自品类 property / MONITOR_POINTS · 非报文 hex</span></div>
+              <div class="info-section-title">上报明细 <span class="sub-nav-hint">逐条采样 · 仅「监控展示」勾选的品类 property · 非报文 hex</span></div>
+              <div class="table-note" style="margin-bottom:10px">仅展示物模型属性中勾选「监控展示」的测点。</div>
               <div class="banner-muted" style="margin-bottom:10px">
                 曲线看趋势；本表看逐条上报。原始报文 contentHex 请到台账「本机数据」。
                 <button class="btn-link btn" @click="openMonitorDeviceLocalData">跳转本机数据 →</button>
@@ -5758,6 +5856,57 @@ createApp({
           <button class="btn" @click="showTransferModal=false">取消</button>
           <button class="btn btn-primary" @click="confirmTransfer">确认改挂</button>
         </div>
+      </div>
+    </div>
+
+        <!-- 物模型：上报属性新建/编辑 -->
+    <div v-if="showPropertyModal" class="overlay" @click.self="showPropertyModal=false">
+      <div class="modal">
+        <div class="modal-header"><span>{{ propertyModalMode==='create'?'添加属性':'编辑属性' }}</span><button class="close-x" @click="showPropertyModal=false">×</button></div>
+        <div class="modal-body">
+          <div class="banner-muted" style="margin-bottom:12px">关闭「监控展示」后，该测点不出现在监控详情最新值 / 曲线 / 上报明细（列表测点列同源过滤）。默认开启，兼容存量。</div>
+          <div class="form-row">
+            <div class="form-item"><label><span class="req">*</span>标识符</label><input class="input input-full" v-model="propertyForm.identifier" placeholder="如 yewei、openAngle" :disabled="propertyModalMode==='edit'" /></div>
+            <div class="form-item"><label><span class="req">*</span>名称</label><input class="input input-full" v-model="propertyForm.name" placeholder="如 液位" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label>数据类型</label>
+              <select class="select input-full" v-model="propertyForm.dataType">
+                <option value="float">float</option>
+                <option value="int">int</option>
+                <option value="bool">bool</option>
+                <option value="string">string</option>
+                <option value="enum">enum</option>
+              </select>
+            </div>
+            <div class="form-item"><label>单位</label><input class="input input-full" v-model="propertyForm.unit" placeholder="m / ℃ / —" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label>访问</label>
+              <select class="select input-full" v-model="propertyForm.access">
+                <option>只读</option>
+                <option>读写</option>
+              </select>
+            </div>
+            <div class="form-item"><label>上报周期</label><input class="input input-full" v-model="propertyForm.reportCycle" placeholder="60s" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label>必报</label>
+              <select class="select input-full" v-model="propertyForm.required">
+                <option :value="true">是</option>
+                <option :value="false">否</option>
+              </select>
+            </div>
+            <div class="form-item"><label>监控展示</label>
+              <select class="select input-full" v-model="propertyForm.showInMonitor">
+                <option :value="true">开（展示）</option>
+                <option :value="false">关（不展示）</option>
+              </select>
+              <div class="hint">对应字段 <code>showInMonitor</code>；最终字段名等 BE。</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer"><button class="btn" @click="showPropertyModal=false">取消</button><button class="btn btn-primary" @click="saveProperty">确定</button></div>
       </div>
     </div>
 
