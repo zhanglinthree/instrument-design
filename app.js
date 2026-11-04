@@ -590,6 +590,50 @@ function genCurveSeries(point, days) {
   return pts;
 }
 
+/** 监控详情「上报明细」mock：按测点拼逐条上报（history 风格），非报文 hex */
+function pad2(n) { return String(n).padStart(2, '0'); }
+function formatSampleTime(baseMs, offsetSec) {
+  const d = new Date(baseMs - offsetSec * 1000);
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+    + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+}
+function genReportSamples(points, opts) {
+  const list = (points || []).filter(Boolean);
+  const count = (opts && opts.count) || 12;
+  const cycleSec = (opts && opts.cycleSec) || 60;
+  const baseTs = (opts && opts.baseTs) || '2026-10-14 09:18:33';
+  const baseMs = Date.parse(String(baseTs).replace(/-/g, '/')) || Date.parse('2026/10/14 09:18:33');
+  const chartable = list.filter(p => isFiniteMetricValue(p.value));
+  if (!chartable.length) return [];
+  const seriesMap = {};
+  chartable.forEach(p => {
+    const s = genCurveSeries(p, 7);
+    seriesMap[p.code] = s.length ? s : [{ v: Number(p.value), t: 1 }];
+  });
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    const offsetSec = i * cycleSec;
+    const values = {};
+    chartable.forEach(p => {
+      const s = seriesMap[p.code];
+      const idx = Math.max(0, s.length - 1 - i);
+      values[p.code] = s[idx] ? s[idx].v : p.value;
+    });
+    // 偶发漏报示意
+    let status = '成功';
+    if (i === 3) status = '漏报';
+    else if (i === 7) status = '延迟';
+    rows.push({
+      id: 'RS' + pad2(i + 1),
+      time: formatSampleTime(baseMs, offsetSec),
+      values,
+      status,
+    });
+  }
+  return rows;
+}
+
+
 const CURVE_SERIES_COLORS = ['#0D6EFD', '#12B886', '#E78212', '#DC3545', '#7950F2', '#15AABF', '#F06595'];
 
 function buildSingleCurveSvg(point, series, color) {
@@ -803,6 +847,7 @@ createApp({
     const monCurvePointCode = ref('yewei');
     const monCurveMode = ref('split'); // 'split' | 'merge' · 默认分开
     const monHoverT = ref(null); // 0..1 · 悬停采样比例（统一 sampleTime）
+    const monDetailTab = ref('overview'); // overview | reports · 最新与曲线 / 上报明细
 
     /* ---- 设备对比 state ---- */
     const cmpCategoryId = ref('');
@@ -1297,7 +1342,11 @@ createApp({
       }
       if (module.value === 'monitor') {
         if (screen.value === 'monitorList') return { parent: '在线监控', current: '设备数据' };
-        if (screen.value === 'monitorDetail') return { parent: '在线监控', current: (currentMonitor.value?.name || '设备') + ' · 设备数据' };
+        if (screen.value === 'monitorDetail') {
+          const name = currentMonitor.value?.name || '设备';
+          const tab = monDetailTab.value === 'reports' ? '上报明细' : '设备数据';
+          return { parent: '在线监控', current: name + ' · ' + tab };
+        }
         if (screen.value === 'monitorCurve') return { parent: currentMonitor.value?.name || '设备', current: '历史曲线' };
         if (screen.value === 'monitorOnlineRate') return { parent: '在线监控', current: '在线率统计' };
         if (screen.value === 'monitorCompare') return { parent: '在线监控', current: '设备对比' };
@@ -2803,8 +2852,47 @@ createApp({
       const pts = MONITOR_POINTS[row.id] || [];
       monCurvePointCode.value = defs.length ? defs[0].identifier : (pts.length ? pts[0].code : '');
       monCurveRange.value = 7;
+      monDetailTab.value = 'overview';
       module.value = 'monitor';
       screen.value = 'monitorDetail';
+    }
+    /** 当前监控设备对应台账行（补 aepDeviceId / deviceSn / aepStatus） */
+    const monLedgerDevice = computed(() => {
+      const m = currentMonitor.value;
+      if (!m) return null;
+      return deviceList.value.find(d => d.id === m.id || d.imei === m.imei) || null;
+    });
+    const monIdentity = computed(() => {
+      const m = currentMonitor.value || {};
+      const d = monLedgerDevice.value || {};
+      return {
+        deviceId: m.id || d.id || '—',
+        aepDeviceId: m.aepDeviceId || d.aepDeviceId || '',
+        imei: m.imei || d.imei || '—',
+        deviceSn: m.deviceSn || d.deviceSn || m.imei || d.imei || '—',
+        categoryName: m.categoryName || d.categoryName || '—',
+        projectName: m.projectName || d.projectName || '—',
+        aepStatus: m.aepStatus != null ? m.aepStatus : (d.aepStatus != null ? d.aepStatus : null),
+      };
+    });
+    /** 上报明细表：当前设备 mock 逐条采样（属性列同 monLatestPoints） */
+    const monReportColumns = computed(() => monLatestPoints.value || []);
+    const monReportSamples = computed(() => {
+      const row = currentMonitor.value;
+      const pts = monLatestPoints.value || [];
+      if (!row || !pts.length) return [];
+      const baseTs = row.lastReportAt && row.lastReportAt !== '—' ? row.lastReportAt : '2026-10-14 09:18:33';
+      return genReportSamples(pts, { count: 12, cycleSec: row.cycleSec || 60, baseTs });
+    });
+    function openMonitorDeviceLocalData() {
+      const m = currentMonitor.value;
+      if (!m) return;
+      const d = deviceList.value.find(x => x.id === m.id || x.imei === m.imei);
+      if (d) {
+        openDeviceDetail(d, 'localData');
+        return;
+      }
+      showToast('台账中未找到该设备，无法打开本机数据', 'warn');
     }
     function openMonitorCurve(row, pointCode) {
       if (row) currentMonitor.value = row;
@@ -3330,6 +3418,7 @@ createApp({
       filteredMonitorRows, monListStats, currentMonitor,
       monMetricColumns, monHasCategoryFilter, monSelectedCategoryName,
       monLatestPoints, monSelectedPoint, monCurveRange, monCurvePointCode, monCurveMode, monHoverT,
+      monDetailTab, monLedgerDevice, monIdentity, monReportColumns, monReportSamples, openMonitorDeviceLocalData,
       monChartablePoints, monCurveCharts, monHoverReadout, monPointsEmptyHint, monCurveEmptyHint,
       monCurveSeries, monCurveSvg, monCycleFullQueryTip,
       onMonCurveMove, onMonCurveLeave, setMonCurveMode, isFiniteMetricValue,
@@ -4930,9 +5019,13 @@ createApp({
             <div>
               <h1 class="page-title">{{ currentMonitor.name }} · 设备数据</h1>
               <div class="detail-meta">
-                <span>IMEI：<b>{{ currentMonitor.imei }}</b></span>
-                <span>项目：<b>{{ currentMonitor.projectName }}</b></span>
-                <span>品类：<b>{{ currentMonitor.categoryName }}</b></span>
+                <span>device_id：<code>{{ monIdentity.deviceId }}</code></span>
+                <span>AEP_ID：<code>{{ monIdentity.aepDeviceId || '—' }}</code></span>
+                <span>IMEI：<b>{{ monIdentity.imei }}</b></span>
+                <span>deviceSn：<code>{{ monIdentity.deviceSn }}</code></span>
+                <span>品类：<b>{{ monIdentity.categoryName }}</b></span>
+                <span>项目：<b>{{ monIdentity.projectName }}</b></span>
+                <span>AEP status：<b>{{ monIdentity.aepStatus == null ? '—' : aepStatusLabel(monIdentity.aepStatus) }}</b></span>
                 <span>在线：
                   <span class="lifecycle-dot" style="display:inline-flex">
                     <i :class="currentMonitor.online==='在线'?'lc-online':(currentMonitor.online==='离线'?'lc-offline':'lc-pending')"></i>
@@ -4944,10 +5037,22 @@ createApp({
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" @click="openMonitorCurve(currentMonitor, monCurvePointCode)">全屏曲线</button>
+              <button class="btn" @click="openMonitorDeviceLocalData">本机数据（报文）</button>
               <button class="btn" @click="goMonitorOnlineRate">在线率</button>
             </div>
           </div>
 
+          <div class="banner-muted" style="margin-bottom:12px">
+            曲线看趋势；上报明细看逐条上报。报文 hex 仍在台账「本机数据」。
+            <button class="btn-link btn" @click="openMonitorDeviceLocalData">打开本机数据 →</button>
+          </div>
+
+          <div class="tabs" style="margin-bottom:14px">
+            <div class="tab" :class="{active: monDetailTab==='overview'}" @click="monDetailTab='overview'">最新与曲线</div>
+            <div class="tab" :class="{active: monDetailTab==='reports'}" @click="monDetailTab='reports'">上报明细</div>
+          </div>
+
+          <template v-if="monDetailTab==='overview'">
           <div class="stat-row">
             <div class="stat-chip" :class="currentMonitor.trustLevel==='T3'||currentMonitor.trustLevel==='T2'?'ok':(currentMonitor.trustLevel==='T1'?'warn':'danger')">
               <div class="sc-label">近 24h 可信分</div>
@@ -5065,7 +5170,11 @@ createApp({
           <div class="info-section">
             <div class="info-section-title">设备与固件</div>
             <div class="kv-grid">
-              <div class="k">设备 ID</div><div class="v">{{ currentMonitor.id }}</div>
+              <div class="k">device_id</div><div class="v"><code>{{ monIdentity.deviceId }}</code></div>
+              <div class="k">AEP_ID</div><div class="v"><code>{{ monIdentity.aepDeviceId || '—' }}</code></div>
+              <div class="k">IMEI / deviceSn</div><div class="v"><code>{{ monIdentity.imei }}</code> / <code>{{ monIdentity.deviceSn }}</code></div>
+              <div class="k">品类 / 项目</div><div class="v">{{ monIdentity.categoryName }} · {{ monIdentity.projectName }}</div>
+              <div class="k">AEP status</div><div class="v">{{ monIdentity.aepStatus == null ? '—' : aepStatusLabel(monIdentity.aepStatus) }}</div>
               <div class="k">硬件型号</div><div class="v">{{ currentMonitor.model }}</div>
               <div class="k">固件版本</div><div class="v">{{ currentMonitor.firmware }}</div>
               <div class="k">告警摘要</div><div class="v">{{ alarmSummaryText(currentMonitor) }}</div>
@@ -5074,6 +5183,42 @@ createApp({
             </div>
           </div>
           <div class="table-note">测点与曲线仅按品类 property 标识符对齐；无有效数值的属性不画曲线（如 D001 dianya / D006·D007 全空演示空态）。PG 时序示意，非实时接入。</div>
+          </template>
+
+          <template v-else-if="monDetailTab==='reports'">
+            <div class="info-section">
+              <div class="info-section-title">上报明细 <span class="sub-nav-hint">逐条采样 · 属性来自品类 property / MONITOR_POINTS · 非报文 hex</span></div>
+              <div class="banner-muted" style="margin-bottom:10px">
+                曲线看趋势；本表看逐条上报。原始报文 contentHex 请到台账「本机数据」。
+                <button class="btn-link btn" @click="openMonitorDeviceLocalData">跳转本机数据 →</button>
+              </div>
+              <div class="table-wrap" v-if="monReportSamples.length">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>上报时间</th>
+                      <th v-for="c in monReportColumns" :key="c.code">{{ c.name }}<span v-if="c.unit">（{{ c.unit }}）</span></th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in monReportSamples" :key="r.id">
+                      <td>{{ r.time }}</td>
+                      <td v-for="c in monReportColumns" :key="r.id + '-' + c.code">
+                        <template v-if="isFiniteMetricValue(r.values[c.code])">{{ r.values[c.code] }}</template>
+                        <span v-else class="muted">—</span>
+                      </td>
+                      <td>
+                        <span class="tag" :class="r.status==='成功'?'tag-green':(r.status==='漏报'?'tag-red':'tag-orange')">{{ r.status }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="empty-hint">{{ monPointsEmptyHint }}</div>
+              <div class="table-note">示意数据由 MONITOR_POINTS / history 风格 mock 生成；正式环境对接时序库采样点。</div>
+            </div>
+          </template>
         </div>
 
         <!-- ===== 在线监控：历史曲线 ===== -->
