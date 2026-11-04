@@ -804,6 +804,18 @@ createApp({
     const monCurveMode = ref('split'); // 'split' | 'merge' · 默认分开
     const monHoverT = ref(null); // 0..1 · 悬停采样比例（统一 sampleTime）
 
+    /* ---- 设备对比 state ---- */
+    const cmpCategoryId = ref('');
+    const cmpDeviceIds = ref([]); // max 8, same category
+    const cmpPropIds = ref([]); // property identifiers
+    const cmpRange = ref(7); // 1 | 7 | 30
+    const cmpDrawerOpen = ref(false);
+    const cmpDrawerSearch = ref('');
+    const cmpDrawerPick = ref([]); // temp ids in drawer
+    const cmpTableOpen = ref(true);
+    const cmpListSelected = ref([]); // monitor list checkboxes
+    const cmpRefreshNonce = ref(0);
+
     const filteredCategories = computed(() => {
       return CATEGORIES.filter(c => {
         const kw = searchKeyword.value.trim();
@@ -1288,6 +1300,7 @@ createApp({
         if (screen.value === 'monitorDetail') return { parent: '在线监控', current: (currentMonitor.value?.name || '设备') + ' · 设备数据' };
         if (screen.value === 'monitorCurve') return { parent: currentMonitor.value?.name || '设备', current: '历史曲线' };
         if (screen.value === 'monitorOnlineRate') return { parent: '在线监控', current: '在线率统计' };
+        if (screen.value === 'monitorCompare') return { parent: '在线监控', current: '设备对比' };
         return { parent: '在线监控', current: '设备数据' };
       }
       if (module.value === 'ledger') {
@@ -2914,6 +2927,234 @@ createApp({
       return sec + ' 秒';
     }
 
+    /* ---- 设备对比 ---- */
+    const CMP_MAX = 8;
+    const cmpCategoryProps = computed(() => getCategoryProperties(cmpCategoryId.value));
+    const cmpSelectedDevices = computed(() => {
+      const set = new Set(cmpDeviceIds.value);
+      return MONITOR_ROWS.filter(d => set.has(d.id));
+    });
+    const cmpCandidateDevices = computed(() => {
+      const cid = cmpCategoryId.value;
+      if (!cid) return [];
+      const kw = cmpDrawerSearch.value.trim();
+      return MONITOR_ROWS.filter(d => {
+        if (d.categoryId !== cid) return false;
+        if (kw && !(d.name.includes(kw) || d.imei.includes(kw))) return false;
+        return true;
+      });
+    });
+    const cmpPrimaryProp = computed(() => {
+      const props = cmpCategoryProps.value;
+      if (!props.length) return null;
+      const id = cmpPropIds.value[0];
+      return props.find(p => p.identifier === id) || props[0];
+    });
+    const cmpKpiCards = computed(() => {
+      void cmpRefreshNonce.value;
+      const prop = cmpPrimaryProp.value;
+      return cmpSelectedDevices.value.map((d, idx) => {
+        const val = prop ? latestMetricValue(d, prop.identifier) : null;
+        return {
+          id: d.id,
+          name: d.name,
+          online: d.online,
+          color: CURVE_SERIES_COLORS[idx % CURVE_SERIES_COLORS.length],
+          propName: prop ? prop.name : '—',
+          propUnit: prop ? (prop.unit || '') : '',
+          value: val,
+          lastReportAt: d.lastReportAt,
+        };
+      });
+    });
+    function cmpPointForDevice(row, prop) {
+      if (!row || !prop) return null;
+      const pts = MONITOR_POINTS[row.id] || [];
+      const hit = pts.find(p => p.code === prop.identifier);
+      const val = latestMetricValue(row, prop.identifier);
+      if (!isFiniteMetricValue(val) && !(hit && isFiniteMetricValue(hit.value))) return null;
+      return {
+        code: prop.identifier,
+        name: row.name,
+        unit: prop.unit || '',
+        value: isFiniteMetricValue(val) ? Number(val) : Number(hit.value),
+        warnLow: hit ? hit.warnLow : null,
+        warnHigh: hit ? hit.warnHigh : null,
+        alarmLow: hit ? hit.alarmLow : null,
+        alarmHigh: hit ? hit.alarmHigh : null,
+        faultLow: hit ? hit.faultLow : null,
+        faultHigh: hit ? hit.faultHigh : null,
+        ymin: hit && hit.ymin != null ? hit.ymin : 0,
+        ymax: hit && hit.ymax != null ? hit.ymax : 100,
+        cycleSec: hit ? hit.cycleSec : (row.cycleSec || 60),
+      };
+    }
+    const cmpOverlayChart = computed(() => {
+      void cmpRefreshNonce.value;
+      const prop = cmpPrimaryProp.value;
+      const days = cmpRange.value === 1 ? 7 : cmpRange.value; // reuse series density; 1d still uses short wave
+      if (!prop || !cmpSelectedDevices.value.length) {
+        return { svg: buildMergeCurveSvg([]), legend: [], empty: true };
+      }
+      const entries = [];
+      const legend = [];
+      cmpSelectedDevices.value.forEach((d, idx) => {
+        const point = cmpPointForDevice(d, prop);
+        const color = CURVE_SERIES_COLORS[idx % CURVE_SERIES_COLORS.length];
+        if (!point) {
+          legend.push({ id: d.id, name: d.name, color, missing: true });
+          return;
+        }
+        // slight phase offset per device so overlay is visually distinct
+        const series = genCurveSeries(point, days === 30 ? 30 : 7).map((pt, i) => ({
+          ...pt,
+          v: Math.round((pt.v + Math.sin(i * 0.17 + idx) * (point.ymax - point.ymin) * 0.02 * (idx + 1)) * 100) / 100,
+        }));
+        if (!series.length) {
+          legend.push({ id: d.id, name: d.name, color, missing: true });
+          return;
+        }
+        entries.push({ point, series });
+        legend.push({ id: d.id, name: d.name, color, missing: false, unit: prop.unit || '' });
+      });
+      const svg = buildMergeCurveSvg(entries);
+      // recolor / rename paths to device names
+      if (svg.paths && svg.paths.length) {
+        let pi = 0;
+        legend.filter(l => !l.missing).forEach((l) => {
+          if (svg.paths[pi]) {
+            svg.paths[pi].color = l.color;
+            svg.paths[pi].name = l.name;
+            svg.paths[pi].code = l.id;
+          }
+          pi += 1;
+        });
+      }
+      return { svg, legend, empty: !entries.length, prop };
+    });
+    const cmpTableRows = computed(() => {
+      void cmpRefreshNonce.value;
+      const props = cmpCategoryProps.value.filter(p => cmpPropIds.value.includes(p.identifier));
+      const useProps = props.length ? props : (cmpPrimaryProp.value ? [cmpPrimaryProp.value] : []);
+      return cmpSelectedDevices.value.map(d => ({
+        id: d.id,
+        name: d.name,
+        online: d.online,
+        lastReportAt: d.lastReportAt,
+        cells: useProps.map(p => ({
+          identifier: p.identifier,
+          name: p.name,
+          unit: p.unit || '',
+          value: latestMetricValue(d, p.identifier),
+        })),
+      }));
+    });
+    const cmpTableProps = computed(() => {
+      const props = cmpCategoryProps.value.filter(p => cmpPropIds.value.includes(p.identifier));
+      return props.length ? props : (cmpPrimaryProp.value ? [cmpPrimaryProp.value] : []);
+    });
+    function syncCmpPropsForCategory() {
+      const props = getCategoryProperties(cmpCategoryId.value);
+      if (!props.length) { cmpPropIds.value = []; return; }
+      const keep = cmpPropIds.value.filter(id => props.some(p => p.identifier === id));
+      cmpPropIds.value = keep.length ? keep : [props[0].identifier];
+    }
+    function onCmpCategoryChange() {
+      const cid = cmpCategoryId.value;
+      cmpDeviceIds.value = cmpDeviceIds.value.filter(id => {
+        const row = MONITOR_ROWS.find(d => d.id === id);
+        return row && row.categoryId === cid;
+      });
+      syncCmpPropsForCategory();
+    }
+    function goMonitorCompare(preIds) {
+      module.value = 'monitor';
+      screen.value = 'monitorCompare';
+      if (Array.isArray(preIds) && preIds.length) {
+        applyCmpDevices(preIds);
+      } else if (!cmpCategoryId.value) {
+        // default demo: 积水仪地埋 + 前两台同品类
+        const demo = MONITOR_ROWS.filter(d => d.categoryId === 'C001').slice(0, 2);
+        if (demo.length) {
+          cmpCategoryId.value = 'C001';
+          cmpDeviceIds.value = demo.map(d => d.id);
+          syncCmpPropsForCategory();
+        }
+      } else {
+        syncCmpPropsForCategory();
+      }
+    }
+    function applyCmpDevices(ids) {
+      const cleaned = [];
+      let category = '';
+      for (const id of ids) {
+        const row = MONITOR_ROWS.find(d => d.id === id);
+        if (!row || !row.categoryId) continue;
+        if (!category) category = row.categoryId;
+        if (row.categoryId !== category) continue;
+        if (cleaned.includes(row.id)) continue;
+        if (cleaned.length >= CMP_MAX) break;
+        cleaned.push(row.id);
+      }
+      cmpCategoryId.value = category;
+      cmpDeviceIds.value = cleaned;
+      syncCmpPropsForCategory();
+    }
+    function removeCmpDevice(id) {
+      cmpDeviceIds.value = cmpDeviceIds.value.filter(x => x !== id);
+    }
+    function openCmpDrawer() {
+      if (!cmpCategoryId.value) {
+        showToast('请先选择品类', 'warn');
+        return;
+      }
+      cmpDrawerPick.value = cmpDeviceIds.value.slice();
+      cmpDrawerSearch.value = '';
+      cmpDrawerOpen.value = true;
+    }
+    function closeCmpDrawer() { cmpDrawerOpen.value = false; }
+    function toggleCmpDrawerPick(id) {
+      const arr = cmpDrawerPick.value.slice();
+      const i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1);
+      else {
+        if (arr.length >= CMP_MAX) { showToast('最多对比 ' + CMP_MAX + ' 台设备', 'warn'); return; }
+        arr.push(id);
+      }
+      cmpDrawerPick.value = arr;
+    }
+    function confirmCmpDrawer() {
+      cmpDeviceIds.value = cmpDrawerPick.value.slice(0, CMP_MAX);
+      cmpDrawerOpen.value = false;
+    }
+    function toggleCmpProp(identifier) {
+      const arr = cmpPropIds.value.slice();
+      const i = arr.indexOf(identifier);
+      if (i >= 0) {
+        if (arr.length <= 1) return; // keep at least one
+        arr.splice(i, 1);
+      } else arr.push(identifier);
+      cmpPropIds.value = arr;
+    }
+    function refreshCmp() { cmpRefreshNonce.value += 1; showToast('已刷新对比数据（mock）', 'ok'); }
+    function toggleCmpListSelect(id, evt) {
+      if (evt) evt.stopPropagation();
+      const arr = cmpListSelected.value.slice();
+      const i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1);
+      else arr.push(id);
+      cmpListSelected.value = arr;
+    }
+    function compareFromMonitorList() {
+      const ids = cmpListSelected.value;
+      if (!ids.length) { showToast('请先勾选设备', 'warn'); return; }
+      const rows = ids.map(id => MONITOR_ROWS.find(d => d.id === id)).filter(Boolean);
+      const cats = [...new Set(rows.map(r => r.categoryId).filter(Boolean))];
+      if (cats.length !== 1) { showToast('仅支持同品类设备对比', 'warn'); return; }
+      if (rows.length > CMP_MAX) { showToast('最多对比 ' + CMP_MAX + ' 台，已截取前 ' + CMP_MAX + ' 台', 'warn'); }
+      goMonitorCompare(ids.slice(0, CMP_MAX));
+    }
+
     function resetOverlays() {
       showCategoryModal.value = false;
       showRuleModal.value = false;
@@ -2926,18 +3167,21 @@ createApp({
       showSendLogModal.value = false;
       showDeviceOtaModal.value = false;
       showCategoryOtaModal.value = false;
+      cmpDrawerOpen.value = false;
     }
 
     function jump(hash) {
       resetOverlays();
       let tabFromQuery = null;
+      let queryParams = null;
       let key = hash || '';
       if (key.includes('?')) {
         const parts = key.split('?');
         key = parts[0];
         try {
-          tabFromQuery = new URLSearchParams(parts.slice(1).join('?')).get('tab');
-        } catch (e) { tabFromQuery = null; }
+          queryParams = new URLSearchParams(parts.slice(1).join('?'));
+          tabFromQuery = queryParams.get('tab');
+        } catch (e) { tabFromQuery = null; queryParams = null; }
       }
       const map = {
         cockpit: () => goCockpit(),
@@ -2987,6 +3231,21 @@ createApp({
         monitorCurve: () => openMonitorCurve(MONITOR_ROWS[0], 'yewei'),
         monitorOnlineRate: () => goMonitorOnlineRate(),
         monitorCurveLong: () => openMonitorCurve(MONITOR_ROWS.find(r => r.id === 'D006') || MONITOR_ROWS[0], 'rain'),
+        deviceCompare: () => {
+          const idsRaw = queryParams ? (queryParams.get('ids') || '') : '';
+          const ids = idsRaw.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+          const cat = queryParams ? (queryParams.get('category') || queryParams.get('categoryId') || '') : '';
+          if (ids.length) goMonitorCompare(ids);
+          else {
+            goMonitorCompare();
+            if (cat) { cmpCategoryId.value = cat; onCmpCategoryChange(); }
+          }
+        },
+        monitorCompare: () => {
+          const idsRaw = queryParams ? (queryParams.get('ids') || '') : '';
+          const ids = idsRaw.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+          goMonitorCompare(ids.length ? ids : undefined);
+        },
       };
       if (map[key]) map[key]();
       else if (map[hash]) map[hash]();
@@ -3078,6 +3337,14 @@ createApp({
       goMonitorList, goMonitorOnlineRate, openMonitorDetail, openMonitorCurve, openMonitorForDevice,
       latestPointEntries, latestMetricValue, formatMetricCell, latestSummaryText, selectCurvePoint, FLOOD_POINT_KEYS,
       alarmSummaryText, formatCycle, aepStatusLabel, aepStatusTag, AEP_STATUS_LABEL,
+      // device compare
+      CMP_MAX, cmpCategoryId, cmpDeviceIds, cmpPropIds, cmpRange, cmpDrawerOpen, cmpDrawerSearch, cmpDrawerPick,
+      cmpTableOpen, cmpListSelected, cmpRefreshNonce,
+      cmpCategoryProps, cmpSelectedDevices, cmpCandidateDevices, cmpPrimaryProp, cmpKpiCards,
+      cmpOverlayChart, cmpTableRows, cmpTableProps,
+      goMonitorCompare, onCmpCategoryChange, removeCmpDevice, openCmpDrawer, closeCmpDrawer,
+      toggleCmpDrawerPick, confirmCmpDrawer, toggleCmpProp, refreshCmp,
+      toggleCmpListSelect, compareFromMonitorList, applyCmpDevices,
     };
   },
   template: `
@@ -3095,7 +3362,7 @@ createApp({
         <div class="nav-group-title">在线监控</div>
         <div class="nav-item" :class="{active: module==='monitor' && (screen==='monitorList' || screen==='monitorDetail' || screen==='monitorCurve')}" @click="jump('monitor')"><span class="dot"></span>设备数据</div>
         <div class="nav-item" :class="{active: module==='monitor' && screen==='monitorOnlineRate'}" @click="goMonitorOnlineRate()"><span class="dot"></span>在线率统计</div>
-        <div class="nav-item nav-item-muted" title="预留：后续功能页挂此分组"><span class="dot"></span>更多功能（预留）</div>
+        <div class="nav-item" :class="{active: module==='monitor' && screen==='monitorCompare'}" @click="goMonitorCompare()"><span class="dot"></span>设备对比</div>
         <div class="nav-group-title">运维</div>
         <div class="nav-item"><span class="dot"></span>告警中心</div>
         <div class="nav-item"><span class="dot"></span>固件仓</div>
@@ -4537,7 +4804,8 @@ createApp({
               <h1 class="page-title">在线监控 · 设备数据</h1>
               <p class="page-desc">看测点最新值与上报状态——按<strong>项目</strong> / <strong>品类</strong>筛选；选品类后展开该品类物模型测点列。档案、生命周期、AEP 绑定、型号请到<strong>设备台账</strong>。</p>
             </div>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-primary" :disabled="!cmpListSelected.length" @click="compareFromMonitorList">对比{{ cmpListSelected.length ? '（' + cmpListSelected.length + '）' : '' }}</button>
               <button class="btn" @click="goMonitorOnlineRate">在线率统计</button>
             </div>
           </div>
@@ -4583,6 +4851,7 @@ createApp({
             <table class="data-table mon-table" data-testid="mon-list-table">
               <thead>
                 <tr>
+                  <th class="mon-col-check" style="width:36px"></th>
                   <th class="mon-col-device">设备</th>
                   <th class="mon-col-status">在线态</th>
                   <th class="mon-col-time">最近上报</th>
@@ -4600,6 +4869,9 @@ createApp({
               </thead>
               <tbody>
                 <tr v-for="d in filteredMonitorRows" :key="d.id" class="row-clickable" @click="openMonitorDetail(d)">
+                  <td class="mon-check-cell" @click.stop>
+                    <input type="checkbox" :checked="cmpListSelected.includes(d.id)" @change="toggleCmpListSelect(d.id, $event)" :aria-label="'选择 '+d.name" />
+                  </td>
                   <td class="mon-device-cell">
                     <div class="cell-title">{{ d.name }}</div>
                     <div class="cell-sub"><code>{{ d.imei }}</code>
@@ -4638,7 +4910,7 @@ createApp({
                   </td>
                 </tr>
                 <tr v-if="!filteredMonitorRows.length">
-                  <td :colspan="monHasCategoryFilter ? (5 + monMetricColumns.length) : 6"><div class="empty-hint">无匹配监控设备</div></td>
+                  <td :colspan="monHasCategoryFilter ? (6 + monMetricColumns.length) : 7"><div class="empty-hint">无匹配监控设备</div></td>
                 </tr>
               </tbody>
             </table>
@@ -4885,6 +5157,184 @@ createApp({
             </div>
             <div v-else class="empty-hint">{{ monCurveEmptyHint }}</div>
 
+        </div>
+
+        <!-- ===== 在线监控：设备对比 ===== -->
+        <div v-else-if="module==='monitor' && screen==='monitorCompare'" class="page-card cmp-page" data-screen="monitor-compare">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">设备对比</h1>
+              <p class="page-desc">同品类多设备测点叠加对比（最多 {{ CMP_MAX }} 台）。数据来自 MONITOR_POINTS / latest_json 与品类 PROPERTIES，无后端接口。</p>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn" @click="goMonitorList">返回设备数据</button>
+              <button class="btn" @click="refreshCmp">刷新</button>
+            </div>
+          </div>
+
+          <div class="toolbar cmp-toolbar">
+            <label class="cmp-field">
+              <span class="cmp-label">品类</span>
+              <select class="select" v-model="cmpCategoryId" @change="onCmpCategoryChange" data-testid="cmp-category">
+                <option value="">请选择品类</option>
+                <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+            </label>
+            <div class="cmp-tags">
+              <span class="cmp-label">已选设备</span>
+              <template v-if="cmpSelectedDevices.length">
+                <span v-for="(d, idx) in cmpSelectedDevices" :key="d.id" class="cmp-device-tag">
+                  <i class="cmp-tag-dot" :class="'cmp-c'+ (idx % 7)"></i>
+                  {{ d.name }}
+                  <button type="button" class="cmp-tag-x" @click="removeCmpDevice(d.id)" title="移除">×</button>
+                </span>
+              </template>
+              <span v-else class="cmp-tags-empty">未选择设备</span>
+              <button class="btn" :disabled="!cmpCategoryId" @click="openCmpDrawer">添加设备</button>
+            </div>
+            <label class="cmp-field">
+              <span class="cmp-label">时间范围</span>
+              <select class="select select-sm" v-model.number="cmpRange">
+                <option :value="1">近 24 小时</option>
+                <option :value="7">近 7 天</option>
+                <option :value="30">近 30 天</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="toolbar cmp-prop-row" v-if="cmpCategoryId">
+            <span class="cmp-label">对比属性</span>
+            <div class="cmp-prop-chips" v-if="cmpCategoryProps.length">
+              <label v-for="p in cmpCategoryProps" :key="p.identifier" class="cmp-prop-chip" :class="{active: cmpPropIds.includes(p.identifier)}">
+                <input type="checkbox" :checked="cmpPropIds.includes(p.identifier)" @change="toggleCmpProp(p.identifier)" />
+                {{ p.name }}<span class="th-sub" v-if="p.unit">{{ p.unit }}</span>
+              </label>
+            </div>
+            <span v-else class="cmp-tags-empty">该品类暂无上报属性（PROPERTIES）</span>
+          </div>
+          <div class="banner-muted mon-hint" v-else>请选择品类以锁定同品类对比，并展开属性多选。</div>
+
+          <!-- KPI -->
+          <div class="cmp-kpi-row" v-if="cmpKpiCards.length">
+            <div v-for="(card, idx) in cmpKpiCards" :key="card.id" class="cmp-kpi-card">
+              <div class="cmp-kpi-top">
+                <span class="cmp-kpi-name"><i class="cmp-tag-dot" :class="'cmp-c'+(idx%7)"></i>{{ card.name }}</span>
+                <span class="mon-status-chip" :class="'mon-st-' + (card.online==='在线'?'online':(card.online==='离线'?'offline':'unknown'))">
+                  <i class="mon-st-dot"></i>{{ card.online }}
+                </span>
+              </div>
+              <div class="cmp-kpi-val">
+                <b>{{ card.value == null || card.value === '' ? '—' : card.value }}</b>
+                <span class="metric-unit" v-if="card.propUnit && card.value != null && card.value !== ''">{{ card.propUnit }}</span>
+              </div>
+              <div class="cmp-kpi-sub">{{ card.propName }} · {{ card.lastReportAt }}</div>
+            </div>
+          </div>
+          <div class="empty-hint cmp-empty" v-else-if="cmpCategoryId">暂无对比设备，请点击「添加设备」从本品类选取（最多 {{ CMP_MAX }} 台）。</div>
+          <div class="empty-hint cmp-empty" v-else>请先选择品类。</div>
+
+          <!-- Overlay chart -->
+          <div class="chart-card cmp-chart-card" v-if="cmpSelectedDevices.length && cmpPrimaryProp">
+            <div class="chart-legend">
+              <strong>叠加曲线 · {{ cmpPrimaryProp.name }}</strong>
+              <span class="sub-nav-hint">多设备同图（按设备名图例）· mock 时序 · 首个勾选属性</span>
+              <span v-for="leg in cmpOverlayChart.legend" :key="leg.id" class="leg">
+                <i class="lg-line" :style="{background: leg.color}"></i>{{ leg.name }}<span v-if="leg.missing" class="th-sub">（无有效值）</span>
+              </span>
+            </div>
+            <div v-if="!cmpOverlayChart.empty" class="cmp-chart-wrap">
+              <svg class="curve-svg cmp-curve-svg" :viewBox="'0 0 ' + cmpOverlayChart.svg.w + ' ' + cmpOverlayChart.svg.h" preserveAspectRatio="none">
+                <rect :x="cmpOverlayChart.svg.padL" :y="cmpOverlayChart.svg.padT" :width="cmpOverlayChart.svg.w - cmpOverlayChart.svg.padL - cmpOverlayChart.svg.padR" :height="cmpOverlayChart.svg.h - cmpOverlayChart.svg.padT - cmpOverlayChart.svg.padB" fill="#fafcff" stroke="#eef2f8" />
+                <g v-for="(tk, i) in cmpOverlayChart.svg.yTicks" :key="'cyt'+i">
+                  <line :x1="cmpOverlayChart.svg.padL" :x2="cmpOverlayChart.svg.w - cmpOverlayChart.svg.padR" :y1="tk.y" :y2="tk.y" stroke="#edf0f5" />
+                  <text :x="cmpOverlayChart.svg.padL - 8" :y="tk.y + 4" text-anchor="end" font-size="11" fill="#8c8c8c">{{ tk.v }}</text>
+                </g>
+                <path v-for="(pp, pi) in cmpOverlayChart.svg.paths" :key="'cp'+pi"
+                  :d="pp.path" fill="none" :stroke="pp.color" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
+                <text :x="(cmpOverlayChart.svg.padL + cmpOverlayChart.svg.w - cmpOverlayChart.svg.padR)/2" :y="cmpOverlayChart.svg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">
+                  sampleTime →（{{ cmpRange === 1 ? '近24小时' : ('近' + cmpRange + '天') }} · 叠加示意）
+                </text>
+              </svg>
+            </div>
+            <div v-else class="empty-hint">所选设备在该属性上暂无有效数值，无法绘制叠加曲线。</div>
+          </div>
+
+          <!-- Value table -->
+          <div class="cmp-table-block" v-if="cmpSelectedDevices.length">
+            <button class="btn-link btn cmp-table-toggle" @click="cmpTableOpen = !cmpTableOpen">{{ cmpTableOpen ? '收起' : '展开' }}数值表</button>
+            <div class="table-wrap" v-show="cmpTableOpen">
+              <table class="data-table mon-table" data-testid="cmp-value-table">
+                <thead>
+                  <tr>
+                    <th>设备</th>
+                    <th>在线态</th>
+                    <th>最近上报</th>
+                    <th v-for="p in cmpTableProps" :key="p.identifier">{{ p.name }} <span class="th-sub" v-if="p.unit">{{ p.unit }}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in cmpTableRows" :key="row.id">
+                    <td><div class="cell-title">{{ row.name }}</div><div class="cell-sub"><code>{{ row.id }}</code></div></td>
+                    <td>
+                      <span class="mon-status-chip" :class="'mon-st-' + (row.online==='在线'?'online':(row.online==='离线'?'offline':'unknown'))">
+                        <i class="mon-st-dot"></i>{{ row.online }}
+                      </span>
+                    </td>
+                    <td class="mon-time-cell">{{ row.lastReportAt }}</td>
+                    <td v-for="cell in row.cells" :key="cell.identifier" class="metric-cell">
+                      <b class="metric-val">{{ cell.value == null || cell.value === '' ? '—' : cell.value }}</b>
+                      <span class="metric-unit" v-if="cell.unit && cell.value != null && cell.value !== ''">{{ cell.unit }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="table-note">对比限制：同品类 · 最多 {{ CMP_MAX }} 台 · 属性来自品类 kind=property。深链示例 <code>#deviceCompare?ids=D001,D002</code>。</div>
+
+          <!-- Drawer: pick devices -->
+          <div class="overlay drawer-mode" v-if="cmpDrawerOpen" @click.self="closeCmpDrawer">
+            <div class="drawer drawer-lg" data-testid="cmp-device-drawer">
+              <div class="drawer-header">
+                <span>添加对比设备 · {{ (CATEGORIES.find(c=>c.id===cmpCategoryId) || {}).name || cmpCategoryId }}</span>
+                <button class="btn" @click="closeCmpDrawer">关闭</button>
+              </div>
+              <div class="drawer-body">
+                <div class="toolbar" style="margin-bottom:12px">
+                  <input class="input input-md" v-model="cmpDrawerSearch" placeholder="搜索设备名 / IMEI" />
+                  <span class="cmp-tags-empty">已勾 {{ cmpDrawerPick.length }} / {{ CMP_MAX }}</span>
+                </div>
+                <div v-if="!cmpCandidateDevices.length" class="empty-hint">本品类暂无监控设备</div>
+                <table class="data-table mon-table" v-else>
+                  <thead>
+                    <tr><th style="width:40px"></th><th>设备</th><th>在线态</th><th>最近上报</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="d in cmpCandidateDevices" :key="d.id">
+                      <td>
+                        <input type="checkbox" :checked="cmpDrawerPick.includes(d.id)" @change="toggleCmpDrawerPick(d.id)" />
+                      </td>
+                      <td>
+                        <div class="cell-title">{{ d.name }}</div>
+                        <div class="cell-sub"><code>{{ d.imei }}</code></div>
+                      </td>
+                      <td>
+                        <span class="mon-status-chip" :class="'mon-st-' + (d.online==='在线'?'online':(d.online==='离线'?'offline':'unknown'))">
+                          <i class="mon-st-dot"></i>{{ d.online }}
+                        </span>
+                      </td>
+                      <td class="mon-time-cell">{{ d.lastReportAt }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="drawer-footer">
+                <button class="btn" @click="closeCmpDrawer">取消</button>
+                <button class="btn btn-primary" @click="confirmCmpDrawer">确定（{{ cmpDrawerPick.length }}）</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ===== 在线监控：在线率 ===== -->

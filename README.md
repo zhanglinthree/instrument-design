@@ -20,7 +20,7 @@ python3 -m http.server 8877
 
 ## 模块切换
 
-侧栏：**设备管控**（工作台 / 设备台账 / 物模型）与一级分组 **在线监控**（设备数据 / 在线率统计；预留后续子页）；同壳同配色，高亮当前模块。HTML 原型无真实登录与权限；正式产品首页由权限决定（用户有权的第一个菜单页），不固定落在工作台。
+侧栏：**设备管控**（工作台 / 设备台账 / 物模型）与一级分组 **在线监控**（设备数据 / 在线率统计 / 设备对比）；同壳同配色，高亮当前模块。HTML 原型无真实登录与权限；正式产品首页由权限决定（用户有权的第一个菜单页），不固定落在工作台。
 
 ## 产品口径（本期）
 
@@ -94,6 +94,7 @@ python3 -m http.server 8877
 - **测点列随品类动态变化**：选品类后，列头取该品类物模型 `kind=property` 的 `identifier` / `name` / `unit`，单元格取 `latest_json[identifier]`。
 - 行操作仅 **查看数据** / **曲线**（无改挂、编辑档案）。
 - 点击行 → **设备数据详情**：最新值卡片 + 历史曲线。台账「数据」按钮跳入同一详情。
+- **设备对比**：侧栏「设备对比」或列表勾选后点「对比」；锁定同品类，属性多选自 `PROPERTIES`，叠加 mock 曲线（设备名图例），无新 BE API。
 
 ## 在线监控屏幕
 
@@ -104,6 +105,7 @@ python3 -m http.server 8877
 | 3 | 历史曲线全屏（7 天 / 30 天；预警 orange / 报警 error / 故障 primary 参考线） | `#monitorCurve` |
 | 3b | 长周期曲线（采集周期 >15 分钟 →「历史全量查、不分段」） | `#monitorCurveLong` |
 | 4 | 在线率（该报没报：应报/实报/漏报统计卡片 + 简表） | `#monitorOnlineRate` |
+| 5 | 设备对比（同品类多设备叠加曲线 + KPI + 数值表；最多 8 台） | `#deviceCompare` / `#monitorCompare`；深链 `#deviceCompare?ids=D001,D002` |
 
 测点时序为 **PostgreSQL 时序示意**，非实时接入。各品类 mock 的 `latest_json` 与物模型 `kind=property` 标识符对齐。一期不做设施树、地图；**物模型可配置指令模板**；设备档案 Tab 顺序：**档案信息 → 本机数据（报文列表）→ 指令下发**（`#deviceDetail` / `#deviceLocalData` / `#deviceDispatch`；旧 `#devicePackets` 并入本机数据）。曲线仅在线监控。点发 dryRun 预览 contentHex + 真正下发 mock toast；AEP CreateCommand 透传 hex dataType=2。
 
