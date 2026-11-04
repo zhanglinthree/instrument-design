@@ -2190,3 +2190,7 @@ iconify-icon.cat-icon {
   background: linear-gradient(90deg, #1677ff, #69b1ff);
   border-radius: 3px;
 }
+
+.nav-item.nav-item-muted { color: #9aa3b2; cursor: default; }
+.nav-item.nav-item-muted:hover { background: transparent; }
+.nav-item.nav-item-muted .dot { opacity: .35; }

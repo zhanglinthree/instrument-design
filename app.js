@@ -1284,11 +1284,11 @@ createApp({
         return { parent: '设备管控', current: '工作台' };
       }
       if (module.value === 'monitor') {
-        if (screen.value === 'monitorList') return { parent: '设备管控', current: '在线监控 · 设备数据' };
+        if (screen.value === 'monitorList') return { parent: '在线监控', current: '设备数据' };
         if (screen.value === 'monitorDetail') return { parent: '在线监控', current: (currentMonitor.value?.name || '设备') + ' · 设备数据' };
         if (screen.value === 'monitorCurve') return { parent: currentMonitor.value?.name || '设备', current: '历史曲线' };
         if (screen.value === 'monitorOnlineRate') return { parent: '在线监控', current: '在线率统计' };
-        return { parent: '设备管控', current: '在线监控' };
+        return { parent: '在线监控', current: '设备数据' };
       }
       if (module.value === 'ledger') {
         if (screen.value === 'projects') return { parent: '设备管控', current: '设备台账 · 项目列表' };
@@ -3091,8 +3091,11 @@ createApp({
         <div class="nav-group-title">设备管控</div>
         <div class="nav-item" :class="{active: module==='cockpit'}" @click="jump('cockpit')"><span class="dot"></span>工作台</div>
         <div class="nav-item" :class="{active: module==='ledger'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
-        <div class="nav-item" :class="{active: module==='monitor'}" @click="jump('monitor')"><span class="dot"></span>在线监控</div>
         <div class="nav-item" :class="{active: module==='thing'}" @click="jump('list')"><span class="dot"></span>物模型</div>
+        <div class="nav-group-title">在线监控</div>
+        <div class="nav-item" :class="{active: module==='monitor' && (screen==='monitorList' || screen==='monitorDetail' || screen==='monitorCurve')}" @click="jump('monitor')"><span class="dot"></span>设备数据</div>
+        <div class="nav-item" :class="{active: module==='monitor' && screen==='monitorOnlineRate'}" @click="goMonitorOnlineRate()"><span class="dot"></span>在线率统计</div>
+        <div class="nav-item nav-item-muted" title="预留：后续功能页挂此分组"><span class="dot"></span>更多功能（预留）</div>
         <div class="nav-group-title">运维</div>
         <div class="nav-item"><span class="dot"></span>告警中心</div>
         <div class="nav-item"><span class="dot"></span>固件仓</div>
