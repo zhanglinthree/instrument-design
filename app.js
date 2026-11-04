@@ -617,10 +617,26 @@ function formatSampleTime(baseMs, offsetSec) {
   return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
     + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
 }
+/** datetime-local 值 → ms；begin 取该分钟 :00，end 取该分钟 :59（含边界） */
+function parseReportBoundMs(local, asEnd) {
+  if (!local) return NaN;
+  const raw = String(local).trim().replace('T', ' ');
+  const withSec = /\d{2}:\d{2}:\d{2}$/.test(raw) ? raw : (raw + (asEnd ? ':59' : ':00'));
+  return Date.parse(withSec.replace(/-/g, '/'));
+}
+function toDatetimeLocalValue(ms) {
+  const d = new Date(ms);
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+    + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+/**
+ * 生成上报明细：默认覆盖近 ~36h（便于默认近 24h 过滤示意），按 sample_time DESC（最新在上）。
+ * 一期不接成功/漏报/延迟状态列；曲线 /history 仍升序，勿改。
+ */
 function genReportSamples(points, opts) {
   const list = (points || []).filter(Boolean);
-  const count = (opts && opts.count) || 12;
-  const cycleSec = (opts && opts.cycleSec) || 60;
+  const count = (opts && opts.count) || 48;
+  const spanSec = (opts && opts.spanSec) || 36 * 3600;
   const baseTs = (opts && opts.baseTs) || '2026-10-14 09:18:33';
   const baseMs = Date.parse(String(baseTs).replace(/-/g, '/')) || Date.parse('2026/10/14 09:18:33');
   const chartable = list.filter(p => isFiniteMetricValue(p.value));
@@ -630,26 +646,24 @@ function genReportSamples(points, opts) {
     const s = genCurveSeries(p, 7);
     seriesMap[p.code] = s.length ? s : [{ v: Number(p.value), t: 1 }];
   });
+  const stepSec = spanSec / Math.max(1, count - 1);
   const rows = [];
   for (let i = 0; i < count; i++) {
-    const offsetSec = i * cycleSec;
+    const offsetSec = Math.round(i * stepSec);
     const values = {};
     chartable.forEach(p => {
       const s = seriesMap[p.code];
-      const idx = Math.max(0, s.length - 1 - i);
+      const idx = Math.max(0, s.length - 1 - (i % s.length));
       values[p.code] = s[idx] ? s[idx].v : p.value;
     });
-    // 偶发漏报示意
-    let status = '成功';
-    if (i === 3) status = '漏报';
-    else if (i === 7) status = '延迟';
     rows.push({
       id: 'RS' + pad2(i + 1),
       time: formatSampleTime(baseMs, offsetSec),
       values,
-      status,
     });
   }
+  // 生成后按 sample_time DESC（不要依赖前端二次 reverse）
+  rows.sort((a, b) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0));
   return rows;
 }
 
@@ -875,6 +889,11 @@ createApp({
     const monCurveMode = ref('split'); // 'split' | 'merge' · 默认分开
     const monHoverT = ref(null); // 0..1 · 悬停采样比例（统一 sampleTime）
     const monDetailTab = ref('overview'); // overview | reports · 最新与曲线 / 上报明细
+    // 上报明细时间区间（对接 sampleTimeBegin / sampleTimeEnd）；默认近 24h（相对最近上报）
+    const monReportBegin = ref('');
+    const monReportEnd = ref('');
+    const monReportAppliedBegin = ref('');
+    const monReportAppliedEnd = ref('');
 
     /* ---- 设备对比 state ---- */
     const cmpCategoryId = ref('');
@@ -2932,6 +2951,7 @@ createApp({
       monCurvePointCode.value = defs.length ? defs[0].identifier : (pts.length ? pts[0].code : '');
       monCurveRange.value = 7;
       monDetailTab.value = 'overview';
+      resetMonReportTimeRange();
       module.value = 'monitor';
       screen.value = 'monitorDetail';
     }
@@ -2956,12 +2976,52 @@ createApp({
     });
     /** 上报明细表：当前设备 mock 逐条采样（属性列同 monLatestPoints） */
     const monReportColumns = computed(() => monLatestPoints.value || []);
-    const monReportSamples = computed(() => {
+    function monReportBaseMs() {
+      const row = currentMonitor.value;
+      const baseTs = row && row.lastReportAt && row.lastReportAt !== '—' ? row.lastReportAt : '2026-10-14 09:18:33';
+      return Date.parse(String(baseTs).replace(/-/g, '/')) || Date.parse('2026/10/14 09:18:33');
+    }
+    /** 默认近 24h：相对最近上报 sample_time */
+    function resetMonReportTimeRange() {
+      const endMs = monReportBaseMs();
+      const beginMs = endMs - 24 * 3600 * 1000;
+      const b = toDatetimeLocalValue(beginMs);
+      const e = toDatetimeLocalValue(endMs);
+      monReportBegin.value = b;
+      monReportEnd.value = e;
+      monReportAppliedBegin.value = b;
+      monReportAppliedEnd.value = e;
+    }
+    function queryMonReportSamples() {
+      monReportAppliedBegin.value = monReportBegin.value;
+      monReportAppliedEnd.value = monReportEnd.value;
+    }
+    const monReportSamplesAll = computed(() => {
       const row = currentMonitor.value;
       const pts = monLatestPoints.value || [];
       if (!row || !pts.length) return [];
       const baseTs = row.lastReportAt && row.lastReportAt !== '—' ? row.lastReportAt : '2026-10-14 09:18:33';
-      return genReportSamples(pts, { count: 12, cycleSec: row.cycleSec || 60, baseTs });
+      // ~36h 跨度 + DESC，便于默认 24h 窗过滤示意；曲线 /history 仍升序另算
+      return genReportSamples(pts, { count: 48, spanSec: 36 * 3600, baseTs });
+    });
+    const monReportSamples = computed(() => {
+      const all = monReportSamplesAll.value;
+      const bMs = parseReportBoundMs(monReportAppliedBegin.value, false);
+      const eMs = parseReportBoundMs(monReportAppliedEnd.value, true);
+      if (!Number.isFinite(bMs) && !Number.isFinite(eMs)) return all;
+      return all.filter(r => {
+        const t = Date.parse(String(r.time).replace(/-/g, '/'));
+        if (!Number.isFinite(t)) return false;
+        if (Number.isFinite(bMs) && t < bMs) return false;
+        if (Number.isFinite(eMs) && t > eMs) return false;
+        return true;
+      });
+    });
+    const monReportEmptyHint = computed(() => {
+      if (!(monLatestPoints.value || []).length) return monPointsEmptyHint.value;
+      if (!monReportSamplesAll.value.length) return '暂无上报数据';
+      if (!monReportSamples.value.length) return '所选时间范围内暂无上报数据';
+      return '';
     });
     function openMonitorDeviceLocalData() {
       const m = currentMonitor.value;
@@ -3499,7 +3559,9 @@ createApp({
       filteredMonitorRows, monListStats, currentMonitor,
       monMetricColumns, monHasCategoryFilter, monSelectedCategoryName,
       monLatestPoints, monSelectedPoint, monCurveRange, monCurvePointCode, monCurveMode, monHoverT,
-      monDetailTab, monLedgerDevice, monIdentity, monReportColumns, monReportSamples, openMonitorDeviceLocalData,
+      monDetailTab, monLedgerDevice, monIdentity, monReportColumns, monReportSamples, monReportSamplesAll,
+      monReportBegin, monReportEnd, monReportEmptyHint, resetMonReportTimeRange, queryMonReportSamples,
+      openMonitorDeviceLocalData,
       monChartablePoints, monCurveCharts, monHoverReadout, monPointsEmptyHint, monCurveEmptyHint,
       monCurveSeries, monCurveSvg, monCycleFullQueryTip,
       onMonCurveMove, onMonCurveLeave, setMonCurveMode, isFiniteMetricValue,
@@ -5284,11 +5346,27 @@ createApp({
 
           <template v-else-if="monDetailTab==='reports'">
             <div class="info-section">
-              <div class="info-section-title">上报明细 <span class="sub-nav-hint">逐条采样 · 仅「监控展示」勾选的品类 property · 非报文 hex</span></div>
-              <div class="table-note" style="margin-bottom:10px">仅展示物模型属性中勾选「监控展示」的测点。</div>
+              <div class="info-section-title">上报明细 <span class="sub-nav-hint">逐条采样 · sample_time DESC · 仅「监控展示」勾选的品类 property · 非报文 hex</span></div>
+              <div class="table-note" style="margin-bottom:10px">仅展示物模型属性中勾选「监控展示」的测点。一期不接成功/漏报/延迟状态列。</div>
               <div class="banner-muted" style="margin-bottom:10px">
                 曲线看趋势；本表看逐条上报。原始报文 contentHex 请到台账「本机数据」。
                 <button class="btn-link btn" @click="openMonitorDeviceLocalData">跳转本机数据 →</button>
+              </div>
+              <div class="form-row" style="align-items:flex-end;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+                <div class="form-item" style="min-width:200px">
+                  <label>开始时间 <code style="font-size:12px;font-weight:normal">sampleTimeBegin</code></label>
+                  <input class="input input-full" type="datetime-local" v-model="monReportBegin" />
+                </div>
+                <div class="form-item" style="min-width:200px">
+                  <label>结束时间 <code style="font-size:12px;font-weight:normal">sampleTimeEnd</code></label>
+                  <input class="input input-full" type="datetime-local" v-model="monReportEnd" />
+                </div>
+                <div class="form-item" style="flex:0;padding-bottom:1px">
+                  <button class="btn btn-primary" @click="queryMonReportSamples">查询</button>
+                </div>
+                <div class="form-item" style="flex:0;padding-bottom:1px">
+                  <button class="btn" @click="resetMonReportTimeRange">近 24 小时</button>
+                </div>
               </div>
               <div class="table-wrap" v-if="monReportSamples.length">
                 <table class="data-table">
@@ -5296,7 +5374,6 @@ createApp({
                     <tr>
                       <th>上报时间</th>
                       <th v-for="c in monReportColumns" :key="c.code">{{ c.name }}<span v-if="c.unit">（{{ c.unit }}）</span></th>
-                      <th>状态</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5306,15 +5383,12 @@ createApp({
                         <template v-if="isFiniteMetricValue(r.values[c.code])">{{ r.values[c.code] }}</template>
                         <span v-else class="muted">—</span>
                       </td>
-                      <td>
-                        <span class="tag" :class="r.status==='成功'?'tag-green':(r.status==='漏报'?'tag-red':'tag-orange')">{{ r.status }}</span>
-                      </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div v-else class="empty-hint">{{ monPointsEmptyHint }}</div>
-              <div class="table-note">示意数据由 MONITOR_POINTS / history 风格 mock 生成；正式环境对接时序库采样点。</div>
+              <div v-else class="empty-hint">{{ monReportEmptyHint }}</div>
+              <div class="table-note">筛参对接 <code>sampleTimeBegin</code> / <code>sampleTimeEnd</code>（含边界）；列表分页 <code>GET /iot/iotDeviceSample</code> 按 <code>sample_time DESC</code>（最新在上）。曲线 <code>/history</code> 仍升序，勿改。本表为 mock 示意过滤/排序，正式列以 sample 实有字段为准。</div>
             </div>
           </template>
         </div>

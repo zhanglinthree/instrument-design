@@ -95,6 +95,7 @@ python3 -m http.server 8877
 - **测点列随品类动态变化**：选品类后，列头取该品类物模型 `kind=property` 且 `showInMonitor !== false` 的 `identifier` / `name` / `unit`，单元格取 `latest_json[identifier]`（与详情最新值/曲线/上报明细同源过滤）。
 - 行操作仅 **查看数据** / **曲线**（无改挂、编辑档案）。
 - 点击行 → **设备数据详情**：顶栏展示 device_id / AEP_ID / IMEI·deviceSn / 品类·项目 / AEP status；Tab「最新与曲线」+「上报明细」（逐条 mock 采样）；曲线看趋势、上报明细看逐条，报文 hex 仍在台账本机数据。台账「数据」按钮跳入同一详情。
+- **上报明细**：时间区间筛参 `sampleTimeBegin` / `sampleTimeEnd`（默认近 24h，相对最近上报）；列表按 `sample_time DESC`（最新在上）；对接分页 `GET /iot/iotDeviceSample`。曲线 `/history` 仍升序。一期不接成功/漏报/延迟状态列。
 - **设备对比**：侧栏「设备对比」或列表勾选后点「对比」；锁定同品类，属性多选自 `PROPERTIES`，叠加 mock 曲线（设备名图例），无新 BE API。
 
 ## 在线监控屏幕
