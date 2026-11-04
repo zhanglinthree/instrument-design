@@ -237,34 +237,34 @@ const FIRMWARES = [
  * 字段对齐后端 kind=service：bitIndex / payloadOffset / hasParam / paramMin / paramMax + identifier·name·dataType·unit·required·access。
  * 真正下发走 AEP CreateCommand（透传 hex，dataType=2） */
 const COMMANDS = [
-  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParam: 0, bitIndex: 1, payloadOffset: 25, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 1；内容起始字节 25（F0 重启 / 0F 不重启）', params: null },
-  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParam: 0, bitIndex: 2, payloadOffset: 26, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 2；内容起始字节 26（F0/0F）', params: null },
-  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParam: 0, bitIndex: 3, payloadOffset: 27, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 3；内容起始字节 27（F0/0F）', params: null },
-  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParam: 1, bitIndex: 4, payloadOffset: 28, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 10000, enabled: true, desc: '命令位 4；内容起始字节 28（2 字节 mm）；params.value',
+  { id: 'CMD01', categoryId: 'C001', code: 'reboot', name: '重启', hasParam: 0, bitIndex: 1, payloadOffset: 25, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, batchable: true, enabled: true, desc: '命令位 1；内容起始字节 25（F0 重启 / 0F 不重启）', params: null },
+  { id: 'CMD02', categoryId: 'C001', code: 'factoryReset', name: '恢复出厂', hasParam: 0, bitIndex: 2, payloadOffset: 26, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, batchable: false, enabled: true, desc: '命令位 2；内容起始字节 26（F0/0F）', params: null },
+  { id: 'CMD03', categoryId: 'C001', code: 'clearData', name: '清零', hasParam: 0, bitIndex: 3, payloadOffset: 27, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, batchable: false, enabled: true, desc: '命令位 3；内容起始字节 27（F0/0F）', params: null },
+  { id: 'CMD04', categoryId: 'C001', code: 'installHeightMm', name: '安装高度', hasParam: 1, bitIndex: 4, payloadOffset: 28, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 10000, batchable: false, enabled: true, desc: '命令位 4；内容起始字节 28（2 字节 mm）；params.value',
     params: { value: { label: '安装高度', min: 0, max: 10000, unit: 'mm' } } },
-  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParam: 1, bitIndex: 5, payloadOffset: 30, dataType: 'int', unit: 's', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 5；内容起始字节 30（4 字节 unix 秒）；params.value',
+  { id: 'CMD05', categoryId: 'C001', code: 'syncTime', name: '对时', hasParam: 1, bitIndex: 5, payloadOffset: 30, dataType: 'int', unit: 's', required: true, access: 'w', paramMin: null, paramMax: null, batchable: true, enabled: true, desc: '命令位 5；内容起始字节 30（4 字节 unix 秒）；params.value',
     params: { value: { label: 'unix 秒', min: null, max: null, unit: 's' } } },
-  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParam: 1, bitIndex: 6, payloadOffset: 34, dataType: 'object', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 65535, enabled: true, desc: '命令位 6；内容起始字节 34（高低水位 4 字节）；params.high / params.low，high＞low',
+  { id: 'CMD06', categoryId: 'C001', code: 'switchThreshold', name: '切换频率', hasParam: 1, bitIndex: 6, payloadOffset: 34, dataType: 'object', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 65535, batchable: false, enabled: true, desc: '命令位 6；内容起始字节 34（高低水位 4 字节）；params.high / params.low，high＞low',
     params: {
       high: { label: '高水位', min: 0, max: 65535, unit: 'mm' },
       low: { label: '低水位', min: 0, max: 65535, unit: 'mm' }
     } },
-  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParam: 1, bitIndex: 7, payloadOffset: 38, dataType: 'object', unit: '-', required: true, access: 'w', paramMin: 0, paramMax: 16777215, enabled: true, desc: '命令位 7；内容起始字节 38（起止包序列号 6 字节）；params.start / params.end，start≤end',
+  { id: 'CMD07', categoryId: 'C001', code: 'resendRange', name: '重发区间', hasParam: 1, bitIndex: 7, payloadOffset: 38, dataType: 'object', unit: '-', required: true, access: 'w', paramMin: 0, paramMax: 16777215, batchable: false, enabled: true, desc: '命令位 7；内容起始字节 38（起止包序列号 6 字节）；params.start / params.end，start≤end',
     params: {
       start: { label: '起始包序列号', min: 0, max: 16777215 },
       end: { label: '结束包序列号', min: 0, max: 16777215 }
     } },
-  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParam: 1, bitIndex: 8, payloadOffset: 44, dataType: 'object', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 8；内容起始字节 44（长/中/短采样间隔）；params.longMin / midMin / shortMin',
+  { id: 'CMD08', categoryId: 'C001', code: 'sampleInterval', name: '采样频率', hasParam: 1, bitIndex: 8, payloadOffset: 44, dataType: 'object', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, batchable: true, enabled: true, desc: '命令位 8；内容起始字节 44（长/中/短采样间隔）；params.longMin / midMin / shortMin',
     params: {
       longMin: { label: '长(无水)分钟', min: 1, max: 65535, unit: 'min' },
       midMin: { label: '中', min: 1, max: 255, unit: 'min' },
       shortMin: { label: '短', min: 1, max: 255, unit: 'min' }
     } },
-  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParam: 1, bitIndex: 10, payloadOffset: 50, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 10（位 9 空缺）；内容起始字节 50（2 字节 mm）；params.value',
+  { id: 'CMD09', categoryId: 'C001', code: 'raiseHeightMm', name: '上凸高度', hasParam: 1, bitIndex: 10, payloadOffset: 50, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, batchable: false, enabled: true, desc: '命令位 10（位 9 空缺）；内容起始字节 50（2 字节 mm）；params.value',
     params: { value: { label: '上凸高度', min: 0, max: 5000, unit: 'mm' } } },
-  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParam: 1, bitIndex: 11, payloadOffset: 52, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, enabled: true, desc: '命令位 11；内容起始字节 52（2 字节 mm）；params.value',
+  { id: 'CMD10', categoryId: 'C001', code: 'sinkHeightMm', name: '下沉高度', hasParam: 1, bitIndex: 11, payloadOffset: 52, dataType: 'int', unit: 'mm', required: true, access: 'w', paramMin: 0, paramMax: 5000, batchable: false, enabled: true, desc: '命令位 11；内容起始字节 52（2 字节 mm）；params.value',
     params: { value: { label: '下沉高度', min: 0, max: 5000, unit: 'mm' } } },
-  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParam: 1, bitIndex: 12, payloadOffset: 54, dataType: 'object', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, enabled: true, desc: '命令位 12；内容起始字节 54（长/中/短发送间隔）；params.longMin / midMin / shortMin',
+  { id: 'CMD11', categoryId: 'C001', code: 'sendInterval', name: '发送频率', hasParam: 1, bitIndex: 12, payloadOffset: 54, dataType: 'object', unit: 'min', required: true, access: 'w', paramMin: 1, paramMax: 65535, batchable: true, enabled: true, desc: '命令位 12；内容起始字节 54（长/中/短发送间隔）；params.longMin / midMin / shortMin',
     params: {
       longMin: { label: '长(无水)分钟', min: 1, max: 65535, unit: 'min' },
       midMin: { label: '中', min: 1, max: 255, unit: 'min' },
@@ -272,12 +272,28 @@ const COMMANDS = [
     } },
 
   /* 智能井盖 C007：命令代码 17/23/24/25；内容区字节 73–82 */
-  { id: 'CMD70', categoryId: 'C007', code: 'openAngle', name: '修改判断开启角度', hasParam: 1, bitIndex: 17, payloadOffset: 73, dataType: 'int', unit: '°', required: true, access: 'w', paramMin: 0, paramMax: 180, enabled: true, desc: '命令位 17；内容起始字节 73（1 字节，0°–180°，默认 35°）；params.value',
+  { id: 'CMD70', categoryId: 'C007', code: 'openAngle', name: '修改判断开启角度', hasParam: 1, bitIndex: 17, payloadOffset: 73, dataType: 'int', unit: '°', required: true, access: 'w', paramMin: 0, paramMax: 180, batchable: false, enabled: true, desc: '命令位 17；内容起始字节 73（1 字节，0°–180°，默认 35°）；params.value',
     params: { value: { label: '开启角度', min: 0, max: 180, unit: '°', default: 35 } } },
-  { id: 'CMD71', categoryId: 'C007', code: 'changeDeviceSn', name: '更改设备号', hasParam: 1, bitIndex: 23, payloadOffset: 74, dataType: 'string', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 23；内容起始字节 74–80（7 字节设备号）；params.value',
+  { id: 'CMD71', categoryId: 'C007', code: 'changeDeviceSn', name: '更改设备号', hasParam: 1, bitIndex: 23, payloadOffset: 74, dataType: 'string', unit: '-', required: true, access: 'w', paramMin: null, paramMax: null, batchable: false, enabled: true, desc: '命令位 23；内容起始字节 74–80（7 字节设备号）；params.value',
     params: { value: { label: '新设备号', min: null, max: null, unit: '', len: 7 } } },
-  { id: 'CMD72', categoryId: 'C007', code: 'recordInstallAttitude', name: '记录安装基准(补偿)姿态', hasParam: 0, bitIndex: 24, payloadOffset: 81, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 24；内容起始字节 81（0xF0 记录补偿姿态 / 0x0F 清除）', params: null },
-  { id: 'CMD73', categoryId: 'C007', code: 'bootUpgrade', name: 'BOOT升级', hasParam: 0, bitIndex: 25, payloadOffset: 82, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, enabled: true, desc: '命令位 25；内容起始字节 82（0xF0 升级 BOOT / 0x0F 不升级）', params: null },
+  { id: 'CMD72', categoryId: 'C007', code: 'recordInstallAttitude', name: '记录安装基准(补偿)姿态', hasParam: 0, bitIndex: 24, payloadOffset: 81, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, batchable: false, enabled: true, desc: '命令位 24；内容起始字节 81（0xF0 记录补偿姿态 / 0x0F 清除）', params: null },
+  { id: 'CMD73', categoryId: 'C007', code: 'bootUpgrade', name: 'BOOT升级', hasParam: 0, bitIndex: 25, payloadOffset: 82, dataType: 'bool', unit: 'F0/0F', required: true, access: 'w', paramMin: null, paramMax: null, batchable: true, enabled: true, desc: '命令位 25；内容起始字节 82（0xF0 升级 BOOT / 0x0F 不升级）', params: null },
+];
+
+
+/* OTA 升级日志（设备级）· 与 bootUpgrade 指令区分：固件包任务 */
+const DEVICE_UPGRADE_LOGS = [
+  { id: 'UL01', deviceId: 'D001', time: '2026-10-28 14:20:11', fromVer: '1.1.2', toVer: '1.2.0', status: '成功', progress: 100, operator: '张三', failReason: '' },
+  { id: 'UL02', deviceId: 'D001', time: '2026-10-30 09:05:00', fromVer: '1.2.0', toVer: '1.3.0', status: '升级中', progress: 62, operator: '李敏', failReason: '' },
+  { id: 'UL03', deviceId: 'D002', time: '2026-10-29 16:40:22', fromVer: '1.2.0', toVer: '1.3.0', status: '排队', progress: 0, operator: '李敏', failReason: '' },
+  { id: 'UL04', deviceId: 'D015', time: '2026-10-27 11:12:00', fromVer: '1.1.2', toVer: '1.2.0', status: '失败', progress: 38, operator: '王建国', failReason: '设备离线超时' },
+  { id: 'UL05', deviceId: 'D007', time: '2026-10-26 08:30:00', fromVer: '1.0.0', toVer: '1.2.0', status: '成功', progress: 100, operator: '张三', failReason: '' },
+];
+
+/* 品类级 OTA 批量升级任务 */
+const CATEGORY_OTA_TASKS = [
+  { id: 'OT01', categoryId: 'C001', fromVerHint: '<1.3.0', toVer: '1.3.0', firmwareId: 'F1', createdAt: '2026-10-30 09:00:00', operator: '李敏', deviceCount: 3, success: 0, fail: 0, pending: 3, status: '进行中' },
+  { id: 'OT02', categoryId: 'C001', fromVerHint: '<1.2.0', toVer: '1.2.0', firmwareId: 'F2', createdAt: '2026-10-20 15:10:00', operator: '张三', deviceCount: 5, success: 4, fail: 1, pending: 0, status: '已完成' },
 ];
 
 /* ========== 设备台账 Mock ========== */
@@ -659,6 +675,27 @@ createApp({
       paramMin: null, paramMax: null, enabled: true
     });
     const commandList = ref(COMMANDS.map(c => ({ ...c })));
+
+    /* ---- 品类 · 批量下发 ---- */
+    const batchCmdId = ref('');
+    const batchParams = reactive({});
+    const batchProjectFilter = ref('');
+    const batchOnlineOnly = ref(true);
+    const batchSelectedDeviceIds = ref([]);
+    const batchPreviewHex = ref('');
+    const batchPreviewOk = ref(false);
+    const batchJobSummary = ref(null); // { total, success, fail, command, at }
+
+    /* ---- OTA：设备固件升级 / 品类批量升级 ---- */
+    const deviceUpgradeLogs = ref(DEVICE_UPGRADE_LOGS.map(r => ({ ...r })));
+    const categoryOtaTasks = ref(CATEGORY_OTA_TASKS.map(r => ({ ...r })));
+    const showDeviceOtaModal = ref(false);
+    const deviceOtaTargetVer = ref('');
+    const showCategoryOtaModal = ref(false);
+    const categoryOtaFirmwareId = ref('');
+    const categoryOtaTargetVer = ref('');
+    const categoryOtaSelectedIds = ref([]);
+    const categoryOtaOnlineOnly = ref(true);
     const COMMAND_DATA_TYPES = ['bool', 'int', 'float', 'string', 'enum', 'object'];
     const COMMAND_ACCESS_OPTS = ['r', 'w'];
 
@@ -731,7 +768,7 @@ createApp({
     const showCategoryOverride = ref(false);
 
     /* ---- 设备档案 · Tab：档案 / 本机数据 / 指令 / 设备发送记录 / 子设备 ---- */
-    const deviceDetailTab = ref('profile'); // profile | localData | dispatch | sendLog | snChange | children
+    const deviceDetailTab = ref('profile'); // profile | localData | dispatch | sendLog | snChange | children | upgradeLog
     const packetTypeFilter = ref(''); // '' | message* | data* | upgrade65535 | command
     const expandedPacketIds = ref([]); // hex 展开行
     const dispatchSelected = ref([]); // command ids
@@ -802,6 +839,77 @@ createApp({
     const dispatchSelectedCmds = computed(() => {
       const set = new Set(dispatchSelected.value);
       return deviceDispatchCommands.value.filter(c => set.has(c.id));
+    });
+
+    const batchableCategoryCommands = computed(() =>
+      currentCategoryCommands.value.filter(c => c.enabled !== false && c.batchable === true)
+    );
+    const batchSelectedCommand = computed(() =>
+      batchableCategoryCommands.value.find(c => c.id === batchCmdId.value) || null
+    );
+    const batchCandidateDevices = computed(() => {
+      const cid = currentCategory.value?.id;
+      if (!cid) return [];
+      return deviceList.value.filter(d => {
+        if (d.categoryId !== cid) return false;
+        if (batchProjectFilter.value && d.projectId !== batchProjectFilter.value) return false;
+        if (batchOnlineOnly.value && d.lifecycle !== '在线') return false;
+        return true;
+      });
+    });
+
+    function compareSemver(a, b) {
+      const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+      const pb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0);
+      const len = Math.max(pa.length, pb.length);
+      for (let i = 0; i < len; i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x < y) return -1;
+        if (x > y) return 1;
+      }
+      return 0;
+    }
+
+    const currentDeviceUpgradeLogs = computed(() => {
+      const d = currentDevice.value;
+      if (!d) return [];
+      return deviceUpgradeLogs.value
+        .filter(r => r.deviceId === d.id)
+        .slice()
+        .sort((a, b) => String(b.time).localeCompare(String(a.time)));
+    });
+
+    const deviceOtaFirmwareOptions = computed(() => {
+      const d = currentDevice.value;
+      if (!d) return [];
+      return FIRMWARES.filter(f => !d.model || f.model === d.model || !d.model);
+    });
+
+    const categoryFirmwares = computed(() => {
+      // 原型：固件表未挂 categoryId，按本品类设备型号交集过滤；无匹配则展示全部
+      const cid = currentCategory.value?.id;
+      const models = new Set(deviceList.value.filter(d => d.categoryId === cid).map(d => d.model).filter(Boolean));
+      const rows = FIRMWARES.filter(f => !models.size || models.has(f.model));
+      return rows.length ? rows : FIRMWARES.slice();
+    });
+
+    const categoryOtaTaskList = computed(() => {
+      const cid = currentCategory.value?.id;
+      return categoryOtaTasks.value
+        .filter(t => t.categoryId === cid)
+        .slice()
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    });
+
+    const categoryOtaUpgradeableDevices = computed(() => {
+      const cid = currentCategory.value?.id;
+      const target = categoryOtaTargetVer.value;
+      if (!cid || !target) return [];
+      return deviceList.value.filter(d => {
+        if (d.categoryId !== cid) return false;
+        if (categoryOtaOnlineOnly.value && d.lifecycle !== '在线') return false;
+        return compareSemver(d.firmware, target) < 0;
+      });
     });
 
     /** 当前设备本机数据 = iot_protocol_data（query by deviceId；可按 packageType 筛） */
@@ -1197,6 +1305,7 @@ createApp({
             sendLog: '设备发送记录',
             snChange: '设备号变更',
             children: '子设备',
+            upgradeLog: '升级日志',
           })[deviceDetailTab.value] || '档案';
           return { parent: '设备台账', current: name + ' · ' + tabLabel };
         }
@@ -2112,6 +2221,225 @@ createApp({
       showToast('已下发 ' + n + ' 条指令 → ' + (d?.name || d?.imei || '设备') + '（mock POST send）', 'ok');
     }
 
+    
+    function resetBatchDispatchState() {
+      batchCmdId.value = '';
+      Object.keys(batchParams).forEach(k => delete batchParams[k]);
+      batchProjectFilter.value = '';
+      batchOnlineOnly.value = true;
+      batchSelectedDeviceIds.value = [];
+      batchPreviewHex.value = '';
+      batchPreviewOk.value = false;
+      batchJobSummary.value = null;
+    }
+
+    function onBatchCommandChange() {
+      Object.keys(batchParams).forEach(k => delete batchParams[k]);
+      batchPreviewHex.value = '';
+      batchPreviewOk.value = false;
+      const cmd = batchSelectedCommand.value;
+      if (cmd && Number(cmd.hasParam) && cmd.dataType !== 'bool') {
+        const def = defaultParamsForCommand(cmd);
+        Object.assign(batchParams, def);
+      }
+    }
+
+    function isBatchDeviceSelected(id) {
+      return batchSelectedDeviceIds.value.includes(id);
+    }
+
+    function toggleBatchDevice(id) {
+      if (isBatchDeviceSelected(id)) {
+        batchSelectedDeviceIds.value = batchSelectedDeviceIds.value.filter(x => x !== id);
+      } else {
+        batchSelectedDeviceIds.value = [...batchSelectedDeviceIds.value, id];
+      }
+    }
+
+    function toggleBatchDevicesAll() {
+      const ids = batchCandidateDevices.value.map(d => d.id);
+      if (ids.length && ids.every(id => isBatchDeviceSelected(id))) {
+        batchSelectedDeviceIds.value = batchSelectedDeviceIds.value.filter(id => !ids.includes(id));
+      } else {
+        const set = new Set([...batchSelectedDeviceIds.value, ...ids]);
+        batchSelectedDeviceIds.value = [...set];
+      }
+    }
+
+    function validateBatchDispatch() {
+      const cmd = batchSelectedCommand.value;
+      if (!cmd) return '请选择一条可批量下发的指令';
+      if (!batchSelectedDeviceIds.value.length) return '请至少选择一台设备';
+      if (Number(cmd.hasParam) && cmd.dataType !== 'bool') {
+        const fields = getCommandParamFields(cmd);
+        for (const f of fields) {
+          const v = batchParams[f.key];
+          if (v === '' || v === null || v === undefined) {
+            return '请填写参数「' + f.label + '」';
+          }
+          const n = Number(v);
+          if (!Number.isFinite(n) || !Number.isInteger(n)) return '参数「' + f.label + '」须为整数';
+          if (f.min != null && n < Number(f.min)) return '参数「' + f.label + '」不能小于 ' + f.min;
+          if (f.max != null && n > Number(f.max)) return '参数「' + f.label + '」不能大于 ' + f.max;
+        }
+        if (cmd.code === 'switchThreshold' && !(Number(batchParams.high) > Number(batchParams.low))) {
+          return 'high 须 ＞ low';
+        }
+      }
+      return '';
+    }
+
+    function dryRunBatchDispatch() {
+      const err = validateBatchDispatch();
+      if (err) { showToast(err, 'warn'); return; }
+      const cmd = batchSelectedCommand.value;
+      const paramsMap = {};
+      if (Number(cmd.hasParam) && cmd.dataType !== 'bool') {
+        paramsMap[cmd.code] = { ...batchParams };
+      }
+      batchPreviewHex.value = packContentHex([cmd], paramsMap);
+      batchPreviewOk.value = true;
+      showToast('批量 dryRun 样例 contentHex 已生成（共 ' + batchSelectedDeviceIds.value.length + ' 台）', 'ok');
+    }
+
+    function confirmBatchDispatch() {
+      const err = validateBatchDispatch();
+      if (err) { showToast(err, 'warn'); return; }
+      if (!batchPreviewOk.value) {
+        dryRunBatchDispatch();
+        if (!batchPreviewOk.value) return;
+      }
+      const cmd = batchSelectedCommand.value;
+      const total = batchSelectedDeviceIds.value.length;
+      // mock：在线成功、其余失败示意
+      const selected = deviceList.value.filter(d => batchSelectedDeviceIds.value.includes(d.id));
+      const success = selected.filter(d => d.lifecycle === '在线').length;
+      const fail = total - success;
+      batchJobSummary.value = {
+        total, success, fail,
+        command: cmd.code + ' · ' + cmd.name,
+        at: new Date().toISOString().slice(0, 19).replace('T', ' ')
+      };
+      showToast('批量下发任务已提交（mock）：' + total + ' 台 · 成功 ' + success + ' / 失败 ' + fail, success && !fail ? 'ok' : 'warn');
+    }
+
+    function openDeviceOtaModal() {
+      const opts = deviceOtaFirmwareOptions.value;
+      const prefer = opts.find(f => f.upgradeVersion) || opts[0];
+      deviceOtaTargetVer.value = prefer
+        ? (prefer.upgradeVersion || prefer.currentVersion)
+        : '';
+      showDeviceOtaModal.value = true;
+    }
+
+    function submitDeviceOta() {
+      const d = currentDevice.value;
+      if (!d) return;
+      const toVer = deviceOtaTargetVer.value;
+      if (!toVer) { showToast('请选择目标固件版本', 'warn'); return; }
+      if (!(compareSemver(d.firmware, toVer) < 0)) {
+        showToast('目标版本须高于当前固件 ' + (d.firmware || '—'), 'warn');
+        return;
+      }
+      const row = {
+        id: 'UL' + Date.now(),
+        deviceId: d.id,
+        time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        fromVer: d.firmware || '—',
+        toVer,
+        status: '排队',
+        progress: 0,
+        operator: '当前用户',
+        failReason: ''
+      };
+      deviceUpgradeLogs.value = [row, ...deviceUpgradeLogs.value];
+      showDeviceOtaModal.value = false;
+      deviceDetailTab.value = 'upgradeLog';
+      showToast('已提交固件升级任务（mock）→ ' + toVer, 'ok');
+    }
+
+    function openCategoryBatchOta(fw) {
+      categoryOtaFirmwareId.value = fw ? fw.id : '';
+      categoryOtaTargetVer.value = fw
+        ? (fw.upgradeVersion || fw.currentVersion || '')
+        : '';
+      categoryOtaSelectedIds.value = [];
+      categoryOtaOnlineOnly.value = true;
+      showCategoryOtaModal.value = true;
+    }
+
+    function isCategoryOtaDeviceSelected(id) {
+      return categoryOtaSelectedIds.value.includes(id);
+    }
+
+    function toggleCategoryOtaDevice(id) {
+      if (isCategoryOtaDeviceSelected(id)) {
+        categoryOtaSelectedIds.value = categoryOtaSelectedIds.value.filter(x => x !== id);
+      } else {
+        categoryOtaSelectedIds.value = [...categoryOtaSelectedIds.value, id];
+      }
+    }
+
+    function toggleCategoryOtaDevicesAll() {
+      const ids = categoryOtaUpgradeableDevices.value.map(d => d.id);
+      if (ids.length && ids.every(id => isCategoryOtaDeviceSelected(id))) {
+        categoryOtaSelectedIds.value = categoryOtaSelectedIds.value.filter(id => !ids.includes(id));
+      } else {
+        categoryOtaSelectedIds.value = [...new Set([...categoryOtaSelectedIds.value, ...ids])];
+      }
+    }
+
+    function submitCategoryOta() {
+      const toVer = categoryOtaTargetVer.value;
+      if (!toVer) { showToast('请选择目标固件版本', 'warn'); return; }
+      if (!categoryOtaSelectedIds.value.length) { showToast('请选择待升级设备', 'warn'); return; }
+      const n = categoryOtaSelectedIds.value.length;
+      const task = {
+        id: 'OT' + Date.now(),
+        categoryId: currentCategory.value.id,
+        fromVerHint: '<' + toVer,
+        toVer,
+        firmwareId: categoryOtaFirmwareId.value,
+        createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        operator: '当前用户',
+        deviceCount: n,
+        success: 0,
+        fail: 0,
+        pending: n,
+        status: '进行中'
+      };
+      categoryOtaTasks.value = [task, ...categoryOtaTasks.value];
+      // 同步写入设备升级日志样例
+      const now = task.createdAt;
+      const extra = categoryOtaSelectedIds.value.map((id, idx) => {
+        const d = deviceList.value.find(x => x.id === id);
+        return {
+          id: 'UL' + Date.now() + idx,
+          deviceId: id,
+          time: now,
+          fromVer: (d && d.firmware) || '—',
+          toVer,
+          status: idx === 0 ? '升级中' : '排队',
+          progress: idx === 0 ? 15 : 0,
+          operator: '当前用户',
+          failReason: ''
+        };
+      });
+      deviceUpgradeLogs.value = [...extra, ...deviceUpgradeLogs.value];
+      showCategoryOtaModal.value = false;
+      detailTab.value = 'otaTasks';
+      showToast('批量固件升级任务已创建（mock）：' + n + ' 台 → ' + toVer, 'ok');
+    }
+
+    function upgradeStatusTag(status) {
+      if (status === '成功') return 'tag-green';
+      if (status === '失败') return 'tag-red';
+      if (status === '升级中') return 'tag-orange';
+      if (status === '排队') return 'tag-blue';
+      return 'tag-gray';
+    }
+
+
     function syncMonitorFromDevice(device) {
       if (!device) return;
       const row = MONITOR_ROWS.find(r => r.id === device.id || r.imei === device.imei);
@@ -2152,7 +2480,7 @@ createApp({
       // packets 旧 hash 并入 localData（本机数据 = 报文列表）；commandLog 旧名 → sendLog
       if (tab === 'packets') tab = 'localData';
       if (tab === 'commandLog') tab = 'sendLog';
-      const allowed = ['profile', 'localData', 'dispatch', 'sendLog', 'snChange', 'children'];
+      const allowed = ['profile', 'localData', 'dispatch', 'sendLog', 'snChange', 'children', 'upgradeLog'];
       let next = allowed.includes(tab) ? tab : 'profile';
       // ?tab=children 无真实子设备时回落档案，避免空表长期挂着
       if (next === 'children') {
@@ -2596,6 +2924,8 @@ createApp({
       showDisableConfirm.value = false;
       showTransferModal.value = false;
       showSendLogModal.value = false;
+      showDeviceOtaModal.value = false;
+      showCategoryOtaModal.value = false;
     }
 
     function jump(hash) {
@@ -2625,6 +2955,8 @@ createApp({
         rules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         categoryRules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         commands: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; },
+        batchDispatch: () => { openDetail(CATEGORIES[0]); detailTab.value = 'batchDispatch'; resetBatchDispatchState(); },
+        otaTasks: () => { openDetail(CATEGORIES[0]); detailTab.value = 'otaTasks'; },
         editCommand: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; openEditCommand(commandList.value.find(c => c.code === 'installHeightMm') || commandList.value.find(c => Number(c.hasParam) === 1) || commandList.value[0]); },
         editPoint: () => { openDetail(CATEGORIES[0]); openEditPoint(POINTS[0]); },
         editInstall: () => { openDetail(CATEGORIES[0]); openEditInstall(INSTALL_FIELDS[0]); },
@@ -2641,6 +2973,8 @@ createApp({
         devicePackets: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'), // 旧 hash → 本机数据
         deviceDispatch: () => openDeviceDetail(deviceList.value.find(d => d.categoryId === 'C001') || deviceList.value[0], 'dispatch'),
         deviceSendLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'sendLog'),
+        deviceUpgradeLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'),
+        deviceOta: () => { openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'); openDeviceOtaModal(); },
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
         importExport: () => { goDevices(); openImportModal(); },
@@ -2705,6 +3039,16 @@ createApp({
       deviceDetailTab, setDeviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
       dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
       isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
+      batchCmdId, batchParams, batchProjectFilter, batchOnlineOnly, batchSelectedDeviceIds,
+      batchPreviewHex, batchPreviewOk, batchJobSummary, batchableCategoryCommands, batchSelectedCommand,
+      batchCandidateDevices, onBatchCommandChange, isBatchDeviceSelected, toggleBatchDevice,
+      toggleBatchDevicesAll, dryRunBatchDispatch, confirmBatchDispatch, resetBatchDispatchState,
+      deviceUpgradeLogs, currentDeviceUpgradeLogs, categoryOtaTasks, categoryOtaTaskList,
+      showDeviceOtaModal, deviceOtaTargetVer, deviceOtaFirmwareOptions, openDeviceOtaModal, submitDeviceOta,
+      showCategoryOtaModal, categoryOtaFirmwareId, categoryOtaTargetVer, categoryOtaSelectedIds,
+      categoryOtaOnlineOnly, categoryFirmwares, categoryOtaUpgradeableDevices,
+      openCategoryBatchOta, isCategoryOtaDeviceSelected, toggleCategoryOtaDevice,
+      toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, compareSemver,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
       deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess, sendLogTypeLabel, sendLogDryRunLabel,
@@ -3120,7 +3464,9 @@ createApp({
             <div class="tab" :class="{active: detailTab==='points'}" @click="detailTab='points'">测点字典</div>
             <div class="tab" :class="{active: detailTab==='install'}" @click="detailTab='install'">安装参数模板</div>
             <div class="tab" :class="{active: detailTab==='firmware'}" @click="detailTab='firmware'">固件基线</div>
+            <div class="tab" :class="{active: detailTab==='otaTasks'}" @click="detailTab='otaTasks'">升级任务</div>
             <div class="tab" :class="{active: detailTab==='commands'}" @click="detailTab='commands'">指令</div>
+            <div class="tab" :class="{active: detailTab==='batchDispatch'}" @click="detailTab='batchDispatch'; resetBatchDispatchState()">批量下发</div>
             <div class="tab" :class="{active: detailTab==='rules'}" @click="detailTab='rules'">归属规则</div>
           </div>
           <div v-if="detailTab==='props'">
@@ -3153,12 +3499,120 @@ createApp({
           <div v-else-if="detailTab==='firmware'">
             <div class="toolbar"><span style="color:#666;font-size:13px">固件型号、当前版本、可升级版本登记</span><div class="spacer"></div><button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button></div>
             <div class="table-wrap"><table class="data-table"><thead><tr><th>型号</th><th>当前版本</th><th>可升版</th><th>发布日期</th><th>状态</th><th>变更说明</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="f in FIRMWARES" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
+              <tbody><tr v-for="f in categoryFirmwares" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
+            <div class="table-note">「批量升级」走 OTA 固件包任务（选版本 → 勾选版本落后设备 → 提交），与「指令 · BOOT升级 / 批量下发」无关。</div>
+          </div>
+          <div v-else-if="detailTab==='otaTasks'">
+            <div class="toolbar">
+              <span style="color:#666;font-size:13px">品类级 OTA 升级任务（固件包下发进度汇总）。可从「固件基线」行内「批量升级」创建。</span>
+              <div class="spacer"></div>
+              <button class="btn btn-sm" @click="detailTab='firmware'">← 固件基线</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>任务 ID</th><th>创建时间</th><th>目标版本</th><th>范围提示</th><th>设备数</th><th>成功</th><th>失败</th><th>排队/进行</th><th>状态</th><th>操作人</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="t in categoryOtaTaskList" :key="t.id">
+                    <td><code>{{ t.id }}</code></td>
+                    <td>{{ t.createdAt }}</td>
+                    <td><code>{{ t.toVer }}</code></td>
+                    <td>{{ t.fromVerHint }}</td>
+                    <td>{{ t.deviceCount }}</td>
+                    <td>{{ t.success }}</td>
+                    <td>{{ t.fail }}</td>
+                    <td>{{ t.pending }}</td>
+                    <td><span class="tag" :class="t.status==='已完成'?'tag-green':(t.status==='进行中'?'tag-orange':'tag-gray')">{{ t.status }}</span></td>
+                    <td>{{ t.operator }}</td>
+                  </tr>
+                  <tr v-if="!categoryOtaTaskList.length"><td colspan="10"><div class="empty-hint">暂无升级任务</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div v-else-if="detailTab==='batchDispatch'">
+            <div class="banner-tip" style="margin-bottom:12px">品类批量下发：选 <b>一条</b> 可批量指令 → 填共享参数 → 多选设备（可筛项目/仅在线）→ dryRun 样例 → 确认批量发送。与「指令」定义 Tab、设备档案单点发分离；不含 OTA 固件包。</div>
+            <div class="form-row" style="align-items:flex-end;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+              <div class="form-item" style="min-width:220px">
+                <label><span class="req">*</span>批量指令（仅 batchable）</label>
+                <select class="select input-full" v-model="batchCmdId" @change="onBatchCommandChange">
+                  <option value="">请选择</option>
+                  <option v-for="c in batchableCategoryCommands" :key="c.id" :value="c.id">{{ c.name }}（{{ c.code }}）</option>
+                </select>
+              </div>
+              <div class="form-item" style="min-width:160px">
+                <label>项目筛选</label>
+                <select class="select input-full" v-model="batchProjectFilter">
+                  <option value="">全部项目</option>
+                  <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
+                </select>
+              </div>
+              <div class="form-item" style="padding-bottom:6px">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="checkbox" v-model="batchOnlineOnly" /> 仅在线设备
+                </label>
+              </div>
+            </div>
+            <div v-if="batchSelectedCommand && Number(batchSelectedCommand.hasParam) && batchSelectedCommand.dataType !== 'bool'" class="info-section" style="margin-bottom:12px">
+              <div class="info-section-title">共享参数 · {{ batchSelectedCommand.name }}</div>
+              <div class="form-row" style="flex-wrap:wrap;gap:12px">
+                <div class="form-item" v-for="f in getCommandParamFields(batchSelectedCommand)" :key="f.key" style="min-width:140px">
+                  <label>{{ f.label }}<span v-if="f.unit">（{{ f.unit }}）</span></label>
+                  <input class="input input-full" type="number" v-model.number="batchParams[f.key]" />
+                </div>
+              </div>
+            </div>
+            <div v-else-if="batchSelectedCommand && (!Number(batchSelectedCommand.hasParam) || batchSelectedCommand.dataType==='bool')" class="banner-muted" style="margin-bottom:12px">无参 / bool 指令：组包写入 0xF0，无需填参。</div>
+            <div class="toolbar">
+              <span style="color:#666;font-size:13px">候选设备 {{ batchCandidateDevices.length }} 台 · 已选 {{ batchSelectedDeviceIds.length }}</span>
+              <div class="spacer"></div>
+              <button class="btn btn-sm" @click="toggleBatchDevicesAll">全选/取消</button>
+              <button class="btn btn-sm" @click="dryRunBatchDispatch" :disabled="!batchCmdId || !batchSelectedDeviceIds.length">dryRun 样例</button>
+              <button class="btn btn-primary btn-sm" @click="confirmBatchDispatch" :disabled="!batchCmdId || !batchSelectedDeviceIds.length">确认批量发送</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:40px"></th>
+                    <th>设备</th><th>IMEI</th><th>项目</th><th>生命周期</th><th>固件</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="d in batchCandidateDevices" :key="d.id" :class="{'row-selected': isBatchDeviceSelected(d.id)}">
+                    <td><input type="checkbox" :checked="isBatchDeviceSelected(d.id)" @change="toggleBatchDevice(d.id)" /></td>
+                    <td>{{ d.name }}</td>
+                    <td><code>{{ d.imei }}</code></td>
+                    <td>{{ d.projectName || '未定义项目' }}</td>
+                    <td><span class="lifecycle-dot" style="display:inline-flex;align-items:center;gap:4px"><i :class="LC_CLASS[d.lifecycle]"></i>{{ d.lifecycle }}</span></td>
+                    <td>{{ d.firmware || '—' }}</td>
+                  </tr>
+                  <tr v-if="!batchCandidateDevices.length"><td colspan="6"><div class="empty-hint">无候选设备（检查项目筛选 / 仅在线）</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="batchPreviewOk" class="info-section" style="margin-top:12px">
+              <div class="info-section-title">dryRun 样例 contentHex</div>
+              <pre class="hex-preview">{{ batchPreviewHex }}</pre>
+            </div>
+            <div v-if="batchJobSummary" class="info-section" style="margin-top:12px">
+              <div class="info-section-title">最近批量任务摘要（mock）</div>
+              <div class="kv-grid">
+                <div class="k">指令</div><div class="v">{{ batchJobSummary.command }}</div>
+                <div class="k">时间</div><div class="v">{{ batchJobSummary.at }}</div>
+                <div class="k">设备数</div><div class="v">{{ batchJobSummary.total }}</div>
+                <div class="k">成功 / 失败</div><div class="v"><span class="tag tag-green">{{ batchJobSummary.success }}</span> / <span class="tag tag-red">{{ batchJobSummary.fail }}</span></div>
+              </div>
+            </div>
+            <div class="table-note">batchable=true 默认识别：reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷不可批量。</div>
           </div>
           <div v-else-if="detailTab==='commands'">
             <div class="banner-muted">字节17–24 为命令开关（bitIndex 1-based，bit=1 执行；积水仪位 9 空缺）；内容从 payloadOffset（1-based 内容起始字节）起写入。组包时选中指令自动置对应位。</div>
             <div class="toolbar">
-              <span style="color:#666;font-size:13px">配置本品类「能下什么」：命令位 vs 内容载荷。本 Tab 只配定义，不是实时点发。</span>
+              <span style="color:#666;font-size:13px">配置本品类「能下什么」：命令位 vs 内容载荷。本 Tab 只配定义，不是实时点发。批量点发见「批量下发」Tab（batchable）。</span>
               <div class="spacer"></div>
               <button class="btn btn-primary btn-sm" @click="openCreateCommand">＋ 新建指令</button>
             </div>
@@ -3510,6 +3964,7 @@ createApp({
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" @click="setDeviceDetailTab('localData')">本机数据</button>
               <button class="btn" @click="setDeviceDetailTab('dispatch')" :disabled="!currentDevice.categoryId">指令</button>
+              <button class="btn" @click="openDeviceOtaModal">固件升级</button>
               <button class="btn" @click="setDeviceDetailTab('sendLog')">设备发送记录</button>
               <button class="btn" v-if="canShowChildDevices" @click="setDeviceDetailTab('children')">子设备（探头） · {{ currentDeviceSlaves.length }}</button>
               <button class="btn" @click="openMonitorForDevice(currentDevice)">{{ canShowChildDevices ? '曲线 · 先选探头' : '曲线（在线监控）' }}</button>
@@ -3551,6 +4006,7 @@ createApp({
             <div class="tab" :class="{active: deviceDetailTab==='profile'}" @click="setDeviceDetailTab('profile')">档案</div>
             <div class="tab" :class="{active: deviceDetailTab==='localData'}" @click="setDeviceDetailTab('localData')">本机数据</div>
             <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="setDeviceDetailTab('dispatch')">指令</div>
+            <div class="tab" :class="{active: deviceDetailTab==='upgradeLog'}" @click="setDeviceDetailTab('upgradeLog')">升级日志</div>
             <div class="tab" :class="{active: deviceDetailTab==='sendLog'}" @click="setDeviceDetailTab('sendLog')">设备发送记录</div>
             <div class="tab" :class="{active: deviceDetailTab==='snChange'}" @click="setDeviceDetailTab('snChange')">设备号变更</div>
             <div class="tab" v-if="canShowChildDevices" :class="{active: deviceDetailTab==='children'}" @click="setDeviceDetailTab('children')">子设备</div>
@@ -3830,6 +4286,40 @@ createApp({
             </template>
           </template>
 
+
+          <template v-else-if="deviceDetailTab==='upgradeLog'">
+            <div class="toolbar">
+              <span style="color:#666;font-size:13px">OTA 固件升级日志（固件包任务）。与指令 bootUpgrade / 批量下发区分。</span>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm" @click="openDeviceOtaModal">＋ 固件升级</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>时间</th><th>版本</th><th>状态</th><th>进度</th><th>操作人</th><th>失败原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="r in currentDeviceUpgradeLogs" :key="r.id">
+                    <td>{{ r.time }}</td>
+                    <td><code>{{ r.fromVer }}</code> → <code>{{ r.toVer }}</code></td>
+                    <td><span class="tag" :class="upgradeStatusTag(r.status)">{{ r.status }}</span></td>
+                    <td>
+                      <div class="ota-progress">
+                        <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
+                        <span>{{ r.progress || 0 }}%</span>
+                      </div>
+                    </td>
+                    <td>{{ r.operator }}</td>
+                    <td>{{ r.failReason || '—' }}</td>
+                  </tr>
+                  <tr v-if="!currentDeviceUpgradeLogs.length"><td colspan="6"><div class="empty-hint">暂无升级日志；点击「固件升级」提交 mock 任务</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-note">状态：排队 / 升级中 / 成功 / 失败。目标版本来自品类固件基线 FIRMWARES。</div>
+          </template>
 
           <template v-else-if="deviceDetailTab==='snChange'">
             <div class="banner-muted">设备号变更记录：执行「更改设备号」指令成功后写入，便于对账与排障。字段：旧号 / 新号 / 操作人 / 时间 / 来源 / commandId / 结果。</div>
@@ -4819,6 +5309,80 @@ createApp({
         </div>
         <div class="modal-footer">
           <button class="btn btn-primary" @click="closeSendLogDetail">关闭</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- 设备 · 固件升级 OTA -->
+    <div v-if="showDeviceOtaModal" class="overlay" @click.self="showDeviceOtaModal=false">
+      <div class="modal">
+        <div class="modal-header"><span>固件升级 · {{ currentDevice && currentDevice.name }}</span><button class="close-x" @click="showDeviceOtaModal=false">×</button></div>
+        <div class="modal-body">
+          <div class="banner-muted" style="margin-bottom:12px">当前固件：<code>{{ currentDevice && (currentDevice.firmware || '—') }}</code> · 型号 {{ currentDevice && (currentDevice.model || '—') }}。此为 OTA 固件包任务，非 bootUpgrade 指令。</div>
+          <div class="form-item">
+            <label><span class="req">*</span>目标固件版本</label>
+            <select class="select input-full" v-model="deviceOtaTargetVer">
+              <option value="">请选择</option>
+              <option v-for="f in deviceOtaFirmwareOptions" :key="f.id" :value="f.upgradeVersion || f.currentVersion">
+                {{ f.model }} · {{ f.upgradeVersion || f.currentVersion }}（{{ f.status }}）
+              </option>
+            </select>
+          </div>
+          <div class="hint">仅展示同型号固件基线；提交后写入本机「升级日志」。</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="showDeviceOtaModal=false">取消</button>
+          <button class="btn btn-primary" @click="submitDeviceOta">提交升级</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 品类 · 批量 OTA -->
+    <div v-if="showCategoryOtaModal" class="overlay" @click.self="showCategoryOtaModal=false">
+      <div class="modal modal-lg">
+        <div class="modal-header"><span>批量固件升级 · {{ currentCategory && currentCategory.name }}</span><button class="close-x" @click="showCategoryOtaModal=false">×</button></div>
+        <div class="modal-body">
+          <div class="form-row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
+            <div class="form-item" style="min-width:200px">
+              <label><span class="req">*</span>目标版本</label>
+              <select class="select input-full" v-model="categoryOtaTargetVer" @change="categoryOtaSelectedIds=[]">
+                <option value="">请选择</option>
+                <option v-for="f in categoryFirmwares" :key="f.id+'-ver'" :value="f.upgradeVersion || f.currentVersion">
+                  {{ f.model }} · {{ f.upgradeVersion || f.currentVersion }}
+                </option>
+              </select>
+            </div>
+            <div class="form-item" style="padding-bottom:6px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" v-model="categoryOtaOnlineOnly" /> 仅在线
+              </label>
+            </div>
+          </div>
+          <div class="toolbar">
+            <span style="color:#666;font-size:13px">可升级（版本落后）{{ categoryOtaUpgradeableDevices.length }} 台 · 已选 {{ categoryOtaSelectedIds.length }}</span>
+            <div class="spacer"></div>
+            <button class="btn btn-sm" @click="toggleCategoryOtaDevicesAll">全选/取消</button>
+          </div>
+          <div class="table-wrap" style="max-height:320px;overflow:auto">
+            <table class="data-table">
+              <thead><tr><th style="width:40px"></th><th>设备</th><th>IMEI</th><th>当前固件</th><th>生命周期</th></tr></thead>
+              <tbody>
+                <tr v-for="d in categoryOtaUpgradeableDevices" :key="d.id" :class="{'row-selected': isCategoryOtaDeviceSelected(d.id)}">
+                  <td><input type="checkbox" :checked="isCategoryOtaDeviceSelected(d.id)" @change="toggleCategoryOtaDevice(d.id)" /></td>
+                  <td>{{ d.name }}</td>
+                  <td><code>{{ d.imei }}</code></td>
+                  <td><code>{{ d.firmware || '—' }}</code></td>
+                  <td>{{ d.lifecycle }}</td>
+                </tr>
+                <tr v-if="!categoryOtaUpgradeableDevices.length"><td colspan="5"><div class="empty-hint">无版本落后的可升级设备</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="showCategoryOtaModal=false">取消</button>
+          <button class="btn btn-primary" @click="submitCategoryOta">提交批量升级任务</button>
         </div>
       </div>
     </div>

@@ -37,6 +37,10 @@ python3 -m http.server 8877
 ### 设备台账
 - **本机数据（报文列表）**：设备档案 `#deviceDetail` Tab「本机数据」= `iot_protocol_data` 报文表（receiveTime / packageType / parsedJson / contentHex / status；按 deviceId 查；筛 packageType：message* / data* / upgrade65535 / command）。**不再**内嵌测点曲线；曲线仅在线监控。顶栏「曲线（在线监控）」→ `#monitorDetail`。
 - **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
+
+- **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
+- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选版本落后设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。
+
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
 - **未定义项目** = **例外池**（SDK 缺产品 / 临时设备等），**不是**主路径。
@@ -59,7 +63,7 @@ python3 -m http.server 8877
 | 2 | 新建品类（模态） | `#createCategory` |
 | 3 | 编辑品类（模态） | `#editCategory` |
 | 4 | 物模型详情壳 + Tab | `#detail` |
-| 4a–4g | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **指令** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#commands` `#rules` / `#categoryRules` |
+| 4a–4i | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **升级任务** / **指令** / **批量下发** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#otaTasks` `#commands` `#batchDispatch` `#rules` / `#categoryRules` |
 | 4h | 新建/编辑指令（模态：bitIndex 1-based / payloadOffset 1-based / hasParam / paramMin·paramMax / dataType·unit·required） | `#editCommand` |
 | 5–7 | 编辑测点 / 安装字段 / 固件 | `#editPoint` `#editInstall` `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
@@ -73,9 +77,12 @@ python3 -m http.server 8877
 | 3 | 设备列表 | `#devices` |
 | 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
 | 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
-| 4 | 设备档案详情（含改挂记录；Tab：档案信息 / **本机数据** / 指令下发） | `#deviceDetail` |
+| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…） | `#deviceDetail` |
 | 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
 | 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
+| 4b2 | 设备档案 · **升级日志**（OTA：time / fromVer→toVer / 状态排队·升级中·成功·失败 / 进度 / 操作人 / failReason；顶栏「固件升级」弹窗选目标版本） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` |
+| 4c0 | 品类详情 · **批量下发**（选一条 batchable 指令 → 共享参数 → 多选设备筛项目/在线 → dryRun → 批量 mock） | `#batchDispatch` |
+| 4c1 | 品类详情 · **升级任务**（固件行「批量升级」→ 选版本落后设备 → 品类 OTA 任务列表） | `#otaTasks` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
