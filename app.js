@@ -234,9 +234,9 @@ const INSTALL_FIELDS = [
 ];
 
 const FIRMWARES = [
-  { id: 'F1', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', changelog: '优化液位滤波算法；修复低电量误报' },
-  { id: 'F2', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', changelog: '支持 AEP 物模型 v1.2' },
-  { id: 'F3', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', changelog: '新硬件平台首发固件' },
+  { id: 'F1', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', changelog: '优化液位滤波算法；修复低电量误报' },
+  { id: 'F2', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', changelog: '支持 AEP 物模型 v1.2' },
+  { id: 'F3', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', packageUrl: 'https://example.com/fw/MF-LW-200/2.0.1.bin', changelog: '新硬件平台首发固件' },
 ];
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
@@ -776,9 +776,11 @@ createApp({
     const categoryOtaTasks = ref(CATEGORY_OTA_TASKS.map(r => ({ ...r })));
     const showDeviceOtaModal = ref(false);
     const deviceOtaTargetVer = ref('');
+    const deviceOtaPackageUrl = ref('');
     const showCategoryOtaModal = ref(false);
     const categoryOtaFirmwareId = ref('');
     const categoryOtaTargetVer = ref('');
+    const categoryOtaPackageUrl = ref('');
     const categoryOtaSelectedIds = ref([]);
     const categoryOtaOnlineOnly = ref(true);
     const COMMAND_DATA_TYPES = ['bool', 'int', 'float', 'string', 'enum', 'object'];
@@ -801,7 +803,7 @@ createApp({
     const installFormMode = ref('create');
 
     const firmwareForm = reactive({
-      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', changelog: ''
+      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', changelog: ''
     });
     const firmwareFormMode = ref('create');
 
@@ -1979,7 +1981,7 @@ createApp({
 
     function openCreateFirmware() {
       firmwareFormMode.value = 'create';
-      Object.assign(firmwareForm, { id: '', model: 'MF-LW-100', currentVersion: '', upgradeVersion: '', releaseDate: '2026-09-30', status: '可升级', changelog: '' });
+      Object.assign(firmwareForm, { id: '', model: 'MF-LW-100', currentVersion: '', upgradeVersion: '', releaseDate: '2026-09-30', status: '可升级', packageUrl: '', changelog: '' });
       screen.value = 'editFirmware';
     }
     function openEditFirmware(f) {
@@ -2483,12 +2485,46 @@ createApp({
       showToast('批量下发任务已提交（mock）：' + total + ' 台 · 成功 ' + success + ' / 失败 ' + fail, success && !fail ? 'ok' : 'warn');
     }
 
+    function firmwareTargetVer(f) {
+      if (!f) return '';
+      return f.upgradeVersion || f.currentVersion || '';
+    }
+
+    function findFirmwareByTargetVer(list, ver) {
+      if (!ver) return null;
+      const rows = list || [];
+      return rows.find(f => firmwareTargetVer(f) === ver)
+        || rows.find(f => f.currentVersion === ver || f.upgradeVersion === ver)
+        || null;
+    }
+
+    function packageUrlFromFirmware(f) {
+      return (f && f.packageUrl) ? String(f.packageUrl).trim() : '';
+    }
+
+    function onDeviceOtaTargetChange() {
+      const f = findFirmwareByTargetVer(deviceOtaFirmwareOptions.value, deviceOtaTargetVer.value);
+      deviceOtaPackageUrl.value = packageUrlFromFirmware(f);
+    }
+
+    function onCategoryOtaTargetChange() {
+      categoryOtaSelectedIds.value = [];
+      const f = findFirmwareByTargetVer(categoryFirmwares.value, categoryOtaTargetVer.value);
+      if (f) {
+        categoryOtaFirmwareId.value = f.id;
+        categoryOtaPackageUrl.value = packageUrlFromFirmware(f);
+      } else {
+        categoryOtaPackageUrl.value = '';
+      }
+    }
+
     function openDeviceOtaModal() {
       const opts = deviceOtaFirmwareOptions.value;
       const prefer = opts.find(f => f.upgradeVersion) || opts[0];
       deviceOtaTargetVer.value = prefer
-        ? (prefer.upgradeVersion || prefer.currentVersion)
+        ? firmwareTargetVer(prefer)
         : '';
+      deviceOtaPackageUrl.value = packageUrlFromFirmware(prefer);
       showDeviceOtaModal.value = true;
     }
 
@@ -2497,6 +2533,8 @@ createApp({
       if (!d) return;
       const toVer = deviceOtaTargetVer.value;
       if (!toVer) { showToast('请选择目标固件版本', 'warn'); return; }
+      const pkg = String(deviceOtaPackageUrl.value || '').trim();
+      if (!pkg) { showToast('请填写包地址 packageUrl 后才能提交', 'warn'); return; }
       if (!(compareSemver(d.firmware, toVer) < 0)) {
         showToast('目标版本须高于当前固件 ' + (d.firmware || '—'), 'warn');
         return;
@@ -2507,6 +2545,7 @@ createApp({
         time: new Date().toISOString().slice(0, 19).replace('T', ' '),
         fromVer: d.firmware || '—',
         toVer,
+        packageUrl: pkg,
         status: '排队',
         progress: 0,
         operator: '当前用户',
@@ -2521,8 +2560,9 @@ createApp({
     function openCategoryBatchOta(fw) {
       categoryOtaFirmwareId.value = fw ? fw.id : '';
       categoryOtaTargetVer.value = fw
-        ? (fw.upgradeVersion || fw.currentVersion || '')
+        ? firmwareTargetVer(fw)
         : '';
+      categoryOtaPackageUrl.value = packageUrlFromFirmware(fw);
       categoryOtaSelectedIds.value = [];
       categoryOtaOnlineOnly.value = true;
       showCategoryOtaModal.value = true;
@@ -2552,6 +2592,8 @@ createApp({
     function submitCategoryOta() {
       const toVer = categoryOtaTargetVer.value;
       if (!toVer) { showToast('请选择目标固件版本', 'warn'); return; }
+      const pkg = String(categoryOtaPackageUrl.value || '').trim();
+      if (!pkg) { showToast('请填写包地址 packageUrl 后才能提交', 'warn'); return; }
       if (!categoryOtaSelectedIds.value.length) { showToast('请选择待升级设备', 'warn'); return; }
       const n = categoryOtaSelectedIds.value.length;
       const task = {
@@ -2559,6 +2601,7 @@ createApp({
         categoryId: currentCategory.value.id,
         fromVerHint: '<' + toVer,
         toVer,
+        packageUrl: pkg,
         firmwareId: categoryOtaFirmwareId.value,
         createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
         operator: '当前用户',
@@ -3532,10 +3575,10 @@ createApp({
       batchCandidateDevices, onBatchCommandChange, isBatchDeviceSelected, toggleBatchDevice,
       toggleBatchDevicesAll, dryRunBatchDispatch, confirmBatchDispatch, resetBatchDispatchState,
       deviceUpgradeLogs, currentDeviceUpgradeLogs, categoryOtaTasks, categoryOtaTaskList,
-      showDeviceOtaModal, deviceOtaTargetVer, deviceOtaFirmwareOptions, openDeviceOtaModal, submitDeviceOta,
-      showCategoryOtaModal, categoryOtaFirmwareId, categoryOtaTargetVer, categoryOtaSelectedIds,
+      showDeviceOtaModal, deviceOtaTargetVer, deviceOtaPackageUrl, deviceOtaFirmwareOptions, openDeviceOtaModal, onDeviceOtaTargetChange, submitDeviceOta,
+      showCategoryOtaModal, categoryOtaFirmwareId, categoryOtaTargetVer, categoryOtaPackageUrl, categoryOtaSelectedIds,
       categoryOtaOnlineOnly, categoryFirmwares, categoryOtaUpgradeableDevices,
-      openCategoryBatchOta, isCategoryOtaDeviceSelected, toggleCategoryOtaDevice,
+      openCategoryBatchOta, onCategoryOtaTargetChange, isCategoryOtaDeviceSelected, toggleCategoryOtaDevice,
       toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, compareSemver,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
@@ -4015,8 +4058,8 @@ createApp({
           </div>
           <div v-else-if="detailTab==='firmware'">
             <div class="toolbar"><span style="color:#666;font-size:13px">固件型号、当前版本、可升级版本登记</span><div class="spacer"></div><button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button></div>
-            <div class="table-wrap"><table class="data-table"><thead><tr><th>型号</th><th>当前版本</th><th>可升版</th><th>发布日期</th><th>状态</th><th>变更说明</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="f in categoryFirmwares" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>型号</th><th>当前版本</th><th>可升版</th><th>包地址</th><th>发布日期</th><th>状态</th><th>变更说明</th><th>操作</th></tr></thead>
+              <tbody><tr v-for="f in categoryFirmwares" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td style="max-width:180px"><code :title="f.packageUrl || ''">{{ f.packageUrl ? (f.packageUrl.length>36 ? f.packageUrl.slice(0,36)+'…' : f.packageUrl) : '—' }}</code></td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
             <div class="table-note">「批量升级」走 OTA 固件包任务（选版本 → 勾选版本落后设备 → 提交），与「指令 · BOOT升级 / 批量下发」无关。</div>
           </div>
           <div v-else-if="detailTab==='otaTasks'">
@@ -4269,6 +4312,7 @@ createApp({
           <div class="page-header"><div><h1 class="page-title">{{ firmwareFormMode==='create'?'登记固件版本':'编辑固件版本' }}</h1><p class="page-desc">品类：{{ currentCategory.name }}</p></div></div>
           <div class="form-row"><div class="form-item"><label><span class="req">*</span>硬件型号</label><input class="input input-full" v-model="firmwareForm.model" /></div><div class="form-item"><label><span class="req">*</span>当前版本</label><input class="input input-full" v-model="firmwareForm.currentVersion" /></div></div>
           <div class="form-row"><div class="form-item"><label>可升级版本</label><input class="input input-full" v-model="firmwareForm.upgradeVersion" /></div><div class="form-item"><label>发布日期</label><input class="input input-full" v-model="firmwareForm.releaseDate" type="date" /></div><div class="form-item"><label>状态</label><select class="select input-full" v-model="firmwareForm.status"><option>可升级</option><option>基线</option><option>最新</option><option>废弃</option></select></div></div>
+          <div class="form-item"><label>包地址 packageUrl</label><input class="input input-full" v-model="firmwareForm.packageUrl" placeholder="https://example.com/fw/..." /></div>
           <div class="form-item"><label>变更说明</label><textarea class="textarea input-full" v-model="firmwareForm.changelog"></textarea></div>
           <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" @click="screen='detail'; detailTab='firmware'">取消</button><button class="btn btn-primary" @click="saveFirmware">保存</button></div>
         </div>
@@ -6143,14 +6187,19 @@ createApp({
           <div class="banner-muted" style="margin-bottom:12px">当前固件：<code>{{ currentDevice && (currentDevice.firmware || '—') }}</code> · 型号 {{ currentDevice && (currentDevice.model || '—') }}。此为 OTA 固件包任务，非 bootUpgrade 指令。</div>
           <div class="form-item">
             <label><span class="req">*</span>目标固件版本</label>
-            <select class="select input-full" v-model="deviceOtaTargetVer">
+            <select class="select input-full" v-model="deviceOtaTargetVer" @change="onDeviceOtaTargetChange">
               <option value="">请选择</option>
               <option v-for="f in deviceOtaFirmwareOptions" :key="f.id" :value="f.upgradeVersion || f.currentVersion">
                 {{ f.model }} · {{ f.upgradeVersion || f.currentVersion }}（{{ f.status }}）
               </option>
             </select>
           </div>
-          <div class="hint">仅展示同型号固件基线；提交后写入本机「升级日志」。</div>
+          <div class="form-item">
+            <label><span class="req">*</span>包地址 packageUrl</label>
+            <input class="input input-full" v-model="deviceOtaPackageUrl" placeholder="选版本后自动带出；可手填兜底" />
+          </div>
+          <div class="hint" v-if="!deviceOtaPackageUrl" style="color:#b45309">无包地址时需填写后才能提交。</div>
+          <div class="hint">仅展示同型号固件基线；选版本带出 packageUrl；提交后写入本机「升级日志」。</div>
         </div>
         <div class="modal-footer">
           <button class="btn" @click="showDeviceOtaModal=false">取消</button>
@@ -6167,12 +6216,16 @@ createApp({
           <div class="form-row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
             <div class="form-item" style="min-width:200px">
               <label><span class="req">*</span>目标版本</label>
-              <select class="select input-full" v-model="categoryOtaTargetVer" @change="categoryOtaSelectedIds=[]">
+              <select class="select input-full" v-model="categoryOtaTargetVer" @change="onCategoryOtaTargetChange">
                 <option value="">请选择</option>
                 <option v-for="f in categoryFirmwares" :key="f.id+'-ver'" :value="f.upgradeVersion || f.currentVersion">
                   {{ f.model }} · {{ f.upgradeVersion || f.currentVersion }}
                 </option>
               </select>
+            </div>
+            <div class="form-item" style="min-width:280px;flex:1">
+              <label><span class="req">*</span>包地址 packageUrl</label>
+              <input class="input input-full" v-model="categoryOtaPackageUrl" placeholder="从固件行带出；可手填兜底" />
             </div>
             <div class="form-item" style="padding-bottom:6px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
@@ -6180,6 +6233,7 @@ createApp({
               </label>
             </div>
           </div>
+          <div class="hint" v-if="!categoryOtaPackageUrl" style="color:#b45309;margin-bottom:8px">无包地址时需填写后才能提交。</div>
           <div class="toolbar">
             <span style="color:#666;font-size:13px">可升级（版本落后）{{ categoryOtaUpgradeableDevices.length }} 台 · 已选 {{ categoryOtaSelectedIds.length }}</span>
             <div class="spacer"></div>

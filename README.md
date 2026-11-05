@@ -40,7 +40,7 @@ python3 -m http.server 8877
 - **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
-- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选版本落后设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。
+- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选版本落后设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出，空则手填。
 
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
