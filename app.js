@@ -234,9 +234,9 @@ const INSTALL_FIELDS = [
 ];
 
 const FIRMWARES = [
-  { id: 'F1', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', changelog: '优化液位滤波算法；修复低电量误报' },
-  { id: 'F2', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', changelog: '支持 AEP 物模型 v1.2' },
-  { id: 'F3', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', packageUrl: 'https://example.com/fw/MF-LW-200/2.0.1.bin', changelog: '新硬件平台首发固件' },
+  { id: 'F1', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', packageFileName: 'MF-LW-100-1.3.0.bin', changelog: '优化液位滤波算法；修复低电量误报' },
+  { id: 'F2', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', packageFileName: 'MF-LW-100-1.2.0.bin', changelog: '支持 AEP 物模型 v1.2' },
+  { id: 'F3', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', packageUrl: 'https://example.com/fw/MF-LW-200/2.0.1.bin', packageFileName: 'MF-LW-200-2.0.1.bin', changelog: '新硬件平台首发固件' },
 ];
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
@@ -803,9 +803,11 @@ createApp({
     const installFormMode = ref('create');
 
     const firmwareForm = reactive({
-      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', changelog: ''
+      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageFileName: '', changelog: ''
     });
     const firmwareFormMode = ref('create');
+    const firmwareUploadInput = ref(null);
+    const firmwareUploading = ref(false);
 
     /* ---- 设备台账 state ---- */
     const projectSearch = ref('');
@@ -1981,15 +1983,74 @@ createApp({
 
     function openCreateFirmware() {
       firmwareFormMode.value = 'create';
-      Object.assign(firmwareForm, { id: '', model: 'MF-LW-100', currentVersion: '', upgradeVersion: '', releaseDate: '2026-09-30', status: '可升级', packageUrl: '', changelog: '' });
+      Object.assign(firmwareForm, { id: '', model: 'MF-LW-100', currentVersion: '', upgradeVersion: '', releaseDate: '2026-09-30', status: '可升级', packageUrl: '', packageFileName: '', changelog: '' });
+      firmwareUploading.value = false;
       screen.value = 'editFirmware';
     }
     function openEditFirmware(f) {
       firmwareFormMode.value = 'edit';
-      Object.assign(firmwareForm, { ...f });
+      Object.assign(firmwareForm, { packageFileName: '', ...f });
+      firmwareUploading.value = false;
       screen.value = 'editFirmware';
     }
-    function saveFirmware() { screen.value = 'detail'; detailTab.value = 'firmware'; }
+    function triggerFirmwareUpload() {
+      const el = firmwareUploadInput.value;
+      if (el) el.click();
+    }
+    function onFirmwarePackageSelected(ev) {
+      const file = ev && ev.target && ev.target.files && ev.target.files[0];
+      if (!file) return;
+      // mock：正式对接 POST /storage/file multipart(part=file; path=firmware; isPrivate=0)
+      // 成功取 Result.data.fileUrl → 写入 packageUrl（须公开，OTA Job 才能拉）
+      firmwareUploading.value = true;
+      const name = file.name || 'firmware.bin';
+      setTimeout(() => {
+        firmwareForm.packageFileName = name;
+        firmwareForm.packageUrl = 'http://instrument.aquaroot.cn/api/storage/file/mock-fw-key';
+        firmwareUploading.value = false;
+        showToast('固件包已上传（mock）→ packageUrl 已回填', 'ok');
+        if (ev && ev.target) ev.target.value = '';
+      }, 350);
+    }
+    function saveFirmware() {
+      const pkg = String(firmwareForm.packageUrl || '').trim();
+      if (!pkg) {
+        showToast('请先上传固件包（回填 packageUrl）后再提交；空 URL 不可提交', 'warn');
+        return;
+      }
+      firmwareForm.packageUrl = pkg;
+      if (firmwareFormMode.value === 'create') {
+        const row = {
+          id: 'F' + Date.now(),
+          model: firmwareForm.model,
+          currentVersion: firmwareForm.currentVersion,
+          upgradeVersion: firmwareForm.upgradeVersion,
+          releaseDate: firmwareForm.releaseDate,
+          status: firmwareForm.status,
+          packageUrl: pkg,
+          packageFileName: firmwareForm.packageFileName || '',
+          changelog: firmwareForm.changelog
+        };
+        FIRMWARES.unshift(row);
+      } else {
+        const idx = FIRMWARES.findIndex(x => x.id === firmwareForm.id);
+        if (idx >= 0) {
+          Object.assign(FIRMWARES[idx], {
+            model: firmwareForm.model,
+            currentVersion: firmwareForm.currentVersion,
+            upgradeVersion: firmwareForm.upgradeVersion,
+            releaseDate: firmwareForm.releaseDate,
+            status: firmwareForm.status,
+            packageUrl: pkg,
+            packageFileName: firmwareForm.packageFileName || FIRMWARES[idx].packageFileName || '',
+            changelog: firmwareForm.changelog
+          });
+        }
+      }
+      screen.value = 'detail';
+      detailTab.value = 'firmware';
+      showToast('固件版本已保存（mock）', 'ok');
+    }
 
     /* ---- 设备台账 actions ---- */
     function goProjects() { module.value = 'ledger'; screen.value = 'projects'; }
@@ -3552,6 +3613,7 @@ createApp({
       commandParamsSummary,
       showDeleteConfirm, deleteTarget,
       pointForm, pointFormMode, installForm, installFormMode, firmwareForm, firmwareFormMode,
+      firmwareUploadInput, firmwareUploading, triggerFirmwareUpload, onFirmwarePackageSelected,
       goList, openDetail, openCreateCategory, openEditCategory, saveCategory,
       confirmDelete, doDelete,
       openCreatePoint, openEditPoint, savePoint,
@@ -4057,9 +4119,9 @@ createApp({
               <tbody><tr v-for="f in INSTALL_FIELDS" :key="f.id"><td><code>{{ f.code }}</code></td><td>{{ f.name }}</td><td>{{ f.dataType }}</td><td>{{ f.unit }}</td><td><span class="tag" :class="f.required?'tag-blue':'tag-gray'">{{ f.required?'是':'否' }}</span></td><td>{{ f.defaultVal || '—' }}</td><td>{{ f.example }}</td><td>{{ f.desc }}</td><td class="actions"><button class="btn-link btn" @click="openEditInstall(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('安装字段', f.id, f.name)">删除</button></td></tr></tbody></table></div>
           </div>
           <div v-else-if="detailTab==='firmware'">
-            <div class="toolbar"><span style="color:#666;font-size:13px">固件型号、当前版本、可升级版本登记</span><div class="spacer"></div><button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button></div>
-            <div class="table-wrap"><table class="data-table"><thead><tr><th>型号</th><th>当前版本</th><th>可升版</th><th>包地址</th><th>发布日期</th><th>状态</th><th>变更说明</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="f in categoryFirmwares" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td style="max-width:180px"><code :title="f.packageUrl || ''">{{ f.packageUrl ? (f.packageUrl.length>36 ? f.packageUrl.slice(0,36)+'…' : f.packageUrl) : '—' }}</code></td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
+            <div class="toolbar"><span style="color:#666;font-size:13px">固件型号、当前版本、可升级版本登记；主路径为上传固件包回填 packageUrl</span><div class="spacer"></div><button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button></div>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>型号</th><th>当前版本</th><th>可升版</th><th>固件包</th><th>包地址</th><th>发布日期</th><th>状态</th><th>变更说明</th><th>操作</th></tr></thead>
+              <tbody><tr v-for="f in categoryFirmwares" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td><span v-if="f.packageUrl" class="tag tag-green" :title="f.packageUrl">已上传{{ f.packageFileName ? ' · ' + f.packageFileName : '' }}</span><span v-else class="tag tag-gray">未上传</span></td><td style="max-width:180px"><code :title="f.packageUrl || ''">{{ f.packageUrl ? (f.packageUrl.length>36 ? f.packageUrl.slice(0,36)+'…' : f.packageUrl) : '—' }}</code></td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
             <div class="table-note">「批量升级」走 OTA 固件包任务（选版本 → 勾选版本落后设备 → 提交），与「指令 · BOOT升级 / 批量下发」无关。</div>
           </div>
           <div v-else-if="detailTab==='otaTasks'">
@@ -4309,10 +4371,20 @@ createApp({
 
         <div v-else-if="module==='thing' && screen==='editFirmware'" class="page-card">
           <button class="back-link" @click="screen='detail'; detailTab='firmware'">← 返回固件基线</button>
-          <div class="page-header"><div><h1 class="page-title">{{ firmwareFormMode==='create'?'登记固件版本':'编辑固件版本' }}</h1><p class="page-desc">品类：{{ currentCategory.name }}</p></div></div>
+          <div class="page-header"><div><h1 class="page-title">{{ firmwareFormMode==='create'?'登记固件版本':'编辑固件版本' }}</h1><p class="page-desc">品类：{{ currentCategory.name }} · 主路径：上传固件包 → 回填 packageUrl（空 URL 不可提交）</p></div></div>
           <div class="form-row"><div class="form-item"><label><span class="req">*</span>硬件型号</label><input class="input input-full" v-model="firmwareForm.model" /></div><div class="form-item"><label><span class="req">*</span>当前版本</label><input class="input input-full" v-model="firmwareForm.currentVersion" /></div></div>
           <div class="form-row"><div class="form-item"><label>可升级版本</label><input class="input input-full" v-model="firmwareForm.upgradeVersion" /></div><div class="form-item"><label>发布日期</label><input class="input input-full" v-model="firmwareForm.releaseDate" type="date" /></div><div class="form-item"><label>状态</label><select class="select input-full" v-model="firmwareForm.status"><option>可升级</option><option>基线</option><option>最新</option><option>废弃</option></select></div></div>
-          <div class="form-item"><label>包地址 packageUrl</label><input class="input input-full" v-model="firmwareForm.packageUrl" placeholder="https://example.com/fw/..." /></div>
+          <div class="form-item">
+            <label><span class="req">*</span>上传固件包</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input ref="firmwareUploadInput" type="file" accept=".bin,.hex,.img,.zip,application/octet-stream" style="display:none" @change="onFirmwarePackageSelected" />
+              <button type="button" class="btn btn-sm" :disabled="firmwareUploading" @click="triggerFirmwareUpload">{{ firmwareUploading ? '上传中…' : '选择并上传' }}</button>
+              <span v-if="firmwareForm.packageFileName" class="tag tag-green">{{ firmwareForm.packageFileName }}</span>
+              <span v-else style="color:#999;font-size:13px">未选择文件</span>
+            </div>
+            <div class="hint">正式对接 <code>POST /storage/file</code> multipart（part <code>file</code>；建议 <code>path=firmware</code>、<code>isPrivate=0</code> 公开可读，OTA Job 才能拉）。成功取 <code>Result.data.fileUrl</code> → 写入 <code>packageUrl</code>。本地目录存储（storage.active=local）。</div>
+          </div>
+          <div class="form-item"><label>包地址 packageUrl</label><input class="input input-full" v-model="firmwareForm.packageUrl" placeholder="上传成功后自动回填；亦可弱兜底手填" /><div class="hint">只读展示上传结果亦可；OTA 弹窗仍按选版本 autofill 此字段。</div></div>
           <div class="form-item"><label>变更说明</label><textarea class="textarea input-full" v-model="firmwareForm.changelog"></textarea></div>
           <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" @click="screen='detail'; detailTab='firmware'">取消</button><button class="btn btn-primary" @click="saveFirmware">保存</button></div>
         </div>
