@@ -242,6 +242,7 @@ const FIRMWARES = [
 const FIRMWARE_EDIT_REFUSED = '暂不支持修改固件信息，请删除后重新上传登记';
 /* DELETE：被 OTA 任务 / 设备升级记录引用，或 packageUrl 相同，则失败；批量时任一条被引用则整批失败 */
 const FIRMWARE_DELETE_REFUSED = '升级包已被 OTA 任务/设备升级记录使用，不能删除';
+const FIRMWARE_DELETE_WARN = '若已被 OTA 任务或设备升级记录引用则无法删除';
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
  * 积水仪 FAFA…ADAD：字节17–24 为命令开关（bitIndex 1-based，bit=1 执行；位 9 空缺）；
@@ -2192,14 +2193,12 @@ createApp({
         showToast('请选择要删除的固件', 'warn');
         return;
       }
-      const blocked = list.filter(firmwareIsReferenced);
       deleteTarget.type = list.length > 1 ? '固件批量' : '固件版本';
       deleteTarget.id = list.length === 1 ? list[0].id : '';
       deleteTarget.ids = list.map(f => f.id);
       deleteTarget.name = list.map(f => (f.packageName || f.upgradeVersion || f.id)).join('、');
-      deleteTarget.blocked = blocked.length > 0;
+      deleteTarget.blocked = false;
       showDeleteConfirm.value = true;
-      if (deleteTarget.blocked) showToast(FIRMWARE_DELETE_REFUSED, 'warn');
     }
     function confirmDelete(type, id, name) {
       if (type === '固件版本') {
@@ -4030,7 +4029,7 @@ createApp({
       openCreateCommand, openEditCommand, saveCommand, toggleCommandEnabled,
       commandParamsSummary,
       showDeleteConfirm, deleteTarget,
-      pointForm, pointFormMode, installForm, installFormMode, firmwareForm, FIRMWARE_EDIT_REFUSED, FIRMWARE_DELETE_REFUSED, firmwareToday,
+      pointForm, pointFormMode, installForm, installFormMode, firmwareForm, FIRMWARE_EDIT_REFUSED, FIRMWARE_DELETE_REFUSED, FIRMWARE_DELETE_WARN, firmwareToday,
       firmwareSelectedIds, toggleFirmwareSelect, toggleFirmwareSelectAll, confirmBatchDeleteFirmware,
       firmwareUploadInput, firmwareUploading, triggerFirmwareUpload, onFirmwarePackageSelected,
       goList, openDetail, openCreateCategory, openEditCategory, saveCategory,
@@ -6716,16 +6715,17 @@ createApp({
 
     <div v-if="showDeleteConfirm" class="overlay" @click.self="showDeleteConfirm=false">
       <div class="modal confirm-box">
-        <div class="modal-header"><span>{{ deleteTarget.blocked ? '无法删除' : '确认删除' }}</span><button class="close-x" @click="showDeleteConfirm=false">×</button></div>
+        <div class="modal-header"><span>{{ deleteTarget.blocked ? '删除失败' : '确认删除' }}</span><button class="close-x" @click="showDeleteConfirm=false">×</button></div>
         <div class="modal-body">
           <div class="confirm-icon">!</div>
           <div v-if="deleteTarget.blocked">
             <div style="font-weight:600;color:var(--error);margin-bottom:8px">{{ FIRMWARE_DELETE_REFUSED }}</div>
-            <div style="font-size:13px;color:#666;line-height:1.6">涉及：{{ deleteTarget.name }}。引用包括 OTA 任务、设备升级记录，或相同 packageUrl。<span v-if="deleteTarget.type==='固件批量'">批量删除中只要有一条被引用，整批失败，其余项也不会删除。</span></div>
+            <div v-if="deleteTarget.type==='固件批量'" style="font-size:13px;color:#666">整批未删除。</div>
           </div>
           <div v-else>
             <div style="font-weight:500;margin-bottom:6px">确定删除{{ deleteTarget.type }}「{{ deleteTarget.name }}」吗？</div>
-            <div style="font-size:13px;color:#666">删除后不可恢复。固件若已被 OTA 任务或设备升级记录使用，将无法删除。</div>
+            <div v-if="deleteTarget.type==='固件版本' || deleteTarget.type==='固件批量'" style="font-size:13px;color:#666">{{ FIRMWARE_DELETE_WARN }}</div>
+            <div v-else style="font-size:13px;color:#666">删除后不可恢复，已关联设备将失去对应配置引用。</div>
           </div>
         </div>
         <div class="modal-footer">
