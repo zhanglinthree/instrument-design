@@ -37,6 +37,7 @@ python3 -m http.server 8877
 
 ### 设备台账
 - **本机数据（报文列表）**：设备档案 `#deviceDetail` Tab「本机数据」= `iot_protocol_data` 报文表（receiveTime / packageType / parsedJson / contentHex / status；按 deviceId 查；筛 packageType：message* / data* / upgrade65535 / command）。**不再**内嵌测点曲线；曲线仅在线监控。顶栏「曲线（在线监控）」→ `#monitorDetail`。
+- **设备信息包**（`GET /iot/iotDevice/{id}`，列表同样带字段）：档案基本信息展示 `hardwareVersion`、`softwareVersion`（整数，可空）和 `firmwareVersion`（OTA 固件版本，**不**用 softwareVersion 代替）。双 IMSI：`chinaTelecomImsi`、`chinaMobileImsi`。安装经纬度仍用 `lng` / `lat`（井盖信息包有效 GPS 会覆盖）。扩展区解析 `messageInfoJson`，按 `packageType`（`message1` / `message3` / `message32769`）展示出厂时间、温度、重启、IP、电池、姿态等未知键也原样列出。设备从未上报信息包时这些字段为 null，界面显示 —。置顶身份条不放这些字段。
 - **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
@@ -80,7 +81,7 @@ python3 -m http.server 8877
 | 3 | 设备列表 | `#devices` |
 | 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
 | 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
-| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…） | `#deviceDetail` |
+| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…）。档案区分 **firmwareVersion**（OTA 固件版本）与 **softwareVersion**（信息包整数，可空）；基本信息含 hardwareVersion；双 IMSI：chinaTelecomImsi / chinaMobileImsi；安装经纬度仍用 lng/lat（井盖信息包有效 GPS 会覆盖）；信息包区解析 messageInfoJson，按 packageType（message1 / message3 / message32769）展示出厂时间、温度、重启、IP、电池、姿态等。未上报信息包时这些字段为 —。样例：`#deviceDetail`（D001·message1）、`#deviceDetail?id=D003`（message3）、`#deviceDetail?id=D013`（message32769）、`#deviceDetail?id=D010`（全空） | `#deviceDetail` |
 | 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
 | 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
 | 4b2 | 设备档案 · **升级日志**（OTA：time / taskId / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度 / 操作人 / failReason；失败常见「任务已取消」「升级超时（超过N分钟无应答）」；顶栏「固件升级」） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` |

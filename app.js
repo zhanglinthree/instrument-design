@@ -407,6 +407,154 @@ const DEVICES = [
   { id: 'D015', imei: 'MF20260901003', deviceSn: 'MF20260901003', aepStatus: 1, lastReportAt: '2026-10-19 15:00', name: '东湖路井-01探头B', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', categoryRuleId: 'R101', lifecycle: '在线', aepDeviceId: 'probe:MF20260901003', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153620, lat: 30.287490, address: '杭州市上城区东湖路检查井（探头B）', installDate: '2026-04-12', installer: '张伟', masterId: 'D001', masterImei: 'MF20260901001', slaves: [], photos: [], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.6', well_no: 'JW-2026-001-P2', cover_type: '铸铁' }, updatedAt: '2026-10-19 15:00' },
 ];
 
+/* 信息包字段：GET /iot/iotDevice/{id}。firmwareVersion 是 OTA 固件版本，与 softwareVersion 无关。
+ * 未上报信息包时 hardwareVersion / softwareVersion / 双 IMSI / messageInfoJson 为 null。 */
+const MESSAGE_INFO_LABELS = {
+  message1: {
+    factoryTime: '出厂时间',
+    temperature: '温度 (℃)',
+    rebootCount: '重启次数',
+    ip: 'IP',
+    battery: '电池电压 (V)',
+    csq: '信号'
+  },
+  message3: {
+    temperature: '温度 (℃)',
+    rebootCount: '重启次数',
+    ip: 'IP',
+    battery: '电池电压 (V)',
+    humidity: '湿度 (%RH)',
+    workMode: '工作模式'
+  },
+  message32769: {
+    factoryTime: '出厂时间',
+    temperature: '温度 (℃)',
+    rebootCount: '重启次数',
+    battery: '电池 (V)',
+    attitude: '姿态',
+    gpsValid: 'GPS 有效'
+  }
+};
+
+function attachDeviceMessageInfo(id, patch) {
+  const row = DEVICES.find(d => d.id === id);
+  if (row) Object.assign(row, patch);
+}
+attachDeviceMessageInfo('D001', {
+  firmwareVersion: '1.2.0',
+  hardwareVersion: 3,
+  softwareVersion: 120,
+  chinaTelecomImsi: '460030912345678',
+  chinaMobileImsi: '460001598765432',
+  messageInfoJson: JSON.stringify({
+    packageType: 'message1',
+    factoryTime: '2024-11-02 10:18:00',
+    temperature: 28.6,
+    rebootCount: 4,
+    ip: '10.18.22.15',
+    battery: 3.68,
+    csq: 21
+  })
+});
+attachDeviceMessageInfo('D003', {
+  firmwareVersion: '2.0.1',
+  hardwareVersion: 2,
+  softwareVersion: 45,
+  chinaTelecomImsi: '460031110002233',
+  chinaMobileImsi: null,
+  messageInfoJson: JSON.stringify({
+    packageType: 'message3',
+    temperature: 19.2,
+    rebootCount: 1,
+    ip: '10.20.4.88',
+    battery: 3.41,
+    humidity: 62,
+    workMode: '定时上报'
+  })
+});
+attachDeviceMessageInfo('D013', {
+  firmwareVersion: '1.0.0',
+  hardwareVersion: 5,
+  softwareVersion: 8,
+  chinaTelecomImsi: '460030000111222',
+  chinaMobileImsi: '460008887776665',
+  messageInfoJson: JSON.stringify({
+    packageType: 'message32769',
+    factoryTime: '2025-06-18 09:00:00',
+    temperature: 26.2,
+    rebootCount: 2,
+    battery: 3.55,
+    attitude: { pitch: 1.2, roll: -0.4, yaw: 88 },
+    gpsValid: true
+  })
+});
+attachDeviceMessageInfo('D007', {
+  firmwareVersion: '1.2.0',
+  hardwareVersion: null,
+  softwareVersion: null,
+  chinaTelecomImsi: null,
+  chinaMobileImsi: null,
+  messageInfoJson: null
+});
+attachDeviceMessageInfo('D010', {
+  firmwareVersion: null,
+  hardwareVersion: null,
+  softwareVersion: null,
+  chinaTelecomImsi: null,
+  chinaMobileImsi: null,
+  messageInfoJson: null
+});
+
+function displayNullable(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  return v;
+}
+function deviceFirmwareVersion(d) {
+  if (!d) return null;
+  if (Object.prototype.hasOwnProperty.call(d, 'firmwareVersion')) return d.firmwareVersion;
+  if (d.firmware === null || d.firmware === undefined || d.firmware === '') return null;
+  return d.firmware;
+}
+function formatMessageValue(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? '是' : '否';
+  if (typeof v === 'object') {
+    if (v.pitch != null || v.roll != null || v.yaw != null) {
+      return '俯仰 ' + displayNullable(v.pitch) + '° · 横滚 ' + displayNullable(v.roll) + '° · 航向 ' + displayNullable(v.yaw) + '°';
+    }
+    try { return JSON.stringify(v); } catch (e) { return '—'; }
+  }
+  return String(v);
+}
+function parseDeviceMessageInfo(device) {
+  if (!device || device.messageInfoJson == null || device.messageInfoJson === '') {
+    return { empty: true, parseError: false, packageType: '', rows: [] };
+  }
+  let obj = device.messageInfoJson;
+  if (typeof obj === 'string') {
+    try { obj = JSON.parse(obj); } catch (e) {
+      return { empty: false, parseError: true, packageType: '', rows: [], raw: device.messageInfoJson };
+    }
+  }
+  if (!obj || typeof obj !== 'object') {
+    return { empty: true, parseError: false, packageType: '', rows: [] };
+  }
+  const packageType = String(obj.packageType || '').trim();
+  const labels = MESSAGE_INFO_LABELS[packageType] || {};
+  const used = { packageType: true };
+  const rows = [];
+  Object.keys(labels).forEach(key => {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) return;
+    used[key] = true;
+    rows.push({ key, label: labels[key], value: formatMessageValue(obj[key]) });
+  });
+  Object.keys(obj).forEach(key => {
+    if (used[key]) return;
+    rows.push({ key, label: key, value: formatMessageValue(obj[key]) });
+  });
+  return { empty: false, parseError: false, packageType: packageType || '—', rows };
+}
+
 const UNASSIGNED_PROJECT_ID = '__unassigned__';
 const UNASSIGNED_PROJECT_NAME = '未定义项目';
 
@@ -942,6 +1090,7 @@ createApp({
     }
     const deviceList = ref(DEVICES.map(d => ({ ...d })));
     const currentDevice = ref(deviceList.value[0]);
+    const currentMessageInfo = computed(() => parseDeviceMessageInfo(currentDevice.value));
     const selectedDeviceIds = ref([]);
 
     const showImportModal = ref(false);
@@ -3301,6 +3450,7 @@ createApp({
           aepStatus: deviceForm.aepStatus != null ? Number(deviceForm.aepStatus) : 0,
           model: deviceForm.model,
           firmware: deviceForm.firmware,
+          firmwareVersion: deviceForm.firmware,
           lng: deviceForm.lng ? Number(deviceForm.lng) : null,
           lat: deviceForm.lat ? Number(deviceForm.lat) : null,
           address: deviceForm.address,
@@ -3960,7 +4110,11 @@ createApp({
         editProject: () => { goProjects(); openEditProject(PROJECTS[0]); },
         devices: () => openAllDevices(),
         unassignedDevices: () => goUnassignedDevices(),
-        deviceDetail: () => openDeviceDetail(deviceList.value[0], tabFromQuery || 'profile'),
+        deviceDetail: () => {
+          const id = queryParams && queryParams.get('id');
+          const d = (id && deviceList.value.find(x => x.id === id)) || deviceList.value[0];
+          openDeviceDetail(d, tabFromQuery || 'profile');
+        },
         deviceLocalData: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'),
         devicePackets: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'), // 旧 hash → 本机数据
         deviceDispatch: () => openDeviceDetail(deviceList.value.find(d => d.categoryId === 'C001') || deviceList.value[0], 'dispatch'),
@@ -4046,7 +4200,7 @@ createApp({
       openCreateProject, openEditProject, saveProject, openAllDevices, openDevicesForProject, openDevicesForProjectLifecycle, openDevicesForCategory, openDevicesForLifecycle, LIFECYCLE_TO_STATUS,
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
       deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, deviceSlaveCategoryFilter, showProbeDevices, isProbeAepId, isChildDevice, isHubDevice, displayAepDeviceId,
-      filteredDevices, deviceStats, currentDevice, openDeviceDetail,
+      filteredDevices, deviceStats, currentDevice, openDeviceDetail, currentMessageInfo, displayNullable, deviceFirmwareVersion,
       deviceDetailTab, setDeviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
       dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
       isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
@@ -5274,8 +5428,10 @@ createApp({
               <div class="k">物模型品类</div><div class="v">{{ currentDevice.categoryName || '未分类' }} <span class="tag" :class="currentDevice.categoryMatch==='auto'?'tag-blue':(currentDevice.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(currentDevice.categoryMatch) }}</span></div>
               <div class="k">挂靠规则 ID</div><div class="v"><code v-if="currentDevice.categoryRuleId">{{ currentDevice.categoryRuleId }}</code><span v-else>—</span> <span class="sub-nav-hint">解绑品类时清空；型号兜底形如 fallback:0042</span></div>
               <div class="k">所属项目</div><div class="v">{{ displayProjectName(currentDevice) }}</div>
-              <div class="k">硬件型号</div><div class="v">{{ currentDevice.model }}</div>
-              <div class="k">固件版本</div><div class="v">{{ currentDevice.firmware }}</div>
+              <div class="k">硬件型号</div><div class="v">{{ currentDevice.model || '—' }}</div>
+              <div class="k">firmwareVersion</div><div class="v">{{ displayNullable(deviceFirmwareVersion(currentDevice)) }} <span class="sub-nav-hint">OTA 固件版本，不是 softwareVersion</span></div>
+              <div class="k">hardwareVersion</div><div class="v">{{ displayNullable(currentDevice.hardwareVersion) }} <span class="sub-nav-hint">整数，可空</span></div>
+              <div class="k">softwareVersion</div><div class="v">{{ displayNullable(currentDevice.softwareVersion) }} <span class="sub-nav-hint">信息包软件版本，整数，可空</span></div>
               <div class="k">安装日期</div><div class="v">{{ currentDevice.installDate || '—' }}</div>
               <div class="k">安装人</div><div class="v">{{ currentDevice.installer || '—' }}</div>
               <div class="k">安装地址</div><div class="v">{{ currentDevice.address || '—' }}</div>
@@ -5284,11 +5440,35 @@ createApp({
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">坐标 <span class="sub-nav-hint">一期无地图，仅展示经纬度</span></div>
-            <div class="coord-row">
-              <span>经度：<b>{{ currentDevice.lng }}</b></span>
-              <span>纬度：<b>{{ currentDevice.lat }}</b></span>
+            <div class="info-section-title">双 IMSI</div>
+            <div class="kv-grid">
+              <div class="k">chinaTelecomImsi</div><div class="v"><code v-if="currentDevice.chinaTelecomImsi">{{ currentDevice.chinaTelecomImsi }}</code><span v-else>—</span></div>
+              <div class="k">chinaMobileImsi</div><div class="v"><code v-if="currentDevice.chinaMobileImsi">{{ currentDevice.chinaMobileImsi }}</code><span v-else>—</span></div>
             </div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-title">安装经纬度 <span class="sub-nav-hint">lng / lat · 井盖信息包有效 GPS 会覆盖</span></div>
+            <div class="coord-row">
+              <span>经度 lng：<b>{{ displayNullable(currentDevice.lng) }}</b></span>
+              <span>纬度 lat：<b>{{ displayNullable(currentDevice.lat) }}</b></span>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-title">信息包 <span class="sub-nav-hint">解析 messageInfoJson，按 packageType 展示</span></div>
+            <div v-if="currentMessageInfo.empty" class="empty-hint">尚未上报信息包。hardwareVersion、softwareVersion、双 IMSI、messageInfoJson 为空时以 — 展示。</div>
+            <div v-else-if="currentMessageInfo.parseError" class="empty-hint">messageInfoJson 无法解析</div>
+            <template v-else>
+              <div class="kv-grid">
+                <div class="k">packageType</div><div class="v"><code>{{ currentMessageInfo.packageType }}</code></div>
+                <template v-for="row in currentMessageInfo.rows" :key="row.key">
+                  <div class="k">{{ row.label }} <span class="sub-nav-hint">{{ row.key }}</span></div>
+                  <div class="v">{{ row.value }}</div>
+                </template>
+              </div>
+              <div v-if="currentMessageInfo.packageType==='message32769'" class="table-note">井盖信息包 gpsValid 为真时，上方 lng/lat 为该包有效 GPS 覆盖后的安装经纬度。</div>
+            </template>
           </div>
 
           <div class="info-section">
@@ -5682,7 +5862,7 @@ createApp({
               <div class="hint" v-else>对账接入后自动回填；勿填 probe: 前缀。</div>
             </div>
             <div class="form-item"><label>硬件型号</label><input class="input input-full" v-model="deviceForm.model" /></div>
-            <div class="form-item"><label>固件版本</label><input class="input input-full" v-model="deviceForm.firmware" /></div>
+            <div class="form-item"><label>firmwareVersion（OTA 固件版本）</label><input class="input input-full" v-model="deviceForm.firmware" /><div class="hint">OTA 固件版本，不要填成信息包 softwareVersion。</div></div>
           </div>
           <div class="form-section-title">坐标与地址</div>
           <div class="form-row">
