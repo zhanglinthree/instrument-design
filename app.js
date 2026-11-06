@@ -330,19 +330,19 @@ function otaTimeoutFailReason(minutes) {
  * （版本可回退；只比该单 fromVersion，不比设备表当前版本，也不比目标版本）。fromVersion 为空则跳过兜底。
  * 回写用信息包实际版本。应答 remain=0 仍记成功。待后端新 tip。 */
 const DEVICE_UPGRADE_LOGS = [
-  { id: 'UL02', deviceId: 'D001', taskId: 'OT01', firmwareId: 'F1', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', time: '2026-10-30 09:05:00', fromVersion: 120, fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 62, operator: '李敏', failReason: '' },
-  { id: 'UL03', deviceId: 'D002', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, operator: '李敏', failReason: '' },
-  { id: 'UL06', deviceId: 'D015', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, operator: '李敏', failReason: '' },
-  { id: 'UL01', deviceId: 'D001', taskId: 'OT02', firmwareId: 'F2', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', time: '2026-10-20 15:12:00', fromVersion: 110, fromVer: '1.1.2', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '', successNote: '应答 remain=0' },
-  { id: 'UL08', deviceId: 'D002', taskId: 'OT02', time: '2026-10-20 16:02:00', fromVersion: null, fromVer: '1.1.8', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '', successNote: '应答 remain=0' },
-  { id: 'UL05', deviceId: 'D007', taskId: 'OT02', time: '2026-10-20 15:11:00', fromVersion: null, fromVer: '1.0.0', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '', successNote: '应答 remain=0' },
-  { id: 'UL07', deviceId: 'D009', taskId: 'OT02', time: '2026-10-20 15:18:00', fromVersion: null, fromVer: '1.1.0', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '', successNote: '应答 remain=0' },
-  { id: 'UL04', deviceId: 'D015', taskId: 'OT02', time: '2026-10-20 15:40:22', fromVersion: null, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 38, operator: '张三', failReason: otaTimeoutFailReason(30) },
-  { id: 'UL09', deviceId: 'D009', taskId: 'OT03', time: '2026-10-25 11:02:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 3, progress: 12, operator: '王建国', failReason: OTA_CANCEL_REASON },
-  { id: 'UL10', deviceId: 'D007', taskId: 'OT03', time: '2026-10-25 11:02:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 3, progress: 0, operator: '王建国', failReason: OTA_CANCEL_REASON },
-  { id: 'UL11', deviceId: 'D001', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: 100, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 40, operator: '李敏', failReason: otaTimeoutFailReason(20) },
-  { id: 'UL12', deviceId: 'D002', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: null, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 0, operator: '李敏', failReason: otaTimeoutFailReason(20) },
-  { id: 'UL13', deviceId: 'D013', taskId: 'OT02', time: '2026-10-21 09:12:00', fromVersion: 8, fromVer: '1.0.0', toVer: '1.0.0', status: 2, progress: 100, operator: '李敏', failReason: '', successNote: '末包无最终应答；信息包 softwareVersion=9 ≠ 本单 fromVersion=8（可升可降），回写实际版本 9' },
+  { id: 'UL02', deviceId: 'D001', taskId: 'OT01', firmwareId: 'F1', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', time: '2026-10-30 09:05:00', fromVersion: 120, fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 62, sentPackage: 8, remainPackage: 5, totalPackage: 13, operator: '李敏', failReason: '' },
+  { id: 'UL03', deviceId: 'D002', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, sentPackage: 0, remainPackage: 12, totalPackage: 12, operator: '李敏', failReason: '' },
+  { id: 'UL06', deviceId: 'D015', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, sentPackage: 0, remainPackage: 10, operator: '李敏', failReason: '' },
+  { id: 'UL01', deviceId: 'D001', taskId: 'OT02', firmwareId: 'F2', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', time: '2026-10-20 15:12:00', fromVersion: 110, fromVer: '1.1.2', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 12, remainPackage: 0, totalPackage: 12, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL08', deviceId: 'D002', taskId: 'OT02', time: '2026-10-20 16:02:00', fromVersion: null, fromVer: '1.1.8', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 9, remainPackage: 0, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL05', deviceId: 'D007', taskId: 'OT02', time: '2026-10-20 15:11:00', fromVersion: null, fromVer: '1.0.0', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 8, remainPackage: 0, totalPackage: 8, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL07', deviceId: 'D009', taskId: 'OT02', time: '2026-10-20 15:18:00', fromVersion: null, fromVer: '1.1.0', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 10, remainPackage: 0, totalPackage: 10, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL04', deviceId: 'D015', taskId: 'OT02', time: '2026-10-20 15:40:22', fromVersion: null, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 38, sentPackage: 5, remainPackage: 8, totalPackage: 13, operator: '张三', failReason: otaTimeoutFailReason(30) },
+  { id: 'UL09', deviceId: 'D009', taskId: 'OT03', time: '2026-10-25 11:02:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 3, progress: 12, sentPackage: 2, remainPackage: 14, totalPackage: 16, operator: '王建国', failReason: OTA_CANCEL_REASON },
+  { id: 'UL10', deviceId: 'D007', taskId: 'OT03', time: '2026-10-25 11:02:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 3, progress: 0, sentPackage: 0, remainPackage: 16, totalPackage: 16, operator: '王建国', failReason: OTA_CANCEL_REASON },
+  { id: 'UL11', deviceId: 'D001', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: 100, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 40, sentPackage: 4, remainPackage: 6, totalPackage: 10, operator: '李敏', failReason: otaTimeoutFailReason(20) },
+  { id: 'UL12', deviceId: 'D002', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: null, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 0, sentPackage: 0, remainPackage: 10, operator: '李敏', failReason: otaTimeoutFailReason(20) },
+  { id: 'UL13', deviceId: 'D013', taskId: 'OT02', time: '2026-10-21 09:12:00', fromVersion: 8, fromVer: '1.0.0', toVer: '1.0.0', status: 2, progress: 100, sentPackage: 11, remainPackage: 0, totalPackage: 11, operator: '李敏', failReason: '', successNote: '末包无最终应答；信息包 softwareVersion=9 ≠ 本单 fromVersion=8（可升可降），回写实际版本 9' },
 ];
 
 /* 品类级 OTA 任务。排除原因一律「排除: …」，出现在创建结果，不进入设备进度。 */
@@ -3060,6 +3060,8 @@ createApp({
         packageUrl: pkg,
         status: 0,
         progress: 0,
+        sentPackage: 0,
+        remainPackage: null,
         operator: '当前用户',
         failReason: ''
       };
@@ -3183,6 +3185,9 @@ createApp({
         toVer,
         status: idx === 0 ? 1 : 0,
         progress: idx === 0 ? 15 : 0,
+        sentPackage: idx === 0 ? 3 : 0,
+        remainPackage: idx === 0 ? 17 : 20,
+        totalPackage: 20,
         operator: '当前用户',
         failReason: '',
       }));
@@ -3277,6 +3282,15 @@ createApp({
       if (row.successNote) return row.successNote;
       if (otaDeviceStatusMeta(row.status).code === 2) return '应答 remain=0';
       return '';
+    }
+    function upgradePackageLine(row) {
+      if (!row) return '';
+      const has = function (v) { return v !== null && v !== undefined && v !== ''; };
+      const parts = [];
+      if (has(row.sentPackage)) parts.push('已发 ' + row.sentPackage);
+      if (has(row.remainPackage)) parts.push('剩余 ' + row.remainPackage);
+      if (has(row.totalPackage)) parts.push('共 ' + row.totalPackage);
+      return parts.join(' · ');
     }
 
 
@@ -4238,7 +4252,7 @@ createApp({
       askCancelOtaTask, doCancelOtaTask, showCancelOtaConfirm, cancelOtaTarget,
       OTA_TIMEOUT_DEFAULT, OTA_DEVICE_CAP, OTA_CANCEL_REASON,
       openCategoryBatchOta, onCategoryOtaTargetChange, isCategoryOtaDeviceSelected, toggleCategoryOtaDevice,
-      toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, upgradeFromVersion, upgradeSuccessNote, compareSemver,
+      toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, upgradeFromVersion, upgradeSuccessNote, upgradePackageLine, compareSemver,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
       deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess, sendLogTypeLabel, sendLogDryRunLabel,
@@ -4818,6 +4832,7 @@ createApp({
                           <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
                           <span>{{ r.progress || 0 }}%</span>
                         </div>
+                        <div class="ota-progress-pkgs" v-if="upgradePackageLine(r)">{{ upgradePackageLine(r) }}</div>
                       </td>
                       <td :class="{'ota-fail-reason': !!r.failReason}">{{ r.failReason || '—' }}</td>
                       <td>{{ upgradeSuccessNote(r) || '—' }}</td>
@@ -4826,7 +4841,7 @@ createApp({
                   </tbody>
                 </table>
               </div>
-              <div class="table-note">fromVersion 是升级前设备 softwareVersion，可空。upgradeStatus 仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败。取消失败原因「任务已取消」；超时「升级超时（超过N分钟无应答）」。</div>
+              <div class="table-note">进度除百分比外展示已发 sentPackage、剩余 remainPackage；有 totalPackage 时一并显示。成功仍看 upgradeStatus。fromVersion 是升级前 softwareVersion，可空。状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败。</div>
             </template>
             <template v-else-if="currentOtaTaskId">
               <div class="toolbar">
@@ -5760,6 +5775,7 @@ createApp({
                         <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
                         <span>{{ r.progress || 0 }}%</span>
                       </div>
+                      <div class="ota-progress-pkgs" v-if="upgradePackageLine(r)">{{ upgradePackageLine(r) }}</div>
                     </td>
                     <td>{{ r.operator }}</td>
                     <td :class="{'ota-fail-reason': !!r.failReason}">{{ r.failReason || '—' }}</td>
@@ -5769,7 +5785,7 @@ createApp({
                 </tbody>
               </table>
             </div>
-            <div class="table-note">fromVersion 为升级前 softwareVersion，未上报则为 —。状态枚举不变。进度按 deviceUpgrade?taskId= 归集。D013 的成功记录是智能井盖信息包兜底示例。</div>
+            <div class="table-note">进度除百分比外展示 sentPackage、remainPackage，有则显示 totalPackage。成功仍看 upgradeStatus。fromVersion 为升级前 softwareVersion，未上报则为 —。D013 的成功记录是智能井盖信息包兜底（softwareVersion ≠ 本单 fromVersion）。</div>
           </template>
 
           <template v-else-if="deviceDetailTab==='snChange'">

@@ -2190,6 +2190,13 @@ iconify-icon.cat-icon {
   background: linear-gradient(90deg, #1677ff, #69b1ff);
   border-radius: 3px;
 }
+.ota-progress-pkgs {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #667085;
+  white-space: normal;
+}
 .modal.modal-ota {
   width: 960px;
   max-width: calc(100vw - 48px);
