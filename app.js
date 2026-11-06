@@ -327,7 +327,8 @@ function otaTimeoutFailReason(minutes) {
 /* fromVersion = 升级前设备 softwareVersion（整数，可空）。成功仍由 upgradeStatus 决定，不新增状态：
  * 主路径末包应答 remain=0 → 2 成功。
  * 智能井盖兜底：末包后无最终应答时，信息包 softwareVersion > 本条升级记录 fromVersion 即成功
- * （只比该单 fromVersion，不比设备表当前版本，也不要求等于 toVersion）。回写用信息包实际版本。待后端新 tip。 */
+ * （只比该单 fromVersion，不比设备表当前版本，也不要求等于 toVersion）。fromVersion 为空则跳过兜底。
+ * 回写用信息包实际版本。应答 remain=0 仍记成功。BE tip 0ab5b122。 */
 const DEVICE_UPGRADE_LOGS = [
   { id: 'UL02', deviceId: 'D001', taskId: 'OT01', firmwareId: 'F1', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', time: '2026-10-30 09:05:00', fromVersion: 120, fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 62, operator: '李敏', failReason: '' },
   { id: 'UL03', deviceId: 'D002', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, operator: '李敏', failReason: '' },
@@ -4800,7 +4801,7 @@ createApp({
                 <div class="cell-sub">本次无设备被排除，纳入 {{ currentOtaTask.deviceCount }} 台。</div>
               </div>
               <div class="info-section-title" style="margin-top:4px">设备升级进度 · <code>deviceUpgrade?taskId={{ currentOtaTask.id }}</code></div>
-              <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 大于本条升级记录的 fromVersion 即记成功（只比该单 fromVersion，不比设备当前版本，也不要求等于目标版本）。回写用信息包实际版本。兜底比较：信息包 softwareVersion > fromVersion（待后端新 tip）。</div>
+              <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 大于本条升级记录的 fromVersion 即记成功（只比该单 fromVersion，不比设备当前版本，也不要求等于目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion > 本单 fromVersion。</div>
               <div class="table-wrap">
                 <table class="data-table">
                   <thead>
@@ -5736,7 +5737,7 @@ createApp({
               <div class="spacer"></div>
               <button class="btn btn-primary btn-sm" @click="openDeviceOtaModal">＋ 固件升级</button>
             </div>
-            <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 大于本条升级记录的 fromVersion 即记成功（只比该单 fromVersion，不比设备当前版本，也不要求等于目标版本）。回写用信息包实际版本。兜底比较：信息包 softwareVersion > fromVersion（待后端新 tip）。</div>
+            <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 大于本条升级记录的 fromVersion 即记成功（只比该单 fromVersion，不比设备当前版本，也不要求等于目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion > 本单 fromVersion。</div>
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
