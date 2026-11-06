@@ -40,7 +40,8 @@ python3 -m http.server 8877
 - **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
-- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选版本落后设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出，空则手填。固件登记主路径：上传包（`POST /storage/file`，path=firmware，isPrivate=0）→ 回填 `packageUrl`（`Result.data.fileUrl`）；空 URL 不可提交。
+- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。固件登记主路径：上传包（`POST /storage/file`，path=firmware，isPrivate=0）→ 回填 `packageUrl`（`Result.data.fileUrl`）；空 URL 不可提交。
+- **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`categoryId` 必填；`packageUrl` 或 `firmwareId`；`deviceIds` 合计 ≤200。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。
 
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
@@ -81,9 +82,9 @@ python3 -m http.server 8877
 | 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…） | `#deviceDetail` |
 | 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
 | 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
-| 4b2 | 设备档案 · **升级日志**（OTA：time / fromVer→toVer / 状态排队·升级中·成功·失败 / 进度 / 操作人 / failReason；顶栏「固件升级」弹窗选目标版本） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` |
+| 4b2 | 设备档案 · **升级日志**（OTA：time / taskId / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度 / 操作人 / failReason；失败常见「任务已取消」「升级超时（超过N分钟无应答）」；顶栏「固件升级」） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` |
 | 4c0 | 品类详情 · **批量下发**（选一条 batchable 指令 → 共享参数 → 多选设备筛项目/在线 → dryRun → 批量 mock） | `#batchDispatch` |
-| 4c1 | 品类详情 · **升级任务**（固件行「批量升级」→ 选版本落后设备 → 品类 OTA 任务列表） | `#otaTasks` |
+| 4c1 | 品类详情 · **升级任务**列表 + 详情。状态 **0 进行中 / 1 已完成 / 2 已取消 / 3 失败**；进行中可取消；详情含 timeoutMinutes（默认 30）、创建结果「排除: …」、设备进度 `deviceUpgrade?taskId=`。样例：进行中 OT01、已完成 OT02（超时 30）、已取消 OT03（超时 45）、失败 OT04（超时 20） | `#otaTasks` · `#otaTasks?id=OT01` `#otaTasks?id=OT02` `#otaTasks?id=OT03` `#otaTasks?id=OT04` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |

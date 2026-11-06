@@ -2190,6 +2190,28 @@ iconify-icon.cat-icon {
   background: linear-gradient(90deg, #1677ff, #69b1ff);
   border-radius: 3px;
 }
+.modal.modal-ota {
+  width: 960px;
+  max-width: calc(100vw - 48px);
+}
+.ota-result {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+.ota-result-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2744;
+  margin-bottom: 6px;
+}
+.ota-exclude-reason,
+.ota-fail-reason {
+  color: var(--error);
+  white-space: normal;
+}
 
 .nav-item.nav-item-muted { color: #9aa3b2; cursor: default; }
 .nav-item.nav-item-muted:hover { background: transparent; }
