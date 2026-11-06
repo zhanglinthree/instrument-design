@@ -240,6 +240,8 @@ const FIRMWARES = [
 ];
 /* PUT /iotCategoryFirmware 拒绝文案（只允许 POST 新建） */
 const FIRMWARE_EDIT_REFUSED = '暂不支持修改固件信息，请删除后重新上传登记';
+/* DELETE：被 OTA 任务 / 设备升级记录引用，或 packageUrl 相同，则失败；批量时任一条被引用则整批失败 */
+const FIRMWARE_DELETE_REFUSED = '升级包已被 OTA 任务/设备升级记录使用，不能删除';
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
  * 积水仪 FAFA…ADAD：字节17–24 为命令开关（bitIndex 1-based，bit=1 执行；位 9 空缺）；
@@ -322,10 +324,10 @@ function otaTimeoutFailReason(minutes) {
 }
 
 const DEVICE_UPGRADE_LOGS = [
-  { id: 'UL02', deviceId: 'D001', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 62, operator: '李敏', failReason: '' },
+  { id: 'UL02', deviceId: 'D001', taskId: 'OT01', firmwareId: 'F1', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', time: '2026-10-30 09:05:00', fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 62, operator: '李敏', failReason: '' },
   { id: 'UL03', deviceId: 'D002', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, operator: '李敏', failReason: '' },
   { id: 'UL06', deviceId: 'D015', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, operator: '李敏', failReason: '' },
-  { id: 'UL01', deviceId: 'D001', taskId: 'OT02', time: '2026-10-20 15:12:00', fromVer: '1.1.2', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '' },
+  { id: 'UL01', deviceId: 'D001', taskId: 'OT02', firmwareId: 'F2', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', time: '2026-10-20 15:12:00', fromVer: '1.1.2', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '' },
   { id: 'UL08', deviceId: 'D002', taskId: 'OT02', time: '2026-10-20 16:02:00', fromVer: '1.1.8', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '' },
   { id: 'UL05', deviceId: 'D007', taskId: 'OT02', time: '2026-10-20 15:11:00', fromVer: '1.0.0', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '' },
   { id: 'UL07', deviceId: 'D009', taskId: 'OT02', time: '2026-10-20 15:18:00', fromVer: '1.1.0', toVer: '1.2.0', status: 2, progress: 100, operator: '张三', failReason: '' },
@@ -883,7 +885,7 @@ createApp({
     const COMMAND_ACCESS_OPTS = ['r', 'w'];
 
     const showDeleteConfirm = ref(false);
-    const deleteTarget = reactive({ type: '', id: '', name: '' });
+    const deleteTarget = reactive({ type: '', id: '', name: '', ids: [], blocked: false });
 
     const currentCategory = ref(CATEGORIES[0]);
 
@@ -902,6 +904,7 @@ createApp({
       id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageName: '', changelog: ''
     });
     const firmwareRevision = ref(0);
+    const firmwareSelectedIds = ref([]);
     const firmwareUploadInput = ref(null);
     const firmwareUploading = ref(false);
 
@@ -2175,13 +2178,78 @@ createApp({
       return d.projectName || projectName(d.projectId);
     }
 
+    function firmwareIsReferenced(f) {
+      if (!f) return false;
+      const url = f.packageUrl ? String(f.packageUrl).trim() : '';
+      const sameUrl = (value) => url && value && String(value).trim() === url;
+      const taskHit = categoryOtaTasks.value.some(t => t.firmwareId === f.id || sameUrl(t.packageUrl));
+      const logHit = deviceUpgradeLogs.value.some(r => r.firmwareId === f.id || sameUrl(r.packageUrl));
+      return taskHit || logHit;
+    }
+    function openFirmwareDelete(rows) {
+      const list = (rows || []).filter(Boolean);
+      if (!list.length) {
+        showToast('请选择要删除的固件', 'warn');
+        return;
+      }
+      const blocked = list.filter(firmwareIsReferenced);
+      deleteTarget.type = list.length > 1 ? '固件批量' : '固件版本';
+      deleteTarget.id = list.length === 1 ? list[0].id : '';
+      deleteTarget.ids = list.map(f => f.id);
+      deleteTarget.name = list.map(f => (f.packageName || f.upgradeVersion || f.id)).join('、');
+      deleteTarget.blocked = blocked.length > 0;
+      showDeleteConfirm.value = true;
+      if (deleteTarget.blocked) showToast(FIRMWARE_DELETE_REFUSED, 'warn');
+    }
     function confirmDelete(type, id, name) {
+      if (type === '固件版本') {
+        openFirmwareDelete([FIRMWARES.find(f => f.id === id)]);
+        return;
+      }
       deleteTarget.type = type;
       deleteTarget.id = id;
       deleteTarget.name = name;
+      deleteTarget.ids = [];
+      deleteTarget.blocked = false;
       showDeleteConfirm.value = true;
     }
-    function doDelete() { showDeleteConfirm.value = false; }
+    function toggleFirmwareSelect(id) {
+      const arr = firmwareSelectedIds.value.slice();
+      const i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1);
+      else arr.push(id);
+      firmwareSelectedIds.value = arr;
+    }
+    function toggleFirmwareSelectAll() {
+      const ids = categoryFirmwares.value.map(f => f.id);
+      const allOn = ids.length && ids.every(id => firmwareSelectedIds.value.includes(id));
+      firmwareSelectedIds.value = allOn ? firmwareSelectedIds.value.filter(id => !ids.includes(id)) : ids.slice();
+    }
+    function confirmBatchDeleteFirmware() {
+      const rows = categoryFirmwares.value.filter(f => firmwareSelectedIds.value.includes(f.id));
+      openFirmwareDelete(rows);
+    }
+    function doDelete() {
+      const isFirmware = deleteTarget.type === '固件版本' || deleteTarget.type === '固件批量';
+      if (!isFirmware) {
+        showDeleteConfirm.value = false;
+        return;
+      }
+      const ids = (deleteTarget.ids && deleteTarget.ids.length) ? deleteTarget.ids.slice() : [deleteTarget.id];
+      const rows = ids.map(id => FIRMWARES.find(f => f.id === id)).filter(Boolean);
+      if (rows.some(firmwareIsReferenced)) {
+        deleteTarget.blocked = true;
+        showToast(FIRMWARE_DELETE_REFUSED, 'warn');
+        return;
+      }
+      for (let i = FIRMWARES.length - 1; i >= 0; i--) {
+        if (ids.indexOf(FIRMWARES[i].id) >= 0) FIRMWARES.splice(i, 1);
+      }
+      firmwareSelectedIds.value = firmwareSelectedIds.value.filter(id => ids.indexOf(id) < 0);
+      firmwareRevision.value += 1;
+      showDeleteConfirm.value = false;
+      showToast('已删除 ' + rows.length + ' 条固件（mock）', 'ok');
+    }
 
     function openCreatePoint() {
       pointFormMode.value = 'create';
@@ -3962,7 +4030,8 @@ createApp({
       openCreateCommand, openEditCommand, saveCommand, toggleCommandEnabled,
       commandParamsSummary,
       showDeleteConfirm, deleteTarget,
-      pointForm, pointFormMode, installForm, installFormMode, firmwareForm, FIRMWARE_EDIT_REFUSED, firmwareToday,
+      pointForm, pointFormMode, installForm, installFormMode, firmwareForm, FIRMWARE_EDIT_REFUSED, FIRMWARE_DELETE_REFUSED, firmwareToday,
+      firmwareSelectedIds, toggleFirmwareSelect, toggleFirmwareSelectAll, confirmBatchDeleteFirmware,
       firmwareUploadInput, firmwareUploading, triggerFirmwareUpload, onFirmwarePackageSelected,
       goList, openDetail, openCreateCategory, openEditCategory, saveCategory,
       confirmDelete, doDelete,
@@ -4480,29 +4549,34 @@ createApp({
             <div class="toolbar">
               <span style="color:#666;font-size:13px">只支持新建。POST 必填 <code>categoryId</code> + <code>packageUrl</code> + <code>upgradeVersion</code>。<code>packageName</code> 取上传文件名；<code>releaseDate</code> 不手填，缺省为今天。</span>
               <div class="spacer"></div>
+              <button class="btn btn-sm" @click="confirmBatchDeleteFirmware" :disabled="!firmwareSelectedIds.length">批量删除<span v-if="firmwareSelectedIds.length">（{{ firmwareSelectedIds.length }}）</span></button>
               <button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button>
             </div>
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
-                  <tr><th>packageName</th><th>upgradeVersion</th><th>packageUrl</th><th>releaseDate</th><th>操作</th></tr>
+                  <tr>
+                    <th style="width:36px"><input type="checkbox" :checked="categoryFirmwares.length && categoryFirmwares.every(f => firmwareSelectedIds.includes(f.id))" @change="toggleFirmwareSelectAll" /></th>
+                    <th>packageName</th><th>upgradeVersion</th><th>packageUrl</th><th>releaseDate</th><th>操作</th>
+                  </tr>
                 </thead>
                 <tbody>
                   <tr v-for="f in categoryFirmwares" :key="f.id">
+                    <td><input type="checkbox" :checked="firmwareSelectedIds.includes(f.id)" @change="toggleFirmwareSelect(f.id)" /></td>
                     <td>{{ f.packageName || '—' }}</td>
                     <td><code>{{ f.upgradeVersion || '—' }}</code></td>
                     <td style="max-width:280px"><code :title="f.packageUrl || ''">{{ f.packageUrl ? (f.packageUrl.length>42 ? f.packageUrl.slice(0,42)+'…' : f.packageUrl) : '—' }}</code></td>
                     <td>{{ f.releaseDate || '—' }}</td>
                     <td class="actions">
                       <button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button>
-                      <button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, (f.upgradeVersion || f.currentVersion || '') + (f.packageName ? ' · ' + f.packageName : ''))">删除</button>
+                      <button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.packageName || f.id)">删除</button>
                     </td>
                   </tr>
-                  <tr v-if="!categoryFirmwares.length"><td colspan="5"><div class="empty-hint">暂无固件版本</div></td></tr>
+                  <tr v-if="!categoryFirmwares.length"><td colspan="6"><div class="empty-hint">暂无固件版本</div></td></tr>
                 </tbody>
               </table>
             </div>
-            <div class="table-note">列顺序：packageName / upgradeVersion / packageUrl / releaseDate。packageUrl 由上传回填（POST /storage/file，path=firmware，isPrivate=0）。修改走 PUT 会被拒绝。删除后可重新上传登记。「批量升级」与「指令 · BOOT升级」无关。</div>
+            <div class="table-note">列顺序：packageName / upgradeVersion / packageUrl / releaseDate。被 OTA 任务、设备升级记录引用，或 packageUrl 相同，则不能删除。批量删除时任一条被引用，整批失败。packageUrl 由上传回填（POST /storage/file，path=firmware，isPrivate=0）。「批量升级」与「指令 · BOOT升级」无关。</div>
           </div>
           <div v-else-if="detailTab==='otaTasks'">
             <template v-if="currentOtaTask">
@@ -6642,15 +6716,22 @@ createApp({
 
     <div v-if="showDeleteConfirm" class="overlay" @click.self="showDeleteConfirm=false">
       <div class="modal confirm-box">
-        <div class="modal-header"><span>确认删除</span><button class="close-x" @click="showDeleteConfirm=false">×</button></div>
+        <div class="modal-header"><span>{{ deleteTarget.blocked ? '无法删除' : '确认删除' }}</span><button class="close-x" @click="showDeleteConfirm=false">×</button></div>
         <div class="modal-body">
           <div class="confirm-icon">!</div>
-          <div>
+          <div v-if="deleteTarget.blocked">
+            <div style="font-weight:600;color:var(--error);margin-bottom:8px">{{ FIRMWARE_DELETE_REFUSED }}</div>
+            <div style="font-size:13px;color:#666;line-height:1.6">涉及：{{ deleteTarget.name }}。引用包括 OTA 任务、设备升级记录，或相同 packageUrl。<span v-if="deleteTarget.type==='固件批量'">批量删除中只要有一条被引用，整批失败，其余项也不会删除。</span></div>
+          </div>
+          <div v-else>
             <div style="font-weight:500;margin-bottom:6px">确定删除{{ deleteTarget.type }}「{{ deleteTarget.name }}」吗？</div>
-            <div style="font-size:13px;color:#666">删除后不可恢复，已关联设备将失去对应配置引用。</div>
+            <div style="font-size:13px;color:#666">删除后不可恢复。固件若已被 OTA 任务或设备升级记录使用，将无法删除。</div>
           </div>
         </div>
-        <div class="modal-footer"><button class="btn" @click="showDeleteConfirm=false">取消</button><button class="btn btn-danger" @click="doDelete">删除</button></div>
+        <div class="modal-footer">
+          <button class="btn" @click="showDeleteConfirm=false">{{ deleteTarget.blocked ? '关闭' : '取消' }}</button>
+          <button v-if="!deleteTarget.blocked" class="btn btn-danger" @click="doDelete">删除</button>
+        </div>
       </div>
     </div>
 
