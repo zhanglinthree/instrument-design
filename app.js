@@ -234,9 +234,9 @@ const INSTALL_FIELDS = [
 ];
 
 const FIRMWARES = [
-  { id: 'F1', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', packageFileName: 'MF-LW-100-1.3.0.bin', changelog: '优化液位滤波算法；修复低电量误报' },
-  { id: 'F2', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', packageFileName: 'MF-LW-100-1.2.0.bin', changelog: '支持 AEP 物模型 v1.2' },
-  { id: 'F3', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', packageUrl: 'https://example.com/fw/MF-LW-200/2.0.1.bin', packageFileName: 'MF-LW-200-2.0.1.bin', changelog: '新硬件平台首发固件' },
+  { id: 'F1', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', packageName: 'MF-LW-100-1.3.0.bin', changelog: '优化液位滤波算法；修复低电量误报' },
+  { id: 'F2', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', packageName: 'MF-LW-100-1.2.0.bin', changelog: '支持 AEP 物模型 v1.2' },
+  { id: 'F3', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', packageUrl: 'https://example.com/fw/MF-LW-200/2.0.1.bin', packageName: 'MF-LW-200-2.0.1.bin', changelog: '新硬件平台首发固件' },
 ];
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
@@ -897,7 +897,7 @@ createApp({
     const installFormMode = ref('create');
 
     const firmwareForm = reactive({
-      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageFileName: '', changelog: ''
+      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageName: '', changelog: ''
     });
     const firmwareRevision = ref(0);
     const firmwareUploadInput = ref(null);
@@ -2210,7 +2210,7 @@ createApp({
     function saveInstall() { screen.value = 'detail'; detailTab.value = 'install'; }
 
     function openCreateFirmware() {
-      Object.assign(firmwareForm, { id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageFileName: '', changelog: '' });
+      Object.assign(firmwareForm, { id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageName: '', changelog: '' });
       firmwareUploading.value = false;
       screen.value = 'editFirmware';
     }
@@ -2222,14 +2222,15 @@ createApp({
       const file = ev && ev.target && ev.target.files && ev.target.files[0];
       if (!file) return;
       // mock：正式对接 POST /storage/file multipart(part=file; path=firmware; isPrivate=0)
-      // 成功取 Result.data.fileUrl → 写入 packageUrl（须公开，OTA Job 才能拉）
+      // 文件名 → packageName；成功取 Result.data.fileUrl → packageUrl（须公开，OTA Job 才能拉）
+      // releaseDate 不在上传时手填，保存时自动写入
       firmwareUploading.value = true;
       const name = file.name || 'firmware.bin';
       setTimeout(() => {
-        firmwareForm.packageFileName = name;
+        firmwareForm.packageName = name;
         firmwareForm.packageUrl = 'http://instrument.aquaroot.cn/api/storage/file/mock-fw-key';
         firmwareUploading.value = false;
-        showToast('固件包已上传（mock）→ packageUrl 已回填', 'ok');
+        showToast('固件包已上传（mock）→ packageName / packageUrl 已回填', 'ok');
         if (ev && ev.target) ev.target.value = '';
       }, 350);
     }
@@ -2245,7 +2246,7 @@ createApp({
         return;
       }
       const pkg = String(firmwareForm.packageUrl || '').trim();
-      if (!firmwareForm.packageFileName || !pkg) {
+      if (!firmwareForm.packageName || !pkg) {
         showToast('请先上传升级包（回填 packageUrl）后再提交；空 URL 不可提交', 'warn');
         return;
       }
@@ -2260,13 +2261,13 @@ createApp({
         releaseDate: releasedAt,
         status: '可升级',
         packageUrl: pkg,
-        packageFileName: firmwareForm.packageFileName,
+        packageName: firmwareForm.packageName,
         changelog: ''
       });
       firmwareRevision.value += 1;
       screen.value = 'detail';
       detailTab.value = 'firmware';
-      showToast('固件已登记（mock）· 目标版本 ' + ver + ' · 发布时间 ' + releasedAt, 'ok');
+      showToast('固件已登记（mock）· 目标版本 ' + ver + ' · releaseDate ' + releasedAt, 'ok');
     }
 
     /* ---- 设备台账 actions ---- */
@@ -4468,31 +4469,31 @@ createApp({
           </div>
           <div v-else-if="detailTab==='firmware'">
             <div class="toolbar">
-              <span style="color:#666;font-size:13px">登记时只上传升级包并填写目标版本。包名取上传文件名，发布时间自动写入。暂不支持修改。</span>
+              <span style="color:#666;font-size:13px">登记时只上传升级包并填写目标版本。<code>packageName</code> 取上传文件名，<code>releaseDate</code> 自动写入。暂不支持修改。</span>
               <div class="spacer"></div>
               <button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button>
             </div>
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
-                  <tr><th>目标版本</th><th>包名</th><th>包地址</th><th>发布时间</th><th>操作</th></tr>
+                  <tr><th>目标版本</th><th>包名 packageName</th><th>包地址 packageUrl</th><th>发布时间 releaseDate</th><th>操作</th></tr>
                 </thead>
                 <tbody>
                   <tr v-for="f in categoryFirmwares" :key="f.id">
                     <td><code>{{ f.upgradeVersion || f.currentVersion || '—' }}</code></td>
-                    <td>{{ f.packageFileName || '—' }}</td>
+                    <td>{{ f.packageName || '—' }}</td>
                     <td style="max-width:280px"><code :title="f.packageUrl || ''">{{ f.packageUrl ? (f.packageUrl.length>42 ? f.packageUrl.slice(0,42)+'…' : f.packageUrl) : '—' }}</code></td>
                     <td>{{ f.releaseDate || '—' }}</td>
                     <td class="actions">
                       <button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button>
-                      <button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, (f.upgradeVersion || f.currentVersion || '') + (f.packageFileName ? ' · ' + f.packageFileName : ''))">删除</button>
+                      <button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, (f.upgradeVersion || f.currentVersion || '') + (f.packageName ? ' · ' + f.packageName : ''))">删除</button>
                     </td>
                   </tr>
                   <tr v-if="!categoryFirmwares.length"><td colspan="5"><div class="empty-hint">暂无固件版本</div></td></tr>
                 </tbody>
               </table>
             </div>
-            <div class="table-note">包名不可手改，展示上传文件名。发布时间在保存时自动记录。packageUrl 由上传回填（POST /storage/file，path=firmware，isPrivate=0）。「批量升级」走 OTA 任务，与「指令 · BOOT升级」无关。本期不提供编辑。</div>
+            <div class="table-note"><code>packageName</code> 不可手改，等于上传文件名。<code>releaseDate</code> 保存时自动写入，不手填。<code>packageUrl</code> 由上传回填（POST /storage/file，path=firmware，isPrivate=0）。「批量升级」走 OTA 任务，与「指令 · BOOT升级」无关。本期不提供编辑。</div>
           </div>
           <div v-else-if="detailTab==='otaTasks'">
             <template v-if="currentOtaTask">
@@ -4886,14 +4887,14 @@ createApp({
           </div>
           <div class="form-row">
             <div class="form-item">
-              <label>包名</label>
-              <div class="field-static">{{ firmwareForm.packageFileName || '上传后显示文件名' }}</div>
-              <div class="hint">取自上传文件名，不可单独修改。</div>
+              <label>包名 packageName</label>
+              <div class="field-static">{{ firmwareForm.packageName || '上传后显示文件名' }}</div>
+              <div class="hint">取自上传文件名，写入 packageName，不可单独修改。</div>
             </div>
             <div class="form-item">
-              <label>发布时间</label>
+              <label>发布时间 releaseDate</label>
               <div class="field-static">保存时自动写入</div>
-              <div class="hint">不需手填。</div>
+              <div class="hint">不手填。提交时写入 releaseDate。</div>
             </div>
           </div>
           <div class="form-item">
