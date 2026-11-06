@@ -43,7 +43,7 @@ python3 -m http.server 8877
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
 - **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。
 - **品类固件登记**（与 `iot-category-firmware-create-tip.md` 一致）：只允许 POST 新建。PUT 拒绝文案：「暂不支持修改固件信息，请删除后重新上传登记」。POST 必填 `categoryId` + `packageUrl` + `upgradeVersion`。上传文件后 `packageName` = `file.name`；`packageUrl` 由 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）回填。`releaseDate` 无输入，不传时后端默认今天，界面只读展示。列表列：`packageName` / `upgradeVersion` / `packageUrl` / `releaseDate`。DELETE 确认框提示「若已被 OTA 任务或设备升级记录引用则无法删除」；失败时原样展示后端文案「升级包已被 OTA 任务/设备升级记录使用，不能删除」（含相同 `packageUrl`）。批量删除中任一条被引用则整批失败、一条都不删。
-- **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`categoryId` 必填；`packageUrl` 或 `firmwareId`；`deviceIds` 合计 ≤200。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。
+- **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`categoryId` 必填；`packageUrl` 或 `firmwareId`；`deviceIds` 合计 ≤200。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。升级记录展示 `fromVersion`（升级前 softwareVersion，可空）。成功仍由 `upgradeStatus` 决定：末包应答 remain=0 记成功。智能井盖兜底：末包后无最终应答时，实时信息包 `softwareVersion` 命中 `toVersion` 也记成功，回写用信息包实际版本。
 
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
@@ -84,7 +84,7 @@ python3 -m http.server 8877
 | 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…）。档案区分 **firmwareVersion**（OTA 固件版本）与 **softwareVersion**（信息包整数，可空）；基本信息含 hardwareVersion；双 IMSI：chinaTelecomImsi / chinaMobileImsi；安装经纬度仍用 lng/lat（井盖信息包有效 GPS 会覆盖）；信息包区解析 messageInfoJson，按 packageType（message1 / message3 / message32769）展示出厂时间、温度、重启、IP、电池、姿态等。未上报信息包时这些字段为 —。样例：`#deviceDetail`（D001·message1）、`#deviceDetail?id=D003`（message3）、`#deviceDetail?id=D013`（message32769）、`#deviceDetail?id=D010`（全空） | `#deviceDetail` |
 | 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
 | 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
-| 4b2 | 设备档案 · **升级日志**（OTA：time / taskId / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度 / 操作人 / failReason；失败常见「任务已取消」「升级超时（超过N分钟无应答）」；顶栏「固件升级」） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` |
+| 4b2 | 设备档案 · **升级日志**（OTA：time / taskId / **fromVersion**（升级前 softwareVersion）/ toVersion / upgradeStatus **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度 / 操作人 / failReason；成功主路径应答 remain=0；智能井盖兜底见 D013；失败常见「任务已取消」「升级超时（超过N分钟无应答）」） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` / `#deviceDetail?id=D013&tab=upgradeLog` |
 | 4c0 | 品类详情 · **批量下发**（选一条 batchable 指令 → 共享参数 → 多选设备筛项目/在线 → dryRun → 批量 mock） | `#batchDispatch` |
 | 4c1 | 品类详情 · **升级任务**列表 + 详情。状态 **0 进行中 / 1 已完成 / 2 已取消 / 3 失败**；进行中可取消；详情含 timeoutMinutes（默认 30）、创建结果「排除: …」、设备进度 `deviceUpgrade?taskId=`。样例：进行中 OT01、已完成 OT02（超时 30）、已取消 OT03（超时 45）、失败 OT04（超时 20） | `#otaTasks` · `#otaTasks?id=OT01` `#otaTasks?id=OT02` `#otaTasks?id=OT03` `#otaTasks?id=OT04` |
 | 5 | 编辑设备档案 | `#editDevice` |
