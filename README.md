@@ -41,7 +41,7 @@ python3 -m http.server 8877
 
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
 - **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。
-- **品类固件登记（简化）**：只上传升级包 + 填写目标版本。`packageName` 取上传文件名，不可手改；`releaseDate` 保存时自动写入，不手填。上传仍走 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）→ 回填 `packageUrl`（`Result.data.fileUrl`）；空 URL 不可提交。暂不支持修改已登记固件。
+- **品类固件登记**：只允许 POST 新建。PUT 拒绝文案：「暂不支持修改固件信息，请删除后重新上传登记」。POST 必填 `categoryId` + `packageUrl` + `upgradeVersion`。上传文件后 `packageName` = `file.name`；`packageUrl` 由 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）回填。`releaseDate` 无输入，不传时后端默认今天，界面只读展示。列表列：`packageName` / `upgradeVersion` / `packageUrl` / `releaseDate`。
 - **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`categoryId` 必填；`packageUrl` 或 `firmwareId`；`deviceIds` 合计 ≤200。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。
 
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
@@ -68,7 +68,7 @@ python3 -m http.server 8877
 | 4 | 物模型详情壳 + Tab | `#detail` |
 | 4a–4i | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **升级任务** / **指令** / **批量下发** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#otaTasks` `#commands` `#batchDispatch` `#rules` / `#categoryRules` |
 | 4h | 新建/编辑指令（模态：bitIndex 1-based / payloadOffset 1-based / hasParam / paramMin·paramMax / dataType·unit·required） | `#editCommand` |
-| 5–7 | 编辑测点 / 安装字段 / **登记固件**（仅上传升级包 + 目标版本；`packageName`=文件名；`releaseDate` 自动；不支持编辑） | `#editPoint` `#editInstall` `#editFirmware` |
+| 5–7 | 编辑测点 / 安装字段 / **登记固件**（仅 POST：`categoryId` + `packageUrl` + `upgradeVersion`；`packageName`=文件名；`releaseDate` 只读默认今天；PUT：「暂不支持修改固件信息，请删除后重新上传登记」） | `#editPoint` `#editInstall` `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
 
 ## 设备台账屏幕
