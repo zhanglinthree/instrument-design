@@ -37,10 +37,13 @@ python3 -m http.server 8877
 
 ### 设备台账
 - **本机数据（报文列表）**：设备档案 `#deviceDetail` Tab「本机数据」= `iot_protocol_data` 报文表（receiveTime / packageType / parsedJson / contentHex / status；按 deviceId 查；筛 packageType：message* / data* / upgrade65535 / command）。**不再**内嵌测点曲线；曲线仅在线监控。顶栏「曲线（在线监控）」→ `#monitorDetail`。
+- **设备信息包**（`GET /iot/iotDevice/{id}`，列表同样带字段）：档案基本信息展示 `hardwareVersion`、`softwareVersion`（整数，可空）和 `firmwareVersion`（OTA 固件版本，**不**用 softwareVersion 代替）。双 IMSI：`chinaTelecomImsi`、`chinaMobileImsi`。安装经纬度仍用 `lng` / `lat`（井盖信息包有效 GPS 会覆盖）。扩展区解析 `messageInfoJson`，按 `packageType`（`message1` / `message3` / `message32769`）展示出厂时间、温度、重启、IP、电池、姿态等未知键也原样列出。设备从未上报信息包时这些字段为 null，界面显示 —。置顶身份条不放这些字段。
 - **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
-- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选版本落后设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出，空则手填。固件登记主路径：上传包（`POST /storage/file`，path=firmware，isPrivate=0）→ 回填 `packageUrl`（`Result.data.fileUrl`）；空 URL 不可提交。
+- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。
+- **品类固件登记**（与 `iot-category-firmware-create-tip.md` 一致）：只允许 POST 新建。PUT 拒绝文案：「暂不支持修改固件信息，请删除后重新上传登记」。POST 必填 `categoryId` + `packageUrl` + `upgradeVersion`。上传文件后 `packageName` = `file.name`；`packageUrl` 由 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）回填。`releaseDate` 无输入，不传时后端默认今天，界面只读展示。列表列：`packageName` / `upgradeVersion` / `packageUrl` / `releaseDate`。DELETE 确认框提示「若已被 OTA 任务或设备升级记录引用则无法删除」；失败时原样展示后端文案「升级包已被 OTA 任务/设备升级记录使用，不能删除」（含相同 `packageUrl`）。批量删除中任一条被引用则整批失败、一条都不删。
+- **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`categoryId` 必填；`packageUrl` 或 `firmwareId`；`deviceIds` 合计 ≤200。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。升级记录展示 `fromVersion`（升级前 softwareVersion，可空）。进度除百分比外展示 `sentPackage`、`remainPackage`，有则显示 `totalPackage`。成功仍由 `upgradeStatus` 决定：末包应答 remain=0 记成功。智能井盖兜底：末包后无最终应答时，实时信息包 `softwareVersion` **不等于本条升级记录的 `fromVersion`** 即记成功（版本可回退；只比该单 `fromVersion`，不比设备当前版本，也不比目标版本）；回写用信息包实际版本。`fromVersion` 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。
 
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
 - 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
@@ -66,7 +69,7 @@ python3 -m http.server 8877
 | 4 | 物模型详情壳 + Tab | `#detail` |
 | 4a–4i | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **升级任务** / **指令** / **批量下发** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#otaTasks` `#commands` `#batchDispatch` `#rules` / `#categoryRules` |
 | 4h | 新建/编辑指令（模态：bitIndex 1-based / payloadOffset 1-based / hasParam / paramMin·paramMax / dataType·unit·required） | `#editCommand` |
-| 5–7 | 编辑测点 / 安装字段 / 固件 | `#editPoint` `#editInstall` `#editFirmware` |
+| 5–7 | 编辑测点 / 安装字段 / **登记固件**（仅 POST：`categoryId` + `packageUrl` + `upgradeVersion`；`packageName`=文件名；`releaseDate` 只读默认今天；PUT：「暂不支持修改固件信息，请删除后重新上传登记」；删除确认：「若已被 OTA 任务或设备升级记录引用则无法删除」；失败原样「升级包已被 OTA 任务/设备升级记录使用，不能删除」，批量任一条被引用则整批失败） | `#editPoint` `#editInstall` `#firmware` / `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
 
 ## 设备台账屏幕
@@ -78,12 +81,12 @@ python3 -m http.server 8877
 | 3 | 设备列表 | `#devices` |
 | 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
 | 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
-| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…） | `#deviceDetail` |
+| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…）。档案区分 **firmwareVersion**（OTA 固件版本）与 **softwareVersion**（信息包整数，可空）；基本信息含 hardwareVersion；双 IMSI：chinaTelecomImsi / chinaMobileImsi；安装经纬度仍用 lng/lat（井盖信息包有效 GPS 会覆盖）；信息包区解析 messageInfoJson，按 packageType（message1 / message3 / message32769）展示出厂时间、温度、重启、IP、电池、姿态等。未上报信息包时这些字段为 —。样例：`#deviceDetail`（D001·message1）、`#deviceDetail?id=D003`（message3）、`#deviceDetail?id=D013`（message32769）、`#deviceDetail?id=D010`（全空） | `#deviceDetail` |
 | 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
 | 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
-| 4b2 | 设备档案 · **升级日志**（OTA：time / fromVer→toVer / 状态排队·升级中·成功·失败 / 进度 / 操作人 / failReason；顶栏「固件升级」弹窗选目标版本） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` |
+| 4b2 | 设备档案 · **升级日志**（OTA：time / taskId / **fromVersion** / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度百分比 + **sentPackage** · **remainPackage**（有则 **totalPackage**）/ 操作人 / failReason；成功仍看 upgradeStatus，应答 remain=0；井盖兜底 softwareVersion ≠ 本单 fromVersion，空 fromVersion 跳过） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` / `#deviceDetail?id=D013&tab=upgradeLog` |
 | 4c0 | 品类详情 · **批量下发**（选一条 batchable 指令 → 共享参数 → 多选设备筛项目/在线 → dryRun → 批量 mock） | `#batchDispatch` |
-| 4c1 | 品类详情 · **升级任务**（固件行「批量升级」→ 选版本落后设备 → 品类 OTA 任务列表） | `#otaTasks` |
+| 4c1 | 品类详情 · **升级任务**列表 + 详情。状态 **0 进行中 / 1 已完成 / 2 已取消 / 3 失败**；进行中可取消；详情含 timeoutMinutes（默认 30）、创建结果「排除: …」、设备进度 `deviceUpgrade?taskId=`。样例：进行中 OT01、已完成 OT02（超时 30）、已取消 OT03（超时 45）、失败 OT04（超时 20） | `#otaTasks` · `#otaTasks?id=OT01` `#otaTasks?id=OT02` `#otaTasks?id=OT03` `#otaTasks?id=OT04` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
