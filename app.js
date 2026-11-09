@@ -234,10 +234,29 @@ const INSTALL_FIELDS = [
 ];
 
 const FIRMWARES = [
-  { id: 'F1', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', packageFileName: 'MF-LW-100-1.3.0.bin', changelog: '优化液位滤波算法；修复低电量误报' },
-  { id: 'F2', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', packageFileName: 'MF-LW-100-1.2.0.bin', changelog: '支持 AEP 物模型 v1.2' },
-  { id: 'F3', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', packageUrl: 'https://example.com/fw/MF-LW-200/2.0.1.bin', packageFileName: 'MF-LW-200-2.0.1.bin', changelog: '新硬件平台首发固件' },
+  { id: 'F1', categoryId: 'C001', model: 'MF-LW-100', currentVersion: '1.2.0', upgradeVersion: '1.3.0', releaseDate: '2026-09-15', status: '可升级', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', packageName: 'MF-LW-100-1.3.0.bin', packageSize: 1867776, changelog: '优化液位滤波算法；修复低电量误报' },
+  { id: 'F2', categoryId: 'C001', model: 'MF-LW-100', currentVersion: '1.1.2', upgradeVersion: '1.2.0', releaseDate: '2026-07-01', status: '基线', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', packageName: 'MF-LW-100-1.2.0.bin', packageSize: 524288, changelog: '支持 AEP 物模型 v1.2' },
+  { id: 'F3', categoryId: 'C001', model: 'MF-LW-200', currentVersion: '2.0.1', upgradeVersion: '', releaseDate: '2026-08-20', status: '最新', packageUrl: 'https://example.com/fw/MF-LW-200/2.0.1.bin', packageName: 'MF-LW-200-2.0.1.bin', packageSize: null, changelog: '新硬件平台首发固件' },
 ];
+/* PUT /iotCategoryFirmware 拒绝文案（只允许 POST 新建） */
+const FIRMWARE_EDIT_REFUSED = '暂不支持修改固件信息，请删除后重新上传登记';
+/* packageSize 存字节。展示 KB/MB；空为 —。落库见 iot_category_firmware_add_package_size_v1.sql（本原型不写 SQL）。 */
+function formatPackageSize(bytes) {
+  if (bytes === null || bytes === undefined || bytes === '') return '—';
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return '—';
+  const kb = n / 1024;
+  if (kb < 1024) {
+    const text = kb >= 100 ? String(Math.round(kb)) : (Math.round(kb * 10) / 10).toString();
+    return text + ' KB';
+  }
+  const mb = kb / 1024;
+  const text = mb >= 100 ? String(Math.round(mb)) : (Math.round(mb * 10) / 10).toString();
+  return text + ' MB';
+}
+/* DELETE：被 OTA 任务 / 设备升级记录引用，或 packageUrl 相同，则失败；批量时任一条被引用则整批失败 */
+const FIRMWARE_DELETE_REFUSED = '升级包已被 OTA 任务/设备升级记录使用，不能删除';
+const FIRMWARE_DELETE_WARN = '若已被 OTA 任务或设备升级记录引用则无法删除';
 
 /* 指令配置：物模型侧定义该品类「能下什么」（非实时点发台）
  * 积水仪 FAFA…ADAD：字节17–24 为命令开关（bitIndex 1-based，bit=1 执行；位 9 空缺）；
@@ -290,19 +309,96 @@ const COMMANDS = [
 ];
 
 
-/* OTA 升级日志（设备级）· 与 bootUpgrade 指令区分：固件包任务 */
+/* OTA 设备升级日志 · 与 bootUpgrade 指令区分：固件包任务
+ * 设备状态（不变）：0 排队 / 1 升级中 / 2 成功 / 3 失败
+ * 进度按 taskId 归集，对齐 deviceUpgrade?taskId=
+ * 失败原因常见：「任务已取消」；「升级超时（超过N分钟无应答）」（N = 任务 timeoutMinutes，默认 30） */
+const OTA_DEVICE_STATUS = {
+  0: { label: '排队', tag: 'tag-blue' },
+  1: { label: '升级中', tag: 'tag-orange' },
+  2: { label: '成功', tag: 'tag-green' },
+  3: { label: '失败', tag: 'tag-red' },
+};
+const OTA_DEVICE_STATUS_BY_LABEL = { '排队': 0, '升级中': 1, '成功': 2, '失败': 3 };
+/* 任务状态：0 进行中 / 1 已完成 / 2 已取消 / 3 失败 */
+const OTA_TASK_STATUS = {
+  0: { label: '进行中', tag: 'tag-orange' },
+  1: { label: '已完成', tag: 'tag-green' },
+  2: { label: '已取消', tag: 'tag-gray' },
+  3: { label: '失败', tag: 'tag-red' },
+};
+const OTA_TASK_STATUS_BY_LABEL = { '进行中': 0, '已完成': 1, '已取消': 2, '失败': 3 };
+const OTA_TIMEOUT_DEFAULT = 30;
+const OTA_DEVICE_CAP = 200;
+const OTA_CANCEL_REASON = '任务已取消';
+
+function otaTimeoutFailReason(minutes) {
+  const n = Number(minutes);
+  const m = Number.isFinite(n) && n > 0 ? Math.round(n) : OTA_TIMEOUT_DEFAULT;
+  return '升级超时（超过' + m + '分钟无应答）';
+}
+
+/* fromVersion = 升级前设备 softwareVersion（整数，可空）。成功仍由 upgradeStatus 决定，不新增状态：
+ * 主路径末包应答 remain=0 → 2 成功。
+ * 智能井盖兜底：末包后无最终应答时，信息包 softwareVersion ≠ 本条升级记录 fromVersion 即成功
+ * （版本可回退；只比该单 fromVersion，不比设备表当前版本，也不比目标版本）。fromVersion 为空则跳过兜底。
+ * 回写用信息包实际版本。应答 remain=0 仍记成功。待后端新 tip。 */
 const DEVICE_UPGRADE_LOGS = [
-  { id: 'UL01', deviceId: 'D001', time: '2026-10-28 14:20:11', fromVer: '1.1.2', toVer: '1.2.0', status: '成功', progress: 100, operator: '张三', failReason: '' },
-  { id: 'UL02', deviceId: 'D001', time: '2026-10-30 09:05:00', fromVer: '1.2.0', toVer: '1.3.0', status: '升级中', progress: 62, operator: '李敏', failReason: '' },
-  { id: 'UL03', deviceId: 'D002', time: '2026-10-29 16:40:22', fromVer: '1.2.0', toVer: '1.3.0', status: '排队', progress: 0, operator: '李敏', failReason: '' },
-  { id: 'UL04', deviceId: 'D015', time: '2026-10-27 11:12:00', fromVer: '1.1.2', toVer: '1.2.0', status: '失败', progress: 38, operator: '王建国', failReason: '设备离线超时' },
-  { id: 'UL05', deviceId: 'D007', time: '2026-10-26 08:30:00', fromVer: '1.0.0', toVer: '1.2.0', status: '成功', progress: 100, operator: '张三', failReason: '' },
+  { id: 'UL02', deviceId: 'D001', taskId: 'OT01', firmwareId: 'F1', packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin', time: '2026-10-30 09:05:00', fromVersion: 120, fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 62, sentPackage: 8, remainPackage: 5, totalPackage: 13, operator: '李敏', failReason: '' },
+  { id: 'UL03', deviceId: 'D002', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, sentPackage: 0, remainPackage: 12, totalPackage: 12, operator: '李敏', failReason: '' },
+  { id: 'UL06', deviceId: 'D015', taskId: 'OT01', time: '2026-10-30 09:05:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 0, progress: 0, sentPackage: 0, remainPackage: 10, operator: '李敏', failReason: '' },
+  { id: 'UL01', deviceId: 'D001', taskId: 'OT02', firmwareId: 'F2', packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin', time: '2026-10-20 15:12:00', fromVersion: 110, fromVer: '1.1.2', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 12, remainPackage: 0, totalPackage: 12, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL08', deviceId: 'D002', taskId: 'OT02', time: '2026-10-20 16:02:00', fromVersion: null, fromVer: '1.1.8', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 9, remainPackage: 0, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL05', deviceId: 'D007', taskId: 'OT02', time: '2026-10-20 15:11:00', fromVersion: null, fromVer: '1.0.0', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 8, remainPackage: 0, totalPackage: 8, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL07', deviceId: 'D009', taskId: 'OT02', time: '2026-10-20 15:18:00', fromVersion: null, fromVer: '1.1.0', toVer: '1.2.0', status: 2, progress: 100, sentPackage: 10, remainPackage: 0, totalPackage: 10, operator: '张三', failReason: '', successNote: '应答 remain=0' },
+  { id: 'UL04', deviceId: 'D015', taskId: 'OT02', time: '2026-10-20 15:40:22', fromVersion: null, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 38, sentPackage: 5, remainPackage: 8, totalPackage: 13, operator: '张三', failReason: otaTimeoutFailReason(30) },
+  { id: 'UL09', deviceId: 'D009', taskId: 'OT03', time: '2026-10-25 11:02:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 3, progress: 12, sentPackage: 2, remainPackage: 14, totalPackage: 16, operator: '王建国', failReason: OTA_CANCEL_REASON },
+  { id: 'UL10', deviceId: 'D007', taskId: 'OT03', time: '2026-10-25 11:02:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 3, progress: 0, sentPackage: 0, remainPackage: 16, totalPackage: 16, operator: '王建国', failReason: OTA_CANCEL_REASON },
+  { id: 'UL11', deviceId: 'D001', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: 100, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 40, sentPackage: 4, remainPackage: 6, totalPackage: 10, operator: '李敏', failReason: otaTimeoutFailReason(20) },
+  { id: 'UL12', deviceId: 'D002', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: null, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 0, sentPackage: 0, remainPackage: 10, operator: '李敏', failReason: otaTimeoutFailReason(20) },
+  { id: 'UL13', deviceId: 'D013', taskId: 'OT02', time: '2026-10-21 09:12:00', fromVersion: 8, fromVer: '1.0.0', toVer: '1.0.0', status: 2, progress: 100, sentPackage: 11, remainPackage: 0, totalPackage: 11, operator: '李敏', failReason: '', successNote: '末包无最终应答；信息包 softwareVersion=9 ≠ 本单 fromVersion=8（可升可降），回写实际版本 9' },
+  { id: 'UL14', deviceId: 'D009', taskId: 'OT01', time: '2026-10-30 09:20:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 100, sentPackage: 13, remainPackage: 0, totalPackage: 13, operator: '李敏', failReason: '' },
 ];
 
-/* 品类级 OTA 批量升级任务 */
+/* 品类级 OTA 任务。排除原因一律「排除: …」，出现在创建结果，不进入设备进度。 */
 const CATEGORY_OTA_TASKS = [
-  { id: 'OT01', categoryId: 'C001', fromVerHint: '<1.3.0', toVer: '1.3.0', firmwareId: 'F1', createdAt: '2026-10-30 09:00:00', operator: '李敏', deviceCount: 3, success: 0, fail: 0, pending: 3, status: '进行中' },
-  { id: 'OT02', categoryId: 'C001', fromVerHint: '<1.2.0', toVer: '1.2.0', firmwareId: 'F2', createdAt: '2026-10-20 15:10:00', operator: '张三', deviceCount: 5, success: 4, fail: 1, pending: 0, status: '已完成' },
+  {
+    id: 'OT01', categoryId: 'C001', fromVerHint: '<1.3.0', toVer: '1.3.0', firmwareId: 'F1',
+    packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin',
+    createdAt: '2026-10-30 09:00:00', operator: '李敏',
+    deviceCount: 4, success: 0, fail: 0, pending: 4,
+    status: 0, timeoutMinutes: 30,
+    excluded: [
+      { deviceId: 'D007', name: '望江路井-待接入', reason: '排除: 设备待接入且无 AEP 设备号' },
+      { deviceId: 'D003', name: '南湖入口站', reason: '排除: 不属于当前品类' },
+    ],
+  },
+  {
+    id: 'OT02', categoryId: 'C001', fromVerHint: '<1.2.0', toVer: '1.2.0', firmwareId: 'F2',
+    packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin',
+    createdAt: '2026-10-20 15:10:00', operator: '张三',
+    deviceCount: 6, success: 5, fail: 1, pending: 0,
+    status: 1, timeoutMinutes: 30,
+    excluded: [],
+  },
+  {
+    id: 'OT03', categoryId: 'C001', fromVerHint: '<1.3.0', toVer: '1.3.0', firmwareId: 'F1',
+    packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin',
+    createdAt: '2026-10-25 11:00:00', cancelledAt: '2026-10-25 11:20:00', operator: '王建国',
+    deviceCount: 2, success: 0, fail: 2, pending: 0,
+    status: 2, timeoutMinutes: 45,
+    excluded: [
+      { deviceId: 'D004', name: '解放路压力-12', reason: '排除: 不属于当前品类' },
+    ],
+  },
+  {
+    id: 'OT04', categoryId: 'C001', fromVerHint: '<1.2.0', toVer: '1.2.0', firmwareId: 'F2',
+    packageUrl: 'https://example.com/fw/MF-LW-100/1.2.0.bin',
+    createdAt: '2026-10-18 08:10:00', operator: '李敏',
+    deviceCount: 2, success: 0, fail: 2, pending: 0,
+    status: 3, timeoutMinutes: 20,
+    excluded: [],
+  },
 ];
 
 /* ========== 设备台账 Mock ========== */
@@ -331,6 +427,154 @@ const DEVICES = [
   { id: 'D014', imei: 'MF20261008014', deviceSn: 'MF20261008014', aepStatus: 1, lastReportAt: '2026-10-08 11:22', name: '艮山路侧壁-02', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C006', categoryName: '积水仪侧壁', categoryMatch: 'auto', categoryRuleId: 'R601', lifecycle: '在线', aepDeviceId: 'AEP-DEV-60014', model: 'MF-FS-60', firmware: '1.0.0', lng: 120.170100, lat: 30.281200, address: '艮山路立交侧壁', installDate: '2026-08-20', installer: '赵强', masterId: '', masterImei: '', slaves: [], photos: ['侧壁铭牌'], installParams: { install_height: '0.25' }, updatedAt: '2026-10-08 11:22' },
   { id: 'D015', imei: 'MF20260901003', deviceSn: 'MF20260901003', aepStatus: 1, lastReportAt: '2026-10-19 15:00', name: '东湖路井-01探头B', projectId: 'PJ01', projectName: '城东排涝一期', categoryId: 'C001', categoryName: '积水仪地埋', categoryMatch: 'auto', categoryRuleId: 'R101', lifecycle: '在线', aepDeviceId: 'probe:MF20260901003', model: 'MF-LW-100', firmware: '1.2.0', lng: 120.153620, lat: 30.287490, address: '杭州市上城区东湖路检查井（探头B）', installDate: '2026-04-12', installer: '张伟', masterId: 'D001', masterImei: 'MF20260901001', slaves: [], photos: [], installParams: { well_depth: '8.5', pipe_diameter: '600', install_height: '0.6', well_no: 'JW-2026-001-P2', cover_type: '铸铁' }, updatedAt: '2026-10-19 15:00' },
 ];
+
+/* 信息包字段：GET /iot/iotDevice/{id}。firmwareVersion 是 OTA 固件版本，与 softwareVersion 无关。
+ * 未上报信息包时 hardwareVersion / softwareVersion / 双 IMSI / messageInfoJson 为 null。 */
+const MESSAGE_INFO_LABELS = {
+  message1: {
+    factoryTime: '出厂时间',
+    temperature: '温度 (℃)',
+    rebootCount: '重启次数',
+    ip: 'IP',
+    battery: '电池电压 (V)',
+    csq: '信号'
+  },
+  message3: {
+    temperature: '温度 (℃)',
+    rebootCount: '重启次数',
+    ip: 'IP',
+    battery: '电池电压 (V)',
+    humidity: '湿度 (%RH)',
+    workMode: '工作模式'
+  },
+  message32769: {
+    factoryTime: '出厂时间',
+    temperature: '温度 (℃)',
+    rebootCount: '重启次数',
+    battery: '电池 (V)',
+    attitude: '姿态',
+    gpsValid: 'GPS 有效'
+  }
+};
+
+function attachDeviceMessageInfo(id, patch) {
+  const row = DEVICES.find(d => d.id === id);
+  if (row) Object.assign(row, patch);
+}
+attachDeviceMessageInfo('D001', {
+  firmwareVersion: '1.2.0',
+  hardwareVersion: 3,
+  softwareVersion: 120,
+  chinaTelecomImsi: '460030912345678',
+  chinaMobileImsi: '460001598765432',
+  messageInfoJson: JSON.stringify({
+    packageType: 'message1',
+    factoryTime: '2024-11-02 10:18:00',
+    temperature: 28.6,
+    rebootCount: 4,
+    ip: '10.18.22.15',
+    battery: 3.68,
+    csq: 21
+  })
+});
+attachDeviceMessageInfo('D003', {
+  firmwareVersion: '2.0.1',
+  hardwareVersion: 2,
+  softwareVersion: 45,
+  chinaTelecomImsi: '460031110002233',
+  chinaMobileImsi: null,
+  messageInfoJson: JSON.stringify({
+    packageType: 'message3',
+    temperature: 19.2,
+    rebootCount: 1,
+    ip: '10.20.4.88',
+    battery: 3.41,
+    humidity: 62,
+    workMode: '定时上报'
+  })
+});
+attachDeviceMessageInfo('D013', {
+  firmwareVersion: '1.0.0',
+  hardwareVersion: 5,
+  softwareVersion: 8,
+  chinaTelecomImsi: '460030000111222',
+  chinaMobileImsi: '460008887776665',
+  messageInfoJson: JSON.stringify({
+    packageType: 'message32769',
+    factoryTime: '2025-06-18 09:00:00',
+    temperature: 26.2,
+    rebootCount: 2,
+    battery: 3.55,
+    attitude: { pitch: 1.2, roll: -0.4, yaw: 88 },
+    gpsValid: true
+  })
+});
+attachDeviceMessageInfo('D007', {
+  firmwareVersion: '1.2.0',
+  hardwareVersion: null,
+  softwareVersion: null,
+  chinaTelecomImsi: null,
+  chinaMobileImsi: null,
+  messageInfoJson: null
+});
+attachDeviceMessageInfo('D010', {
+  firmwareVersion: null,
+  hardwareVersion: null,
+  softwareVersion: null,
+  chinaTelecomImsi: null,
+  chinaMobileImsi: null,
+  messageInfoJson: null
+});
+
+function displayNullable(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  return v;
+}
+function deviceFirmwareVersion(d) {
+  if (!d) return null;
+  if (Object.prototype.hasOwnProperty.call(d, 'firmwareVersion')) return d.firmwareVersion;
+  if (d.firmware === null || d.firmware === undefined || d.firmware === '') return null;
+  return d.firmware;
+}
+function formatMessageValue(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? '是' : '否';
+  if (typeof v === 'object') {
+    if (v.pitch != null || v.roll != null || v.yaw != null) {
+      return '俯仰 ' + displayNullable(v.pitch) + '° · 横滚 ' + displayNullable(v.roll) + '° · 航向 ' + displayNullable(v.yaw) + '°';
+    }
+    try { return JSON.stringify(v); } catch (e) { return '—'; }
+  }
+  return String(v);
+}
+function parseDeviceMessageInfo(device) {
+  if (!device || device.messageInfoJson == null || device.messageInfoJson === '') {
+    return { empty: true, parseError: false, packageType: '', rows: [] };
+  }
+  let obj = device.messageInfoJson;
+  if (typeof obj === 'string') {
+    try { obj = JSON.parse(obj); } catch (e) {
+      return { empty: false, parseError: true, packageType: '', rows: [], raw: device.messageInfoJson };
+    }
+  }
+  if (!obj || typeof obj !== 'object') {
+    return { empty: true, parseError: false, packageType: '', rows: [] };
+  }
+  const packageType = String(obj.packageType || '').trim();
+  const labels = MESSAGE_INFO_LABELS[packageType] || {};
+  const used = { packageType: true };
+  const rows = [];
+  Object.keys(labels).forEach(key => {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) return;
+    used[key] = true;
+    rows.push({ key, label: labels[key], value: formatMessageValue(obj[key]) });
+  });
+  Object.keys(obj).forEach(key => {
+    if (used[key]) return;
+    rows.push({ key, label: key, value: formatMessageValue(obj[key]) });
+  });
+  return { empty: false, parseError: false, packageType: packageType || '—', rows };
+}
 
 const UNASSIGNED_PROJECT_ID = '__unassigned__';
 const UNASSIGNED_PROJECT_NAME = '未定义项目';
@@ -771,9 +1015,12 @@ createApp({
     const batchPreviewOk = ref(false);
     const batchJobSummary = ref(null); // { total, success, fail, command, at }
 
-    /* ---- OTA：设备固件升级 / 品类批量升级 ---- */
+    /* ---- OTA：设备固件升级 / 品类批量升级任务 ---- */
     const deviceUpgradeLogs = ref(DEVICE_UPGRADE_LOGS.map(r => ({ ...r })));
-    const categoryOtaTasks = ref(CATEGORY_OTA_TASKS.map(r => ({ ...r })));
+    const categoryOtaTasks = ref(CATEGORY_OTA_TASKS.map(r => ({
+      ...r,
+      excluded: (r.excluded || []).map(e => ({ ...e })),
+    })));
     const showDeviceOtaModal = ref(false);
     const deviceOtaTargetVer = ref('');
     const deviceOtaPackageUrl = ref('');
@@ -783,11 +1030,32 @@ createApp({
     const categoryOtaPackageUrl = ref('');
     const categoryOtaSelectedIds = ref([]);
     const categoryOtaOnlineOnly = ref(true);
+    const categoryOtaTimeoutMinutes = ref(OTA_TIMEOUT_DEFAULT);
+    const categoryOtaExtraIds = ref('');
+    const currentOtaTaskId = ref('');
+    const showCancelOtaConfirm = ref(false);
+    const cancelOtaTargetId = ref('');
+    const otaCreateResult = ref({
+      taskId: 'OT01',
+      at: '2026-10-30 09:00:00',
+      categoryId: 'C001',
+      toVer: '1.3.0',
+      firmwareId: 'F1',
+      packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin',
+      timeoutMinutes: 30,
+      accepted: 3,
+      acceptedDevices: [
+        { deviceId: 'D001', name: '东湖路井-01' },
+        { deviceId: 'D002', name: '东湖路井-01从机' },
+        { deviceId: 'D015', name: '东湖路井-01探头B' },
+      ],
+      excluded: CATEGORY_OTA_TASKS[0].excluded.map(e => ({ ...e })),
+    });
     const COMMAND_DATA_TYPES = ['bool', 'int', 'float', 'string', 'enum', 'object'];
     const COMMAND_ACCESS_OPTS = ['r', 'w'];
 
     const showDeleteConfirm = ref(false);
-    const deleteTarget = reactive({ type: '', id: '', name: '' });
+    const deleteTarget = reactive({ type: '', id: '', name: '', ids: [], blocked: false });
 
     const currentCategory = ref(CATEGORIES[0]);
 
@@ -803,9 +1071,10 @@ createApp({
     const installFormMode = ref('create');
 
     const firmwareForm = reactive({
-      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageFileName: '', changelog: ''
+      id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageName: '', packageSize: null, changelog: ''
     });
-    const firmwareFormMode = ref('create');
+    const firmwareRevision = ref(0);
+    const firmwareSelectedIds = ref([]);
     const firmwareUploadInput = ref(null);
     const firmwareUploading = ref(false);
 
@@ -842,6 +1111,7 @@ createApp({
     }
     const deviceList = ref(DEVICES.map(d => ({ ...d })));
     const currentDevice = ref(deviceList.value[0]);
+    const currentMessageInfo = computed(() => parseDeviceMessageInfo(currentDevice.value));
     const selectedDeviceIds = ref([]);
 
     const showImportModal = ref(false);
@@ -977,6 +1247,66 @@ createApp({
       return 0;
     }
 
+    function otaDeviceStatusMeta(status) {
+      if (status != null && OTA_DEVICE_STATUS_BY_LABEL[status] != null) {
+        const code = OTA_DEVICE_STATUS_BY_LABEL[status];
+        return { code, ...OTA_DEVICE_STATUS[code] };
+      }
+      const n = Number(status);
+      if (OTA_DEVICE_STATUS[n] && String(status) !== '' && status != null) {
+        return { code: n, ...OTA_DEVICE_STATUS[n] };
+      }
+      return { code: '—', label: status ? String(status) : '—', tag: 'tag-gray' };
+    }
+
+    function otaDeviceStatusText(status) {
+      const m = otaDeviceStatusMeta(status);
+      return m.code + ' ' + m.label;
+    }
+
+    function otaTaskStatusMeta(status) {
+      if (status != null && OTA_TASK_STATUS_BY_LABEL[status] != null) {
+        const code = OTA_TASK_STATUS_BY_LABEL[status];
+        return { code, ...OTA_TASK_STATUS[code] };
+      }
+      const n = Number(status);
+      if (OTA_TASK_STATUS[n] && String(status) !== '' && status != null) {
+        return { code: n, ...OTA_TASK_STATUS[n] };
+      }
+      return { code: '—', label: status ? String(status) : '—', tag: 'tag-gray' };
+    }
+
+    function otaTaskStatusText(status) {
+      const m = otaTaskStatusMeta(status);
+      return m.code + ' ' + m.label;
+    }
+
+    function otaTimeoutMinutesOf(task) {
+      const n = Number(task && task.timeoutMinutes);
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : OTA_TIMEOUT_DEFAULT;
+    }
+
+    function otaTaskTimeoutReason(task) {
+      return otaTimeoutFailReason(otaTimeoutMinutesOf(task));
+    }
+
+    function otaDeviceBrief(id) {
+      const d = deviceList.value.find(x => x.id === id);
+      if (!d) return { id, name: '—', imei: '' };
+      return { id: d.id, name: d.name, imei: d.imei };
+    }
+
+    function parseExtraDeviceIds(text) {
+      return String(text || '').split(/[\s,，;；]+/).map(s => s.trim()).filter(Boolean);
+    }
+
+    function normalizeTimeoutMinutes(raw) {
+      if (raw === '' || raw == null) return OTA_TIMEOUT_DEFAULT;
+      const n = parseInt(raw, 10);
+      if (!Number.isFinite(n) || n <= 0) return OTA_TIMEOUT_DEFAULT;
+      return n;
+    }
+
     const currentDeviceUpgradeLogs = computed(() => {
       const d = currentDevice.value;
       if (!d) return [];
@@ -987,17 +1317,19 @@ createApp({
     });
 
     const deviceOtaFirmwareOptions = computed(() => {
+      firmwareRevision.value;
       const d = currentDevice.value;
       if (!d) return [];
-      return FIRMWARES.filter(f => !d.model || f.model === d.model || !d.model);
+      return FIRMWARES.filter(f => {
+        if (f.categoryId) return f.categoryId === d.categoryId;
+        return !d.model || !f.model || f.model === d.model;
+      });
     });
 
     const categoryFirmwares = computed(() => {
-      // 原型：固件表未挂 categoryId，按本品类设备型号交集过滤；无匹配则展示全部
+      firmwareRevision.value;
       const cid = currentCategory.value?.id;
-      const models = new Set(deviceList.value.filter(d => d.categoryId === cid).map(d => d.model).filter(Boolean));
-      const rows = FIRMWARES.filter(f => !models.size || models.has(f.model));
-      return rows.length ? rows : FIRMWARES.slice();
+      return FIRMWARES.filter(f => !f.categoryId || f.categoryId === cid);
     });
 
     const categoryOtaTaskList = computed(() => {
@@ -1008,15 +1340,80 @@ createApp({
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     });
 
-    const categoryOtaUpgradeableDevices = computed(() => {
+    const currentOtaTask = computed(() => {
+      const id = currentOtaTaskId.value;
+      if (!id) return null;
+      return categoryOtaTasks.value.find(t => t.id === id) || null;
+    });
+
+    const currentOtaTaskDevices = computed(() => {
+      const t = currentOtaTask.value;
+      if (!t) return [];
+      return deviceUpgradeLogs.value
+        .filter(r => r.taskId === t.id)
+        .slice()
+        .sort((a, b) => String(a.deviceId).localeCompare(String(b.deviceId)));
+    });
+
+    const otaRunningDeviceIds = computed(() => {
+      const set = new Set();
+      categoryOtaTasks.value.forEach(t => {
+        if (otaTaskStatusMeta(t.status).code !== 0) return;
+        deviceUpgradeLogs.value.forEach(r => {
+          if (r.taskId !== t.id) return;
+          const code = otaDeviceStatusMeta(r.status).code;
+          if (code === 0 || code === 1) set.add(r.deviceId);
+        });
+      });
+      return set;
+    });
+
+    function otaDeviceExcludeReason(device, ctx) {
+      const runningIds = (ctx && ctx.runningIds) || otaRunningDeviceIds.value;
+      const categoryId = ctx && ctx.categoryId;
+      const toVer = ctx && ctx.toVer;
+      if (!device) return '排除: 设备不存在';
+      if (!categoryId) return '排除: 缺少 categoryId';
+      if (device.categoryId !== categoryId) return '排除: 不属于当前品类';
+      if (!toVer) return '排除: 未指定目标版本';
+      if (!(compareSemver(device.firmware, toVer) < 0)) return '排除: 当前固件不低于目标版本';
+      if (device.lifecycle === '待接入' || !device.aepDeviceId) return '排除: 设备待接入且无 AEP 设备号';
+      if (device.lifecycle === '停用' || device.lifecycle === '报废') return '排除: 设备已' + device.lifecycle;
+      if (runningIds && runningIds.has(device.id)) return '排除: 已在进行中的升级任务中';
+      return '';
+    }
+
+    const categoryOtaCandidateDevices = computed(() => {
       const cid = currentCategory.value?.id;
-      const target = categoryOtaTargetVer.value;
-      if (!cid || !target) return [];
+      const toVer = categoryOtaTargetVer.value;
+      if (!cid) return [];
+      const runningIds = otaRunningDeviceIds.value;
       return deviceList.value.filter(d => {
         if (d.categoryId !== cid) return false;
         if (categoryOtaOnlineOnly.value && d.lifecycle !== '在线') return false;
-        return compareSemver(d.firmware, target) < 0;
-      });
+        return true;
+      }).map(d => ({
+        ...d,
+        excludeReason: otaDeviceExcludeReason(d, { categoryId: cid, toVer, runningIds }),
+      }));
+    });
+
+    const categoryOtaUpgradeableDevices = computed(() => {
+      return categoryOtaCandidateDevices.value.filter(d => !d.excludeReason);
+    });
+
+    const categoryOtaFailureRows = computed(() => {
+      const ids = new Set(categoryOtaTaskList.value.map(t => t.id));
+      const taskById = {};
+      categoryOtaTaskList.value.forEach(t => { taskById[t.id] = t; });
+      return deviceUpgradeLogs.value
+        .filter(r => ids.has(r.taskId) && otaDeviceStatusMeta(r.status).code === 3)
+        .map(r => ({ ...r, task: taskById[r.taskId] }))
+        .sort((a, b) => String(b.time).localeCompare(String(a.time)));
+    });
+
+    const cancelOtaTarget = computed(() => {
+      return categoryOtaTasks.value.find(t => t.id === cancelOtaTargetId.value) || null;
     });
 
     /** 当前设备本机数据 = iot_protocol_data（query by deviceId；可按 packageType 筛） */
@@ -1425,13 +1822,23 @@ createApp({
         }
         if (screen.value === 'editDevice') return { parent: currentDevice.value?.name || '设备', current: deviceFormMode.value === 'create' ? '新建设备档案' : '编辑设备档案' };
         if (screen.value === 'aepReconcile') return { parent: '设备台账', current: 'AEP 对账' };
+        if (screen.value === 'upgradeMonitor') {
+          const id = upgradeMonitorTaskId.value;
+          return { parent: '设备台账', current: id ? ('升级在线监控 · ' + id) : '升级在线监控' };
+        }
         return { parent: '设备管控', current: '设备台账' };
       }
       if (screen.value === 'list') return { parent: '设备管控', current: '物模型 · 品类列表' };
-      if (screen.value === 'detail') return { parent: '物模型', current: currentCategory.value.name + ' · 详情' };
+      if (screen.value === 'detail') {
+        if (detailTab.value === 'otaTasks') {
+          const id = currentOtaTaskId.value;
+          return { parent: currentCategory.value.name, current: id ? ('升级任务 · ' + id) : '升级任务' };
+        }
+        return { parent: '物模型', current: currentCategory.value.name + ' · 详情' };
+      }
       if (screen.value === 'editPoint') return { parent: currentCategory.value.name, current: pointFormMode.value === 'create' ? '添加测点' : '编辑测点' };
       if (screen.value === 'editInstall') return { parent: currentCategory.value.name, current: installFormMode.value === 'create' ? '添加安装字段' : '编辑安装字段' };
-      if (screen.value === 'editFirmware') return { parent: currentCategory.value.name, current: firmwareFormMode.value === 'create' ? '登记固件版本' : '编辑固件版本' };
+      if (screen.value === 'editFirmware') return { parent: currentCategory.value.name, current: '登记固件版本' };
       return { parent: '设备管控', current: '物模型' };
     });
 
@@ -1946,13 +2353,76 @@ createApp({
       return d.projectName || projectName(d.projectId);
     }
 
+    function firmwareIsReferenced(f) {
+      if (!f) return false;
+      const url = f.packageUrl ? String(f.packageUrl).trim() : '';
+      const sameUrl = (value) => url && value && String(value).trim() === url;
+      const taskHit = categoryOtaTasks.value.some(t => t.firmwareId === f.id || sameUrl(t.packageUrl));
+      const logHit = deviceUpgradeLogs.value.some(r => r.firmwareId === f.id || sameUrl(r.packageUrl));
+      return taskHit || logHit;
+    }
+    function openFirmwareDelete(rows) {
+      const list = (rows || []).filter(Boolean);
+      if (!list.length) {
+        showToast('请选择要删除的固件', 'warn');
+        return;
+      }
+      deleteTarget.type = list.length > 1 ? '固件批量' : '固件版本';
+      deleteTarget.id = list.length === 1 ? list[0].id : '';
+      deleteTarget.ids = list.map(f => f.id);
+      deleteTarget.name = list.map(f => (f.packageName || f.upgradeVersion || f.id)).join('、');
+      deleteTarget.blocked = false;
+      showDeleteConfirm.value = true;
+    }
     function confirmDelete(type, id, name) {
+      if (type === '固件版本') {
+        openFirmwareDelete([FIRMWARES.find(f => f.id === id)]);
+        return;
+      }
       deleteTarget.type = type;
       deleteTarget.id = id;
       deleteTarget.name = name;
+      deleteTarget.ids = [];
+      deleteTarget.blocked = false;
       showDeleteConfirm.value = true;
     }
-    function doDelete() { showDeleteConfirm.value = false; }
+    function toggleFirmwareSelect(id) {
+      const arr = firmwareSelectedIds.value.slice();
+      const i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1);
+      else arr.push(id);
+      firmwareSelectedIds.value = arr;
+    }
+    function toggleFirmwareSelectAll() {
+      const ids = categoryFirmwares.value.map(f => f.id);
+      const allOn = ids.length && ids.every(id => firmwareSelectedIds.value.includes(id));
+      firmwareSelectedIds.value = allOn ? firmwareSelectedIds.value.filter(id => !ids.includes(id)) : ids.slice();
+    }
+    function confirmBatchDeleteFirmware() {
+      const rows = categoryFirmwares.value.filter(f => firmwareSelectedIds.value.includes(f.id));
+      openFirmwareDelete(rows);
+    }
+    function doDelete() {
+      const isFirmware = deleteTarget.type === '固件版本' || deleteTarget.type === '固件批量';
+      if (!isFirmware) {
+        showDeleteConfirm.value = false;
+        return;
+      }
+      const ids = (deleteTarget.ids && deleteTarget.ids.length) ? deleteTarget.ids.slice() : [deleteTarget.id];
+      const rows = ids.map(id => FIRMWARES.find(f => f.id === id)).filter(Boolean);
+      if (rows.some(firmwareIsReferenced)) {
+        deleteTarget.blocked = true;
+        showToast(FIRMWARE_DELETE_REFUSED, 'warn');
+        return;
+      }
+      for (let i = FIRMWARES.length - 1; i >= 0; i--) {
+        if (ids.indexOf(FIRMWARES[i].id) >= 0) FIRMWARES.splice(i, 1);
+      }
+      firmwareSelectedIds.value = firmwareSelectedIds.value.filter(id => ids.indexOf(id) < 0);
+      firmwareRevision.value += 1;
+      showDeleteConfirm.value = false;
+      showToast('已删除 ' + rows.length + ' 条固件（mock）', 'ok');
+    }
 
     function openCreatePoint() {
       pointFormMode.value = 'create';
@@ -1982,14 +2452,7 @@ createApp({
     function saveInstall() { screen.value = 'detail'; detailTab.value = 'install'; }
 
     function openCreateFirmware() {
-      firmwareFormMode.value = 'create';
-      Object.assign(firmwareForm, { id: '', model: 'MF-LW-100', currentVersion: '', upgradeVersion: '', releaseDate: '2026-09-30', status: '可升级', packageUrl: '', packageFileName: '', changelog: '' });
-      firmwareUploading.value = false;
-      screen.value = 'editFirmware';
-    }
-    function openEditFirmware(f) {
-      firmwareFormMode.value = 'edit';
-      Object.assign(firmwareForm, { packageFileName: '', ...f });
+      Object.assign(firmwareForm, { id: '', model: '', currentVersion: '', upgradeVersion: '', releaseDate: '', status: '可升级', packageUrl: '', packageName: '', packageSize: null, changelog: '' });
       firmwareUploading.value = false;
       screen.value = 'editFirmware';
     }
@@ -2001,55 +2464,62 @@ createApp({
       const file = ev && ev.target && ev.target.files && ev.target.files[0];
       if (!file) return;
       // mock：正式对接 POST /storage/file multipart(part=file; path=firmware; isPrivate=0)
-      // 成功取 Result.data.fileUrl → 写入 packageUrl（须公开，OTA Job 才能拉）
+      // 文件名 → packageName；Result.data.fileUrl → packageUrl；Result.data.fileSize（字节）→ packageSize
+      // releaseDate 不在上传时手填，保存时自动写入
       firmwareUploading.value = true;
       const name = file.name || 'firmware.bin';
+      const fileSize = Number(file.size) || 0;
       setTimeout(() => {
-        firmwareForm.packageFileName = name;
+        firmwareForm.packageName = name;
         firmwareForm.packageUrl = 'http://instrument.aquaroot.cn/api/storage/file/mock-fw-key';
+        firmwareForm.packageSize = fileSize;
         firmwareUploading.value = false;
-        showToast('固件包已上传（mock）→ packageUrl 已回填', 'ok');
+        showToast('固件包已上传（mock）→ packageName / packageUrl / packageSize=' + fileSize, 'ok');
         if (ev && ev.target) ev.target.value = '';
       }, 350);
     }
+    function firmwareToday() {
+      const d = new Date();
+      const p = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
     function saveFirmware() {
-      const pkg = String(firmwareForm.packageUrl || '').trim();
-      if (!pkg) {
-        showToast('请先上传固件包（回填 packageUrl）后再提交；空 URL 不可提交', 'warn');
+      const categoryId = currentCategory.value && currentCategory.value.id;
+      if (!categoryId) {
+        showToast('categoryId 必填', 'warn');
         return;
       }
-      firmwareForm.packageUrl = pkg;
-      if (firmwareFormMode.value === 'create') {
-        const row = {
-          id: 'F' + Date.now(),
-          model: firmwareForm.model,
-          currentVersion: firmwareForm.currentVersion,
-          upgradeVersion: firmwareForm.upgradeVersion,
-          releaseDate: firmwareForm.releaseDate,
-          status: firmwareForm.status,
-          packageUrl: pkg,
-          packageFileName: firmwareForm.packageFileName || '',
-          changelog: firmwareForm.changelog
-        };
-        FIRMWARES.unshift(row);
-      } else {
-        const idx = FIRMWARES.findIndex(x => x.id === firmwareForm.id);
-        if (idx >= 0) {
-          Object.assign(FIRMWARES[idx], {
-            model: firmwareForm.model,
-            currentVersion: firmwareForm.currentVersion,
-            upgradeVersion: firmwareForm.upgradeVersion,
-            releaseDate: firmwareForm.releaseDate,
-            status: firmwareForm.status,
-            packageUrl: pkg,
-            packageFileName: firmwareForm.packageFileName || FIRMWARES[idx].packageFileName || '',
-            changelog: firmwareForm.changelog
-          });
-        }
+      const ver = String(firmwareForm.upgradeVersion || '').trim();
+      if (!ver) {
+        showToast('upgradeVersion 必填', 'warn');
+        return;
       }
+      const pkg = String(firmwareForm.packageUrl || '').trim();
+      if (!pkg) {
+        showToast('packageUrl 必填：请先上传升级包回填地址', 'warn');
+        return;
+      }
+      firmwareForm.upgradeVersion = ver;
+      firmwareForm.packageUrl = pkg;
+      // releaseDate 选填；不传时后端默认今天。界面不提供输入，列表展示该默认日期。
+      const releaseDate = firmwareToday();
+      FIRMWARES.unshift({
+        id: 'F' + Date.now(),
+        categoryId,
+        model: '',
+        currentVersion: '',
+        upgradeVersion: ver,
+        releaseDate,
+        status: '可升级',
+        packageUrl: pkg,
+        packageName: firmwareForm.packageName || '',
+        packageSize: (firmwareForm.packageSize === 0 || firmwareForm.packageSize) ? firmwareForm.packageSize : null,
+        changelog: ''
+      });
+      firmwareRevision.value += 1;
       screen.value = 'detail';
       detailTab.value = 'firmware';
-      showToast('固件版本已保存（mock）', 'ok');
+      showToast('固件已登记（mock）· upgradeVersion ' + ver + ' · releaseDate ' + releaseDate, 'ok');
     }
 
     /* ---- 设备台账 actions ---- */
@@ -2575,6 +3045,7 @@ createApp({
         categoryOtaFirmwareId.value = f.id;
         categoryOtaPackageUrl.value = packageUrlFromFirmware(f);
       } else {
+        categoryOtaFirmwareId.value = '';
         categoryOtaPackageUrl.value = '';
       }
     }
@@ -2603,19 +3074,23 @@ createApp({
       const row = {
         id: 'UL' + Date.now(),
         deviceId: d.id,
+        taskId: '',
         time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        fromVersion: (d.softwareVersion === 0 || d.softwareVersion) ? d.softwareVersion : null,
         fromVer: d.firmware || '—',
         toVer,
         packageUrl: pkg,
-        status: '排队',
+        status: 0,
         progress: 0,
+        sentPackage: 0,
+        remainPackage: null,
         operator: '当前用户',
         failReason: ''
       };
       deviceUpgradeLogs.value = [row, ...deviceUpgradeLogs.value];
       showDeviceOtaModal.value = false;
       deviceDetailTab.value = 'upgradeLog';
-      showToast('已提交固件升级任务（mock）→ ' + toVer, 'ok');
+      showToast('已提交固件升级（mock）→ ' + toVer + ' · 设备状态 0 排队', 'ok');
     }
 
     function openCategoryBatchOta(fw) {
@@ -2626,6 +3101,8 @@ createApp({
       categoryOtaPackageUrl.value = packageUrlFromFirmware(fw);
       categoryOtaSelectedIds.value = [];
       categoryOtaOnlineOnly.value = true;
+      categoryOtaTimeoutMinutes.value = OTA_TIMEOUT_DEFAULT;
+      categoryOtaExtraIds.value = '';
       showCategoryOtaModal.value = true;
     }
 
@@ -2651,56 +3128,299 @@ createApp({
     }
 
     function submitCategoryOta() {
+      const cat = currentCategory.value;
+      if (!cat || !cat.id) { showToast('categoryId 必填', 'warn'); return; }
       const toVer = categoryOtaTargetVer.value;
       if (!toVer) { showToast('请选择目标固件版本', 'warn'); return; }
       const pkg = String(categoryOtaPackageUrl.value || '').trim();
-      if (!pkg) { showToast('请填写包地址 packageUrl 后才能提交', 'warn'); return; }
-      if (!categoryOtaSelectedIds.value.length) { showToast('请选择待升级设备', 'warn'); return; }
-      const n = categoryOtaSelectedIds.value.length;
+      const fwId = categoryOtaFirmwareId.value || '';
+      if (!pkg && !fwId) { showToast('请填写 packageUrl 或 firmwareId', 'warn'); return; }
+      const extraIds = parseExtraDeviceIds(categoryOtaExtraIds.value);
+      const requestedIds = [];
+      categoryOtaSelectedIds.value.forEach(id => { if (!requestedIds.includes(id)) requestedIds.push(id); });
+      extraIds.forEach(id => { if (!requestedIds.includes(id)) requestedIds.push(id); });
+      if (!requestedIds.length) { showToast('请选择待升级设备，或追加 deviceIds', 'warn'); return; }
+      if (requestedIds.length > OTA_DEVICE_CAP) {
+        showToast('deviceIds 合计不能超过 200（当前 ' + requestedIds.length + '）', 'warn');
+        return;
+      }
+      const timeoutMinutes = normalizeTimeoutMinutes(categoryOtaTimeoutMinutes.value);
+      categoryOtaTimeoutMinutes.value = timeoutMinutes;
+      const runningIds = otaRunningDeviceIds.value;
+      const accepted = [];
+      const excluded = [];
+      requestedIds.forEach(id => {
+        const d = deviceList.value.find(x => x.id === id);
+        const reason = otaDeviceExcludeReason(d, { categoryId: cat.id, toVer, runningIds });
+        if (reason) {
+          excluded.push({ deviceId: id, name: d ? d.name : '—', reason });
+        } else {
+          accepted.push(d);
+        }
+      });
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const resultBase = {
+        at: now,
+        categoryId: cat.id,
+        toVer,
+        firmwareId: fwId,
+        packageUrl: pkg,
+        timeoutMinutes,
+        accepted: accepted.length,
+        acceptedDevices: accepted.map(d => ({ deviceId: d.id, name: d.name })),
+        excluded,
+      };
+      if (!accepted.length) {
+        otaCreateResult.value = { taskId: '', ...resultBase };
+        showCategoryOtaModal.value = false;
+        currentOtaTaskId.value = '';
+        detailTab.value = 'otaTasks';
+        if ((location.hash || '') !== '#otaTasks') location.hash = '#otaTasks';
+        showToast('没有可纳入的设备，创建结果仅含排除项', 'warn');
+        return;
+      }
       const task = {
         id: 'OT' + Date.now(),
-        categoryId: currentCategory.value.id,
+        categoryId: cat.id,
         fromVerHint: '<' + toVer,
         toVer,
         packageUrl: pkg,
-        firmwareId: categoryOtaFirmwareId.value,
-        createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        firmwareId: fwId,
+        createdAt: now,
         operator: '当前用户',
-        deviceCount: n,
+        deviceCount: accepted.length,
         success: 0,
         fail: 0,
-        pending: n,
-        status: '进行中'
+        pending: accepted.length,
+        status: 0,
+        timeoutMinutes,
+        excluded: excluded.map(e => ({ ...e })),
       };
       categoryOtaTasks.value = [task, ...categoryOtaTasks.value];
-      // 同步写入设备升级日志样例
-      const now = task.createdAt;
-      const extra = categoryOtaSelectedIds.value.map((id, idx) => {
-        const d = deviceList.value.find(x => x.id === id);
-        return {
-          id: 'UL' + Date.now() + idx,
-          deviceId: id,
-          time: now,
-          fromVer: (d && d.firmware) || '—',
-          toVer,
-          status: idx === 0 ? '升级中' : '排队',
-          progress: idx === 0 ? 15 : 0,
-          operator: '当前用户',
-          failReason: ''
-        };
-      });
-      deviceUpgradeLogs.value = [...extra, ...deviceUpgradeLogs.value];
+      const logs = accepted.map((d, idx) => ({
+        id: 'UL' + Date.now() + idx,
+        deviceId: d.id,
+        taskId: task.id,
+        time: now,
+        fromVersion: (d.softwareVersion === 0 || d.softwareVersion) ? d.softwareVersion : null,
+        fromVer: d.firmware || '—',
+        toVer,
+        status: idx === 0 ? 1 : 0,
+        progress: idx === 0 ? 15 : 0,
+        sentPackage: idx === 0 ? 3 : 0,
+        remainPackage: idx === 0 ? 17 : 20,
+        totalPackage: 20,
+        operator: '当前用户',
+        failReason: '',
+      }));
+      deviceUpgradeLogs.value = [...logs, ...deviceUpgradeLogs.value];
+      otaCreateResult.value = { taskId: task.id, ...resultBase };
       showCategoryOtaModal.value = false;
+      const tip = excluded.length
+        ? ('已创建任务 ' + task.id + '：纳入 ' + accepted.length + ' · 排除 ' + excluded.length)
+        : ('已创建任务 ' + task.id + '：纳入 ' + accepted.length + ' 台 → ' + toVer);
+      showToast(tip, excluded.length ? 'warn' : 'ok');
+      openOtaTaskDetail(task.id);
+    }
+
+    function recalcOtaTaskCounts(task) {
+      const rows = deviceUpgradeLogs.value.filter(r => r.taskId === task.id);
+      let success = 0, fail = 0, pending = 0;
+      rows.forEach(r => {
+        const code = otaDeviceStatusMeta(r.status).code;
+        if (code === 2) success += 1;
+        else if (code === 3) fail += 1;
+        else pending += 1;
+      });
+      task.deviceCount = rows.length;
+      task.success = success;
+      task.fail = fail;
+      task.pending = pending;
+    }
+
+    function openOtaTaskDetail(taskOrId) {
+      const id = typeof taskOrId === 'string' ? taskOrId : (taskOrId && taskOrId.id);
+      if (!id) return;
+      const task = categoryOtaTasks.value.find(t => t.id === id);
+      if (task) {
+        const cat = CATEGORIES.find(c => c.id === task.categoryId);
+        if (cat) currentCategory.value = cat;
+      }
+      module.value = 'thing';
+      screen.value = 'detail';
       detailTab.value = 'otaTasks';
-      showToast('批量固件升级任务已创建（mock）：' + n + ' 台 → ' + toVer, 'ok');
+      currentOtaTaskId.value = id;
+      const next = '#otaTasks?id=' + encodeURIComponent(id);
+      if (location.hash !== next) location.hash = next;
+    }
+
+    function closeOtaTaskDetail() {
+      currentOtaTaskId.value = '';
+      detailTab.value = 'otaTasks';
+      if ((location.hash || '').indexOf('#otaTasks') === 0 && location.hash !== '#otaTasks') {
+        location.hash = '#otaTasks';
+      }
+    }
+
+    function openOtaTaskFromLog(taskId) {
+      if (!taskId) return;
+      openOtaTaskDetail(taskId);
+    }
+
+    function askCancelOtaTask(task) {
+      if (!task || otaTaskStatusMeta(task.status).code !== 0) {
+        showToast('仅状态 0「进行中」的任务可取消', 'warn');
+        return;
+      }
+      cancelOtaTargetId.value = task.id;
+      showCancelOtaConfirm.value = true;
+    }
+
+    function doCancelOtaTask() {
+      const task = categoryOtaTasks.value.find(t => t.id === cancelOtaTargetId.value);
+      showCancelOtaConfirm.value = false;
+      if (!task || otaTaskStatusMeta(task.status).code !== 0) return;
+      task.status = 2;
+      task.cancelledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      deviceUpgradeLogs.value = deviceUpgradeLogs.value.map(r => {
+        if (r.taskId !== task.id) return r;
+        const code = otaDeviceStatusMeta(r.status).code;
+        if (code === 2 || code === 3) return r;
+        return { ...r, status: 3, failReason: OTA_CANCEL_REASON };
+      });
+      recalcOtaTaskCounts(task);
+      showToast('任务已取消：未完成设备失败原因「' + OTA_CANCEL_REASON + '」', 'ok');
     }
 
     function upgradeStatusTag(status) {
-      if (status === '成功') return 'tag-green';
-      if (status === '失败') return 'tag-red';
-      if (status === '升级中') return 'tag-orange';
-      if (status === '排队') return 'tag-blue';
-      return 'tag-gray';
+      return otaDeviceStatusMeta(status).tag;
+    }
+    function upgradeFromVersion(row) {
+      if (!row || !Object.prototype.hasOwnProperty.call(row, 'fromVersion')) return null;
+      return row.fromVersion;
+    }
+    function upgradeSuccessNote(row) {
+      if (!row) return '';
+      if (row.successNote) return row.successNote;
+      if (otaDeviceStatusMeta(row.status).code === 2) return '应答 remain=0';
+      return '';
+    }
+    function upgradePackageLine(row) {
+      if (!row) return '';
+      const has = function (v) { return v !== null && v !== undefined && v !== ''; };
+      const parts = [];
+      if (has(row.sentPackage)) parts.push('已发 ' + row.sentPackage);
+      if (has(row.remainPackage)) parts.push('剩余 ' + row.remainPackage);
+      if (has(row.totalPackage)) parts.push('共 ' + row.totalPackage);
+      return parts.join(' · ');
+    }
+    const UPGRADE_MONITOR_POLL_MS = 4000;
+    const upgradeMonitorTaskId = ref('');
+    const upgradeMonitorPolledAt = ref('');
+    const upgradeMonitorTick = ref(0);
+    let upgradeMonitorTimer = null;
+    function upgradeMonitorStage(row) {
+      const code = otaDeviceStatusMeta(row.status).code;
+      if (code === 0) return { stage: 'queued', stageLabel: '排队' };
+      if (code === 1) {
+        if (Number(row.remainPackage) === 0) return { stage: 'awaitingConfirm', stageLabel: '待确认' };
+        return { stage: 'transferring', stageLabel: '传输中' };
+      }
+      return null;
+    }
+    function upgradeMonitorStamp(date) {
+      const p = function (n) { return String(n).padStart(2, '0'); };
+      return date.getFullYear() + '-' + p(date.getMonth() + 1) + '-' + p(date.getDate()) + ' ' + p(date.getHours()) + ':' + p(date.getMinutes());
+    }
+    function touchUpgradeMonitorPoll() {
+      upgradeMonitorPolledAt.value = upgradeMonitorStamp(new Date());
+    }
+    function stopUpgradeMonitorPoll() {
+      if (upgradeMonitorTimer) {
+        clearInterval(upgradeMonitorTimer);
+        upgradeMonitorTimer = null;
+      }
+    }
+    function startUpgradeMonitorPoll() {
+      stopUpgradeMonitorPoll();
+      touchUpgradeMonitorPoll();
+      upgradeMonitorTimer = setInterval(function () {
+        upgradeMonitorTick.value += 1;
+        touchUpgradeMonitorPoll();
+      }, UPGRADE_MONITOR_POLL_MS);
+    }
+    const upgradeMonitorView = computed(function () {
+      upgradeMonitorTick.value;
+      const taskId = upgradeMonitorTaskId.value;
+      const active = deviceUpgradeLogs.value.filter(function (row) {
+        if (taskId && row.taskId !== taskId) return false;
+        return !!upgradeMonitorStage(row);
+      });
+      const items = active.map(function (row) {
+        const stage = upgradeMonitorStage(row);
+        const remain = Number(row.remainPackage);
+        const sec = (Number.isFinite(remain) && remain > 0) ? remain * 30 : 120;
+        const brief = otaDeviceBrief(row.deviceId);
+        return {
+          id: row.id,
+          deviceId: row.deviceId,
+          deviceName: brief.name,
+          taskId: row.taskId || '',
+          fromVersion: upgradeFromVersion(row),
+          status: row.status,
+          statusText: otaDeviceStatusText(row.status),
+          statusTag: otaDeviceStatusMeta(row.status).tag,
+          stage: stage.stage,
+          stageLabel: stage.stageLabel,
+          progress: row.progress || 0,
+          sentPackage: row.sentPackage,
+          remainPackage: row.remainPackage,
+          totalPackage: row.totalPackage,
+          packageLine: upgradePackageLine(row),
+          estimatedCompleteAt: upgradeMonitorStamp(new Date(Date.now() + sec * 1000))
+        };
+      });
+      const countStage = function (key) { return items.filter(function (it) { return it.stage === key; }).length; };
+      const queuedCount = countStage('queued');
+      const transferringCount = countStage('transferring');
+      const awaitingConfirmCount = countStage('awaitingConfirm');
+      let latest = 0;
+      items.forEach(function (it) {
+        const remain = Number(it.remainPackage);
+        const sec = (Number.isFinite(remain) && remain > 0) ? remain * 30 : 120;
+        if (sec > latest) latest = sec;
+      });
+      const etaAt = items.length ? upgradeMonitorStamp(new Date(Date.now() + latest * 1000)) : '';
+      const runningTasks = categoryOtaTasks.value.filter(function (t) {
+        return otaTaskStatusMeta(t.status).code === 0;
+      }).map(function (t) {
+        const n = deviceUpgradeLogs.value.filter(function (row) {
+          return row.taskId === t.id && upgradeMonitorStage(row);
+        }).length;
+        return { taskId: t.id, toVer: t.toVer, activeCount: n };
+      });
+      return {
+        summary: {
+          upgradingCount: transferringCount + awaitingConfirmCount,
+          queuedCount: queuedCount,
+          transferringCount: transferringCount,
+          awaitingConfirmCount: awaitingConfirmCount
+        },
+        stageBreakdown: [
+          { stage: 'queued', label: '排队', count: queuedCount },
+          { stage: 'transferring', label: '传输中', count: transferringCount },
+          { stage: 'awaitingConfirm', label: '待确认', count: awaitingConfirmCount }
+        ],
+        items: items,
+        eta: {
+          estimatedCompleteAt: etaAt,
+          estimateBasis: '按在途剩余包粗估（约 30 秒/包；剩余 0 的待确认另加约 2 分钟），非精确倒计时'
+        },
+        runningTasks: runningTasks
+      };
+    });
+    function openUpgradeMonitor(taskId) {
+      location.hash = taskId ? ('#upgradeMonitor?taskId=' + encodeURIComponent(taskId)) : '#upgradeMonitor';
     }
 
 
@@ -2892,6 +3612,7 @@ createApp({
           aepStatus: deviceForm.aepStatus != null ? Number(deviceForm.aepStatus) : 0,
           model: deviceForm.model,
           firmware: deviceForm.firmware,
+          firmwareVersion: deviceForm.firmware,
           lng: deviceForm.lng ? Number(deviceForm.lng) : null,
           lat: deviceForm.lat ? Number(deviceForm.lat) : null,
           address: deviceForm.address,
@@ -3498,6 +4219,7 @@ createApp({
       showSendLogModal.value = false;
       showDeviceOtaModal.value = false;
       showCategoryOtaModal.value = false;
+      showCancelOtaConfirm.value = false;
       cmpDrawerOpen.value = false;
     }
 
@@ -3514,6 +4236,7 @@ createApp({
           tabFromQuery = queryParams.get('tab');
         } catch (e) { tabFromQuery = null; queryParams = null; }
       }
+      if (key !== 'upgradeMonitor') stopUpgradeMonitorPoll();
       const map = {
         cockpit: () => goCockpit(),
         workbench: () => goCockpit(),
@@ -3531,7 +4254,14 @@ createApp({
         categoryRules: () => { openDetail(CATEGORIES[0]); detailTab.value = 'rules'; },
         commands: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; },
         batchDispatch: () => { openDetail(CATEGORIES[0]); detailTab.value = 'batchDispatch'; resetBatchDispatchState(); },
-        otaTasks: () => { openDetail(CATEGORIES[0]); detailTab.value = 'otaTasks'; },
+        otaTasks: () => {
+          const id = queryParams && queryParams.get('id');
+          const task = id ? categoryOtaTasks.value.find(t => t.id === id) : null;
+          const cat = (task && CATEGORIES.find(c => c.id === task.categoryId)) || CATEGORIES[0];
+          openDetail(cat);
+          detailTab.value = 'otaTasks';
+          currentOtaTaskId.value = id || '';
+        },
         editCommand: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; openEditCommand(commandList.value.find(c => c.code === 'installHeightMm') || commandList.value.find(c => Number(c.hasParam) === 1) || commandList.value[0]); },
         editPoint: () => { openDetail(CATEGORIES[0]); openEditPoint(POINTS[0]); },
         editInstall: () => { openDetail(CATEGORIES[0]); openEditInstall(INSTALL_FIELDS[0]); },
@@ -3543,13 +4273,23 @@ createApp({
         editProject: () => { goProjects(); openEditProject(PROJECTS[0]); },
         devices: () => openAllDevices(),
         unassignedDevices: () => goUnassignedDevices(),
-        deviceDetail: () => openDeviceDetail(deviceList.value[0], tabFromQuery || 'profile'),
+        deviceDetail: () => {
+          const id = queryParams && queryParams.get('id');
+          const d = (id && deviceList.value.find(x => x.id === id)) || deviceList.value[0];
+          openDeviceDetail(d, tabFromQuery || 'profile');
+        },
         deviceLocalData: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'),
         devicePackets: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'), // 旧 hash → 本机数据
         deviceDispatch: () => openDeviceDetail(deviceList.value.find(d => d.categoryId === 'C001') || deviceList.value[0], 'dispatch'),
         deviceSendLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'sendLog'),
         deviceUpgradeLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'),
         deviceOta: () => { openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'); openDeviceOtaModal(); },
+        upgradeMonitor: () => {
+          module.value = 'ledger';
+          screen.value = 'upgradeMonitor';
+          upgradeMonitorTaskId.value = (queryParams && queryParams.get('taskId')) || '';
+          startUpgradeMonitorPoll();
+        },
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
         importExport: () => { goDevices(); openImportModal(); },
@@ -3612,13 +4352,14 @@ createApp({
       openCreateCommand, openEditCommand, saveCommand, toggleCommandEnabled,
       commandParamsSummary,
       showDeleteConfirm, deleteTarget,
-      pointForm, pointFormMode, installForm, installFormMode, firmwareForm, firmwareFormMode,
+      pointForm, pointFormMode, installForm, installFormMode, firmwareForm, FIRMWARE_EDIT_REFUSED, FIRMWARE_DELETE_REFUSED, FIRMWARE_DELETE_WARN, firmwareToday,
+      firmwareSelectedIds, toggleFirmwareSelect, toggleFirmwareSelectAll, confirmBatchDeleteFirmware,
       firmwareUploadInput, firmwareUploading, triggerFirmwareUpload, onFirmwarePackageSelected,
       goList, openDetail, openCreateCategory, openEditCategory, saveCategory,
       confirmDelete, doDelete,
       openCreatePoint, openEditPoint, savePoint,
       openCreateInstall, openEditInstall, saveInstall,
-      openCreateFirmware, openEditFirmware, saveFirmware,
+      openCreateFirmware, saveFirmware, formatPackageSize,
       jump,
       // ledger
       PROJECTS, DEVICES, deviceList, LIFECYCLES, LC_CLASS, LC_TAG, PJ_STATUS_TAG,
@@ -3628,7 +4369,7 @@ createApp({
       openCreateProject, openEditProject, saveProject, openAllDevices, openDevicesForProject, openDevicesForProjectLifecycle, openDevicesForCategory, openDevicesForLifecycle, LIFECYCLE_TO_STATUS,
       goProjects, goDevices, goUnassignedDevices, goAepReconcile,
       deviceProjectFilter, deviceCategoryFilter, deviceLifecycleFilter, deviceImeiSearch, deviceMasterFilter, deviceSlaveCategoryFilter, showProbeDevices, isProbeAepId, isChildDevice, isHubDevice, displayAepDeviceId,
-      filteredDevices, deviceStats, currentDevice, openDeviceDetail,
+      filteredDevices, deviceStats, currentDevice, openDeviceDetail, currentMessageInfo, displayNullable, deviceFirmwareVersion,
       deviceDetailTab, setDeviceDetailTab, deviceDispatchCommands, dispatchSelectedCmds,
       dispatchSelected, dispatchParams, dispatchPreviewHex, dispatchPreviewOk,
       isDispatchSelected, toggleDispatchCmd, dryRunDispatch, sendDispatch, toast,
@@ -3639,9 +4380,17 @@ createApp({
       deviceUpgradeLogs, currentDeviceUpgradeLogs, categoryOtaTasks, categoryOtaTaskList,
       showDeviceOtaModal, deviceOtaTargetVer, deviceOtaPackageUrl, deviceOtaFirmwareOptions, openDeviceOtaModal, onDeviceOtaTargetChange, submitDeviceOta,
       showCategoryOtaModal, categoryOtaFirmwareId, categoryOtaTargetVer, categoryOtaPackageUrl, categoryOtaSelectedIds,
-      categoryOtaOnlineOnly, categoryFirmwares, categoryOtaUpgradeableDevices,
+      categoryOtaOnlineOnly, categoryOtaTimeoutMinutes, categoryOtaExtraIds, categoryFirmwares,
+      categoryOtaUpgradeableDevices, categoryOtaCandidateDevices, categoryOtaFailureRows,
+      currentOtaTaskId, currentOtaTask, currentOtaTaskDevices, otaCreateResult,
+      otaTaskStatusMeta, otaTaskStatusText, otaDeviceStatusMeta, otaDeviceStatusText,
+      otaTimeoutMinutesOf, otaTaskTimeoutReason, otaDeviceBrief,
+      openOtaTaskDetail, closeOtaTaskDetail, openOtaTaskFromLog,
+      askCancelOtaTask, doCancelOtaTask, showCancelOtaConfirm, cancelOtaTarget,
+      OTA_TIMEOUT_DEFAULT, OTA_DEVICE_CAP, OTA_CANCEL_REASON,
       openCategoryBatchOta, onCategoryOtaTargetChange, isCategoryOtaDeviceSelected, toggleCategoryOtaDevice,
-      toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, compareSemver,
+      toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, upgradeFromVersion, upgradeSuccessNote, upgradePackageLine, compareSemver,
+      upgradeMonitorView, upgradeMonitorTaskId, upgradeMonitorPolledAt, openUpgradeMonitor, UPGRADE_MONITOR_POLL_MS,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
       deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess, sendLogTypeLabel, sendLogDryRunLabel,
@@ -3694,7 +4443,8 @@ createApp({
       <nav class="sidebar-nav">
         <div class="nav-group-title">设备管控</div>
         <div class="nav-item" :class="{active: module==='cockpit'}" @click="jump('cockpit')"><span class="dot"></span>工作台</div>
-        <div class="nav-item" :class="{active: module==='ledger'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
+        <div class="nav-item" :class="{active: module==='ledger' && screen!=='upgradeMonitor'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
+        <div class="nav-item" :class="{active: screen==='upgradeMonitor'}" @click="jump('upgradeMonitor')"><span class="dot"></span>升级监控</div>
         <div class="nav-item" :class="{active: module==='thing'}" @click="jump('list')"><span class="dot"></span>物模型</div>
         <div class="nav-group-title">在线监控</div>
         <div class="nav-item" :class="{active: module==='monitor' && (screen==='monitorList' || screen==='monitorDetail' || screen==='monitorCurve')}" @click="jump('monitor')"><span class="dot"></span>设备数据</div>
@@ -4071,7 +4821,7 @@ createApp({
             <div class="tab" :class="{active: detailTab==='points'}" @click="detailTab='points'">测点字典</div>
             <div class="tab" :class="{active: detailTab==='install'}" @click="detailTab='install'">安装参数模板</div>
             <div class="tab" :class="{active: detailTab==='firmware'}" @click="detailTab='firmware'">固件基线</div>
-            <div class="tab" :class="{active: detailTab==='otaTasks'}" @click="detailTab='otaTasks'">升级任务</div>
+            <div class="tab" :class="{active: detailTab==='otaTasks'}" @click="closeOtaTaskDetail()">升级任务</div>
             <div class="tab" :class="{active: detailTab==='commands'}" @click="detailTab='commands'">指令</div>
             <div class="tab" :class="{active: detailTab==='batchDispatch'}" @click="detailTab='batchDispatch'; resetBatchDispatchState()">批量下发</div>
             <div class="tab" :class="{active: detailTab==='rules'}" @click="detailTab='rules'">归属规则</div>
@@ -4119,41 +4869,199 @@ createApp({
               <tbody><tr v-for="f in INSTALL_FIELDS" :key="f.id"><td><code>{{ f.code }}</code></td><td>{{ f.name }}</td><td>{{ f.dataType }}</td><td>{{ f.unit }}</td><td><span class="tag" :class="f.required?'tag-blue':'tag-gray'">{{ f.required?'是':'否' }}</span></td><td>{{ f.defaultVal || '—' }}</td><td>{{ f.example }}</td><td>{{ f.desc }}</td><td class="actions"><button class="btn-link btn" @click="openEditInstall(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('安装字段', f.id, f.name)">删除</button></td></tr></tbody></table></div>
           </div>
           <div v-else-if="detailTab==='firmware'">
-            <div class="toolbar"><span style="color:#666;font-size:13px">固件型号、当前版本、可升级版本登记；主路径为上传固件包回填 packageUrl</span><div class="spacer"></div><button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button></div>
-            <div class="table-wrap"><table class="data-table"><thead><tr><th>型号</th><th>当前版本</th><th>可升版</th><th>固件包</th><th>包地址</th><th>发布日期</th><th>状态</th><th>变更说明</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="f in categoryFirmwares" :key="f.id"><td><code>{{ f.model }}</code></td><td>{{ f.currentVersion }}</td><td>{{ f.upgradeVersion || '—' }}</td><td><span v-if="f.packageUrl" class="tag tag-green" :title="f.packageUrl">已上传{{ f.packageFileName ? ' · ' + f.packageFileName : '' }}</span><span v-else class="tag tag-gray">未上传</span></td><td style="max-width:180px"><code :title="f.packageUrl || ''">{{ f.packageUrl ? (f.packageUrl.length>36 ? f.packageUrl.slice(0,36)+'…' : f.packageUrl) : '—' }}</code></td><td>{{ f.releaseDate }}</td><td><span class="tag" :class="f.status==='可升级'?'tag-orange':(f.status==='最新'?'tag-green':'tag-blue')">{{ f.status }}</span></td><td style="max-width:240px;white-space:normal">{{ f.changelog }}</td><td class="actions"><button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button><button class="btn-link btn" @click="openEditFirmware(f)">编辑</button><button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.model+' '+f.currentVersion)">删除</button></td></tr></tbody></table></div>
-            <div class="table-note">「批量升级」走 OTA 固件包任务（选版本 → 勾选版本落后设备 → 提交），与「指令 · BOOT升级 / 批量下发」无关。</div>
-          </div>
-          <div v-else-if="detailTab==='otaTasks'">
+            <div class="banner-tip">{{ FIRMWARE_EDIT_REFUSED }}</div>
             <div class="toolbar">
-              <span style="color:#666;font-size:13px">品类级 OTA 升级任务（固件包下发进度汇总）。可从「固件基线」行内「批量升级」创建。</span>
+              <span style="color:#666;font-size:13px">只支持新建。POST 必填 <code>categoryId</code> + <code>packageUrl</code> + <code>upgradeVersion</code>。<code>packageName</code> 取上传文件名；<code>packageSize</code> 取上传返回的 fileSize；<code>releaseDate</code> 不手填，缺省为今天。</span>
               <div class="spacer"></div>
-              <button class="btn btn-sm" @click="detailTab='firmware'">← 固件基线</button>
+              <button class="btn btn-sm" @click="confirmBatchDeleteFirmware" :disabled="!firmwareSelectedIds.length">批量删除<span v-if="firmwareSelectedIds.length">（{{ firmwareSelectedIds.length }}）</span></button>
+              <button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button>
             </div>
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>任务 ID</th><th>创建时间</th><th>目标版本</th><th>范围提示</th><th>设备数</th><th>成功</th><th>失败</th><th>排队/进行</th><th>状态</th><th>操作人</th>
+                    <th style="width:36px"><input type="checkbox" :checked="categoryFirmwares.length && categoryFirmwares.every(f => firmwareSelectedIds.includes(f.id))" @change="toggleFirmwareSelectAll" /></th>
+                    <th>packageName</th><th>upgradeVersion</th><th>packageUrl</th><th>packageSize</th><th>releaseDate</th><th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="t in categoryOtaTaskList" :key="t.id">
-                    <td><code>{{ t.id }}</code></td>
-                    <td>{{ t.createdAt }}</td>
-                    <td><code>{{ t.toVer }}</code></td>
-                    <td>{{ t.fromVerHint }}</td>
-                    <td>{{ t.deviceCount }}</td>
-                    <td>{{ t.success }}</td>
-                    <td>{{ t.fail }}</td>
-                    <td>{{ t.pending }}</td>
-                    <td><span class="tag" :class="t.status==='已完成'?'tag-green':(t.status==='进行中'?'tag-orange':'tag-gray')">{{ t.status }}</span></td>
-                    <td>{{ t.operator }}</td>
+                  <tr v-for="f in categoryFirmwares" :key="f.id">
+                    <td><input type="checkbox" :checked="firmwareSelectedIds.includes(f.id)" @change="toggleFirmwareSelect(f.id)" /></td>
+                    <td>{{ f.packageName || '—' }}</td>
+                    <td><code>{{ f.upgradeVersion || '—' }}</code></td>
+                    <td style="max-width:280px"><code :title="f.packageUrl || ''">{{ f.packageUrl ? (f.packageUrl.length>42 ? f.packageUrl.slice(0,42)+'…' : f.packageUrl) : '—' }}</code></td>
+                    <td :title="f.packageSize != null ? (f.packageSize + ' 字节') : ''">{{ formatPackageSize(f.packageSize) }}</td>
+                    <td>{{ f.releaseDate || '—' }}</td>
+                    <td class="actions">
+                      <button class="btn-link btn" @click="openCategoryBatchOta(f)" :disabled="!f.upgradeVersion && f.status==='最新'">批量升级</button>
+                      <button class="btn-link btn danger" @click="confirmDelete('固件版本', f.id, f.packageName || f.id)">删除</button>
+                    </td>
                   </tr>
-                  <tr v-if="!categoryOtaTaskList.length"><td colspan="10"><div class="empty-hint">暂无升级任务</div></td></tr>
+                  <tr v-if="!categoryFirmwares.length"><td colspan="7"><div class="empty-hint">暂无固件版本</div></td></tr>
                 </tbody>
               </table>
             </div>
+            <div class="table-note">列顺序：packageName / upgradeVersion / packageUrl / packageSize / releaseDate。packageSize 为字节，展示为 KB/MB，空为 —。上传 POST /storage/file（path=firmware）后把返回 fileSize 写入 packageSize。落库脚本 iot_category_firmware_add_package_size_v1.sql（本原型不写 SQL）。被引用或 packageUrl 相同则不能删除；批量任一条被引用则整批失败。</div>
+          </div>
+          <div v-else-if="detailTab==='otaTasks'">
+            <template v-if="currentOtaTask">
+              <div class="toolbar">
+                <button class="btn btn-sm" @click="closeOtaTaskDetail">← 返回任务列表</button>
+                <div class="spacer"></div>
+                <button v-if="otaTaskStatusMeta(currentOtaTask.status).code===0" class="btn btn-danger btn-sm" @click="askCancelOtaTask(currentOtaTask)">取消任务</button>
+                <span v-else class="cell-sub">已结束的任务不可取消</span>
+              </div>
+              <div class="info-section">
+                <div class="info-section-title">
+                  <span>升级任务 {{ currentOtaTask.id }}</span>
+                  <span class="tag" :class="otaTaskStatusMeta(currentOtaTask.status).tag">{{ otaTaskStatusText(currentOtaTask.status) }}</span>
+                </div>
+                <div class="kv-grid">
+                  <div class="k">任务状态</div>
+                  <div class="v"><code>{{ otaTaskStatusMeta(currentOtaTask.status).code }}</code> {{ otaTaskStatusMeta(currentOtaTask.status).label }} <span class="cell-sub">0 进行中 / 1 已完成 / 2 已取消 / 3 失败</span></div>
+                  <div class="k">categoryId</div><div class="v"><code>{{ currentOtaTask.categoryId }}</code></div>
+                  <div class="k">目标版本</div><div class="v"><code>{{ currentOtaTask.toVer }}</code> <span class="cell-sub">{{ currentOtaTask.fromVerHint }}</span></div>
+                  <div class="k">firmwareId</div><div class="v"><code>{{ currentOtaTask.firmwareId || '—' }}</code></div>
+                  <div class="k">packageUrl</div><div class="v"><code>{{ currentOtaTask.packageUrl || '—' }}</code></div>
+                  <div class="k">timeoutMinutes</div>
+                  <div class="v">{{ otaTimeoutMinutesOf(currentOtaTask) }} 分钟<span v-if="otaTimeoutMinutesOf(currentOtaTask)===30">（默认）</span></div>
+                  <div class="k">创建 / 操作人</div><div class="v">{{ currentOtaTask.createdAt }} · {{ currentOtaTask.operator }}</div>
+                  <div class="k" v-if="currentOtaTask.cancelledAt">取消时间</div>
+                  <div class="v" v-if="currentOtaTask.cancelledAt">{{ currentOtaTask.cancelledAt }}</div>
+                  <div class="k">进度</div>
+                  <div class="v">纳入 {{ currentOtaTask.deviceCount }} · 成功 {{ currentOtaTask.success }} · 失败 {{ currentOtaTask.fail }} · 排队/进行 {{ currentOtaTask.pending }}</div>
+                </div>
+              </div>
+              <div class="banner-tip">取消：仅状态 <b>0 进行中</b> 可取消。确认后任务变为 <b>2 已取消</b>；未完成设备（0 排队 / 1 升级中）记为 <b>3 失败</b>，失败原因「任务已取消」。已成功（2）不回滚。</div>
+              <div class="banner-muted">超时：设备超过本任务 timeoutMinutes（当前 <b>{{ otaTimeoutMinutesOf(currentOtaTask) }}</b> 分钟，未配置时默认 30）无应答，记为失败，失败原因「{{ otaTaskTimeoutReason(currentOtaTask) }}」。</div>
+              <div class="ota-result" v-if="currentOtaTask.excluded && currentOtaTask.excluded.length">
+                <div class="ota-result-title">创建结果 · 排除 {{ currentOtaTask.excluded.length }} 台</div>
+                <div class="cell-sub" style="margin-bottom:8px">被排除的设备不进入 deviceUpgrade。原因以「排除: 」开头。</div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>deviceId</th><th>设备</th><th>排除原因</th></tr></thead>
+                    <tbody>
+                      <tr v-for="ex in currentOtaTask.excluded" :key="currentOtaTask.id+ex.deviceId">
+                        <td><code>{{ ex.deviceId }}</code></td>
+                        <td>{{ ex.name || '—' }}</td>
+                        <td class="ota-exclude-reason">{{ ex.reason }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="ota-result" v-else>
+                <div class="ota-result-title">创建结果</div>
+                <div class="cell-sub">本次无设备被排除，纳入 {{ currentOtaTask.deviceCount }} 台。</div>
+              </div>
+              <div class="info-section-title" style="margin-top:4px">设备升级进度 · <code>deviceUpgrade?taskId={{ currentOtaTask.id }}</code></div>
+              <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 与本条升级记录的 fromVersion 不相等即记成功（版本可回退；只比该单 fromVersion，不比设备当前版本，也不比目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。</div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>设备</th><th>fromVersion</th><th>版本</th><th>设备状态</th><th>进度</th><th>失败原因</th><th>说明</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in currentOtaTaskDevices" :key="r.id">
+                      <td>{{ otaDeviceBrief(r.deviceId).name }}<div class="cell-sub"><code>{{ r.deviceId }}</code></div></td>
+                      <td>{{ displayNullable(upgradeFromVersion(r)) }}<div class="cell-sub">升级前 softwareVersion</div></td>
+                      <td><code>{{ r.fromVer }}</code> → <code>{{ r.toVer }}</code></td>
+                      <td><span class="tag" :class="otaDeviceStatusMeta(r.status).tag">{{ otaDeviceStatusText(r.status) }}</span></td>
+                      <td>
+                        <div class="ota-progress">
+                          <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
+                          <span>{{ r.progress || 0 }}%</span>
+                        </div>
+                        <div class="ota-progress-pkgs" v-if="upgradePackageLine(r)">{{ upgradePackageLine(r) }}</div>
+                      </td>
+                      <td :class="{'ota-fail-reason': !!r.failReason}">{{ r.failReason || '—' }}</td>
+                      <td>{{ upgradeSuccessNote(r) || '—' }}</td>
+                    </tr>
+                    <tr v-if="!currentOtaTaskDevices.length"><td colspan="7"><div class="empty-hint">该任务暂无设备进度</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-note">进度除百分比外展示已发 sentPackage、剩余 remainPackage；有 totalPackage 时一并显示。成功仍看 upgradeStatus。fromVersion 是升级前 softwareVersion，可空。状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败。</div>
+            </template>
+            <template v-else-if="currentOtaTaskId">
+              <div class="toolbar">
+                <button class="btn btn-sm" @click="closeOtaTaskDetail">← 返回任务列表</button>
+              </div>
+              <div class="empty-hint">未找到升级任务 {{ currentOtaTaskId }}</div>
+            </template>
+            <template v-else>
+              <div class="toolbar">
+                <span style="color:#666;font-size:13px">品类 OTA 任务。状态 0 进行中 / 1 已完成 / 2 已取消 / 3 失败。从「固件基线」行「批量升级」创建。</span>
+                <div class="spacer"></div>
+                <button class="btn btn-sm" @click="detailTab='firmware'">← 固件基线</button>
+              </div>
+              <div class="banner-tip">取消：仅 <b>0 进行中</b> 可点「取消」。取消后未完成设备失败原因「任务已取消」。超时：超过任务 timeoutMinutes（默认 <b>30</b> 分钟）无应答，失败原因「升级超时（超过N分钟无应答）」。</div>
+              <div class="ota-result" v-if="otaCreateResult">
+                <div class="ota-result-title">创建结果<span v-if="otaCreateResult.taskId"> · {{ otaCreateResult.taskId }}</span><span v-else> · 未生成任务</span></div>
+                <div class="cell-sub" style="margin-bottom:8px">{{ otaCreateResult.at }} · categoryId <code>{{ otaCreateResult.categoryId }}</code> · 目标 <code>{{ otaCreateResult.toVer }}</code> · 超时 {{ otaCreateResult.timeoutMinutes }} 分钟<span v-if="otaCreateResult.timeoutMinutes===30">（默认）</span> · 纳入 {{ otaCreateResult.accepted }} · 排除 {{ otaCreateResult.excluded.length }}</div>
+                <div class="cell-sub" v-if="otaCreateResult.acceptedDevices && otaCreateResult.acceptedDevices.length" style="margin-bottom:8px">纳入：<span v-for="(d, i) in otaCreateResult.acceptedDevices" :key="d.deviceId">{{ i ? '、' : '' }}{{ d.name }}（{{ d.deviceId }}）</span></div>
+                <div class="table-wrap" v-if="otaCreateResult.excluded.length">
+                  <table class="data-table">
+                    <thead><tr><th>deviceId</th><th>设备</th><th>排除原因</th></tr></thead>
+                    <tbody>
+                      <tr v-for="ex in otaCreateResult.excluded" :key="'cr-'+ex.deviceId">
+                        <td><code>{{ ex.deviceId }}</code></td>
+                        <td>{{ ex.name || '—' }}</td>
+                        <td class="ota-exclude-reason">{{ ex.reason }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="table-note" v-else>本次无设备被排除。</div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>任务 ID</th><th>创建时间</th><th>目标版本</th><th>超时</th><th>纳入</th><th>成功</th><th>失败</th><th>排队/进行</th><th>排除</th><th>状态</th><th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="t in categoryOtaTaskList" :key="t.id" class="row-clickable" @click="openOtaTaskDetail(t)">
+                      <td><code>{{ t.id }}</code></td>
+                      <td>{{ t.createdAt }}</td>
+                      <td><code>{{ t.toVer }}</code></td>
+                      <td>{{ otaTimeoutMinutesOf(t) }} 分钟<span v-if="otaTimeoutMinutesOf(t)===30" class="cell-sub"> · 默认</span></td>
+                      <td>{{ t.deviceCount }}</td>
+                      <td>{{ t.success }}</td>
+                      <td>{{ t.fail }}</td>
+                      <td>{{ t.pending }}</td>
+                      <td>{{ (t.excluded && t.excluded.length) || 0 }}</td>
+                      <td><span class="tag" :class="otaTaskStatusMeta(t.status).tag">{{ otaTaskStatusText(t.status) }}</span></td>
+                      <td class="actions" @click.stop>
+                        <button class="btn-link btn" @click="openOtaTaskDetail(t)">详情</button>
+                        <button v-if="otaTaskStatusMeta(t.status).code===0" class="btn-link btn danger" @click="askCancelOtaTask(t)">取消</button>
+                      </td>
+                    </tr>
+                    <tr v-if="!categoryOtaTaskList.length"><td colspan="11"><div class="empty-hint">暂无升级任务</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-note">任务状态：0 进行中 / 1 已完成 / 2 已取消 / 3 失败。设备状态（不变）：0 排队 / 1 升级中 / 2 成功 / 3 失败。设备进度走 deviceUpgrade?taskId=。</div>
+              <div class="info-section-title" style="margin-top:16px">设备失败原因</div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>任务</th><th>超时</th><th>设备</th><th>fromVersion</th><th>设备状态</th><th>失败原因</th></tr></thead>
+                  <tbody>
+                    <tr v-for="r in categoryOtaFailureRows" :key="'fail-'+r.id">
+                      <td><button class="btn-link btn" @click="openOtaTaskDetail(r.taskId)">{{ r.taskId }}</button></td>
+                      <td>{{ r.task ? otaTimeoutMinutesOf(r.task) : '—' }} 分钟</td>
+                      <td>{{ otaDeviceBrief(r.deviceId).name }}<div class="cell-sub"><code>{{ r.deviceId }}</code></div></td>
+                      <td>{{ displayNullable(upgradeFromVersion(r)) }}</td>
+                      <td><span class="tag" :class="otaDeviceStatusMeta(r.status).tag">{{ otaDeviceStatusText(r.status) }}</span></td>
+                      <td class="ota-fail-reason">{{ r.failReason || '—' }}</td>
+                    </tr>
+                    <tr v-if="!categoryOtaFailureRows.length"><td colspan="6"><div class="empty-hint">暂无失败设备</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-note">常见失败原因：「任务已取消」（取消进行中任务后，未完成设备）；「升级超时（超过N分钟无应答）」，N 取该任务 timeoutMinutes，未填时默认 30。</div>
+            </template>
           </div>
           <div v-else-if="detailTab==='batchDispatch'">
             <div class="banner-tip" style="margin-bottom:12px">品类批量下发：选 <b>一条</b> 可批量指令 → 填共享参数 → 多选设备（可筛项目/仅在线）→ dryRun 样例 → 确认批量发送。与「指令」定义 Tab、设备档案单点发分离；不含 OTA 固件包。</div>
@@ -4371,24 +5279,140 @@ createApp({
 
         <div v-else-if="module==='thing' && screen==='editFirmware'" class="page-card">
           <button class="back-link" @click="screen='detail'; detailTab='firmware'">← 返回固件基线</button>
-          <div class="page-header"><div><h1 class="page-title">{{ firmwareFormMode==='create'?'登记固件版本':'编辑固件版本' }}</h1><p class="page-desc">品类：{{ currentCategory.name }} · 主路径：上传固件包 → 回填 packageUrl（空 URL 不可提交）</p></div></div>
-          <div class="form-row"><div class="form-item"><label><span class="req">*</span>硬件型号</label><input class="input input-full" v-model="firmwareForm.model" /></div><div class="form-item"><label><span class="req">*</span>当前版本</label><input class="input input-full" v-model="firmwareForm.currentVersion" /></div></div>
-          <div class="form-row"><div class="form-item"><label>可升级版本</label><input class="input input-full" v-model="firmwareForm.upgradeVersion" /></div><div class="form-item"><label>发布日期</label><input class="input input-full" v-model="firmwareForm.releaseDate" type="date" /></div><div class="form-item"><label>状态</label><select class="select input-full" v-model="firmwareForm.status"><option>可升级</option><option>基线</option><option>最新</option><option>废弃</option></select></div></div>
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">登记固件版本</h1>
+              <p class="page-desc">品类：{{ currentCategory.name }} · 仅 POST 新建。{{ FIRMWARE_EDIT_REFUSED }}</p>
+            </div>
+          </div>
+          <div class="banner-tip">{{ FIRMWARE_EDIT_REFUSED }}</div>
+          <div class="form-row">
+            <div class="form-item">
+              <label><span class="req">*</span>categoryId</label>
+              <div class="field-static"><code>{{ currentCategory.id }}</code> {{ currentCategory.name }}</div>
+              <div class="hint">POST 必填，取当前品类，不可改挂。</div>
+            </div>
+            <div class="form-item">
+              <label><span class="req">*</span>upgradeVersion</label>
+              <input class="input input-full" v-model="firmwareForm.upgradeVersion" placeholder="例如 1.4.0" />
+              <div class="hint">POST 必填。OTA 目标版本。</div>
+            </div>
+          </div>
           <div class="form-item">
-            <label><span class="req">*</span>上传固件包</label>
+            <label><span class="req">*</span>上传升级包（回填 packageUrl）</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <input ref="firmwareUploadInput" type="file" accept=".bin,.hex,.img,.zip,application/octet-stream" style="display:none" @change="onFirmwarePackageSelected" />
               <button type="button" class="btn btn-sm" :disabled="firmwareUploading" @click="triggerFirmwareUpload">{{ firmwareUploading ? '上传中…' : '选择并上传' }}</button>
-              <span v-if="firmwareForm.packageFileName" class="tag tag-green">{{ firmwareForm.packageFileName }}</span>
-              <span v-else style="color:#999;font-size:13px">未选择文件</span>
             </div>
-            <div class="hint">正式对接 <code>POST /storage/file</code> multipart（part <code>file</code>；建议 <code>path=firmware</code>、<code>isPrivate=0</code> 公开可读，OTA Job 才能拉）。成功取 <code>Result.data.fileUrl</code> → 写入 <code>packageUrl</code>。本地目录存储（storage.active=local）。</div>
+            <div class="hint">对接 <code>POST /storage/file</code> multipart（part <code>file</code>；<code>path=firmware</code>、<code>isPrivate=0</code> 公开可读，本地目录 storage.active=local）。成功取 <code>Result.data.fileUrl</code> 回填 <code>packageUrl</code>，取 <code>Result.data.fileSize</code>（字节）写入 <code>packageSize</code>。空 URL 不可提交。</div>
           </div>
-          <div class="form-item"><label>包地址 packageUrl</label><input class="input input-full" v-model="firmwareForm.packageUrl" placeholder="上传成功后自动回填；亦可弱兜底手填" /><div class="hint">只读展示上传结果亦可；OTA 弹窗仍按选版本 autofill 此字段。</div></div>
-          <div class="form-item"><label>变更说明</label><textarea class="textarea input-full" v-model="firmwareForm.changelog"></textarea></div>
-          <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" @click="screen='detail'; detailTab='firmware'">取消</button><button class="btn btn-primary" @click="saveFirmware">保存</button></div>
+          <div class="form-row">
+            <div class="form-item">
+              <label>包名 packageName</label>
+              <div class="field-static">{{ firmwareForm.packageName || '上传后显示文件名' }}</div>
+              <div class="hint">取自上传文件名，写入 packageName，不可单独修改。</div>
+            </div>
+            <div class="form-item">
+              <label>packageSize</label>
+              <div class="field-static" :title="firmwareForm.packageSize != null ? (firmwareForm.packageSize + ' 字节') : ''">{{ formatPackageSize(firmwareForm.packageSize) }}</div>
+              <div class="hint">只读。上传返回 fileSize 写入 packageSize，按 KB/MB 展示；未上传为 —。</div>
+            </div>
+            <div class="form-item">
+              <label>releaseDate</label>
+              <div class="field-static">{{ firmwareToday() }}</div>
+              <div class="hint">无输入框。不传时后端默认今天，此处只读预览。</div>
+            </div>
+          </div>
+          <div class="form-item">
+            <label>包地址 packageUrl</label>
+            <div class="field-static">{{ firmwareForm.packageUrl || '上传成功后自动回填' }}</div>
+            <div class="hint">POST 必填。只读，不可手填。OTA 选该版本时带出此地址。</div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" @click="screen='detail'; detailTab='firmware'">取消</button>
+            <button class="btn btn-primary" @click="saveFirmware">保存</button>
+          </div>
         </div>
 
+
+        <!-- ===== 升级在线监控 ===== -->
+        <div v-else-if="module==='ledger' && screen==='upgradeMonitor'" class="page-card" data-screen="upgrade-monitor">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">升级在线监控</h1>
+              <p class="page-desc">组件 <code>iot/iot-device/IotDeviceUpgradeMonitor</code> · 路由建议 <code>/iot/iot-device-upgrade-monitor</code> · 本页 <code>#upgradeMonitor</code>。约 {{ UPGRADE_MONITOR_POLL_MS / 1000 }} 秒轮询 <code>GET /iot/deviceUpgrade/monitor</code><span v-if="upgradeMonitorTaskId">?taskId={{ upgradeMonitorTaskId }}</span>。最近刷新 {{ upgradeMonitorPolledAt || '—' }}。</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" v-if="upgradeMonitorTaskId" @click="openUpgradeMonitor()">查看全部在途</button>
+              <button class="btn" @click="jump('deviceUpgradeLog')">历史升级记录</button>
+              <button class="btn" @click="jump('otaTasks')">升级任务</button>
+            </div>
+          </div>
+          <div class="banner-muted">历史成功/失败仍走 <code>GET /iot/deviceUpgrade</code>（设备升级日志 / 任务详情）。本页只看在途，不替代历史查询。库状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败；阶段 queued / transferring / awaitingConfirm 只是在途拆分。</div>
+          <div class="stat-row">
+            <div class="stat-chip accent"><div class="sc-label">升级中 upgradingCount</div><div class="sc-value">{{ upgradeMonitorView.summary.upgradingCount }}</div></div>
+            <div class="stat-chip warn"><div class="sc-label">排队 queuedCount</div><div class="sc-value">{{ upgradeMonitorView.summary.queuedCount }}</div></div>
+          </div>
+          <div class="table-note" style="margin-top:0">其中传输中 transferringCount {{ upgradeMonitorView.summary.transferringCount }} · 待确认 awaitingConfirmCount {{ upgradeMonitorView.summary.awaitingConfirmCount }}</div>
+          <div class="info-section" style="margin-top:16px">
+            <div class="info-section-title">阶段 stageBreakdown</div>
+            <div class="stat-row">
+              <div class="stat-chip" v-for="s in upgradeMonitorView.stageBreakdown" :key="s.stage">
+                <div class="sc-label">{{ s.label }} {{ s.stage }}</div>
+                <div class="sc-value">{{ s.count }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="info-section">
+            <div class="info-section-title">预计全部完成</div>
+            <div class="kv-grid">
+              <div class="k">eta.estimatedCompleteAt</div>
+              <div class="v">{{ upgradeMonitorView.eta.estimatedCompleteAt || '—' }}</div>
+              <div class="k">eta.estimateBasis</div>
+              <div class="v">{{ upgradeMonitorView.eta.estimateBasis }}</div>
+            </div>
+          </div>
+          <div class="info-section">
+            <div class="info-section-title">进行中任务 runningTasks</div>
+            <div v-if="upgradeMonitorView.runningTasks.length" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-sm" v-for="t in upgradeMonitorView.runningTasks" :key="t.taskId" @click="openUpgradeMonitor(t.taskId)">
+                {{ t.taskId }} · {{ t.toVer }} · 在途 {{ t.activeCount }}
+              </button>
+            </div>
+            <div v-else class="empty-hint">当前没有进行中的批量任务</div>
+          </div>
+          <div class="info-section">
+            <div class="info-section-title">在途明细 items</div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>设备</th><th>任务</th><th>阶段 stageLabel</th><th>库状态</th><th>fromVersion</th><th>包进度</th><th>预计完成 estimatedCompleteAt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="it in upgradeMonitorView.items" :key="it.id">
+                    <td>{{ it.deviceName }}<div class="cell-sub"><code>{{ it.deviceId }}</code></div></td>
+                    <td><button v-if="it.taskId" class="btn-link btn" @click="openOtaTaskDetail(it.taskId)">{{ it.taskId }}</button><span v-else>—</span></td>
+                    <td>{{ it.stageLabel }}<div class="cell-sub"><code>{{ it.stage }}</code></div></td>
+                    <td><span class="tag" :class="it.statusTag">{{ it.statusText }}</span></td>
+                    <td>{{ displayNullable(it.fromVersion) }}</td>
+                    <td>
+                      <div class="ota-progress">
+                        <div class="ota-progress-bar"><i :style="{width: (it.progress||0)+'%'}"></i></div>
+                        <span>{{ it.progress || 0 }}%</span>
+                      </div>
+                      <div class="ota-progress-pkgs">{{ it.packageLine || '—' }}</div>
+                    </td>
+                    <td>{{ it.estimatedCompleteAt }}</td>
+                  </tr>
+                  <tr v-if="!upgradeMonitorView.items.length"><td colspan="7"><div class="empty-hint">没有在途升级</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-note">包进度为 sentPackage / remainPackage，有 totalPackage 时带「共」。行内预计完成是粗估。成功失败不在本表，请看升级日志。</div>
+          </div>
+        </div>
 
         <!-- ===== 设备台账：项目列表 ===== -->
         <div v-else-if="module==='ledger' && screen==='projects'" class="page-card" data-screen="ledger-projects">
@@ -4665,8 +5689,10 @@ createApp({
               <div class="k">物模型品类</div><div class="v">{{ currentDevice.categoryName || '未分类' }} <span class="tag" :class="currentDevice.categoryMatch==='auto'?'tag-blue':(currentDevice.categoryMatch==='manual'?'tag-orange':'tag-gray')">{{ categoryMatchLabel(currentDevice.categoryMatch) }}</span></div>
               <div class="k">挂靠规则 ID</div><div class="v"><code v-if="currentDevice.categoryRuleId">{{ currentDevice.categoryRuleId }}</code><span v-else>—</span> <span class="sub-nav-hint">解绑品类时清空；型号兜底形如 fallback:0042</span></div>
               <div class="k">所属项目</div><div class="v">{{ displayProjectName(currentDevice) }}</div>
-              <div class="k">硬件型号</div><div class="v">{{ currentDevice.model }}</div>
-              <div class="k">固件版本</div><div class="v">{{ currentDevice.firmware }}</div>
+              <div class="k">硬件型号</div><div class="v">{{ currentDevice.model || '—' }}</div>
+              <div class="k">firmwareVersion</div><div class="v">{{ displayNullable(deviceFirmwareVersion(currentDevice)) }} <span class="sub-nav-hint">OTA 固件版本，不是 softwareVersion</span></div>
+              <div class="k">hardwareVersion</div><div class="v">{{ displayNullable(currentDevice.hardwareVersion) }} <span class="sub-nav-hint">整数，可空</span></div>
+              <div class="k">softwareVersion</div><div class="v">{{ displayNullable(currentDevice.softwareVersion) }} <span class="sub-nav-hint">信息包软件版本，整数，可空</span></div>
               <div class="k">安装日期</div><div class="v">{{ currentDevice.installDate || '—' }}</div>
               <div class="k">安装人</div><div class="v">{{ currentDevice.installer || '—' }}</div>
               <div class="k">安装地址</div><div class="v">{{ currentDevice.address || '—' }}</div>
@@ -4675,11 +5701,35 @@ createApp({
           </div>
 
           <div class="info-section">
-            <div class="info-section-title">坐标 <span class="sub-nav-hint">一期无地图，仅展示经纬度</span></div>
-            <div class="coord-row">
-              <span>经度：<b>{{ currentDevice.lng }}</b></span>
-              <span>纬度：<b>{{ currentDevice.lat }}</b></span>
+            <div class="info-section-title">双 IMSI</div>
+            <div class="kv-grid">
+              <div class="k">chinaTelecomImsi</div><div class="v"><code v-if="currentDevice.chinaTelecomImsi">{{ currentDevice.chinaTelecomImsi }}</code><span v-else>—</span></div>
+              <div class="k">chinaMobileImsi</div><div class="v"><code v-if="currentDevice.chinaMobileImsi">{{ currentDevice.chinaMobileImsi }}</code><span v-else>—</span></div>
             </div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-title">安装经纬度 <span class="sub-nav-hint">lng / lat · 井盖信息包有效 GPS 会覆盖</span></div>
+            <div class="coord-row">
+              <span>经度 lng：<b>{{ displayNullable(currentDevice.lng) }}</b></span>
+              <span>纬度 lat：<b>{{ displayNullable(currentDevice.lat) }}</b></span>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-title">信息包 <span class="sub-nav-hint">解析 messageInfoJson，按 packageType 展示</span></div>
+            <div v-if="currentMessageInfo.empty" class="empty-hint">尚未上报信息包。hardwareVersion、softwareVersion、双 IMSI、messageInfoJson 为空时以 — 展示。</div>
+            <div v-else-if="currentMessageInfo.parseError" class="empty-hint">messageInfoJson 无法解析</div>
+            <template v-else>
+              <div class="kv-grid">
+                <div class="k">packageType</div><div class="v"><code>{{ currentMessageInfo.packageType }}</code></div>
+                <template v-for="row in currentMessageInfo.rows" :key="row.key">
+                  <div class="k">{{ row.label }} <span class="sub-nav-hint">{{ row.key }}</span></div>
+                  <div class="v">{{ row.value }}</div>
+                </template>
+              </div>
+              <div v-if="currentMessageInfo.packageType==='message32769'" class="table-note">井盖信息包 gpsValid 为真时，上方 lng/lat 为该包有效 GPS 覆盖后的安装经纬度。</div>
+            </template>
           </div>
 
           <div class="info-section">
@@ -4922,36 +5972,44 @@ createApp({
 
           <template v-else-if="deviceDetailTab==='upgradeLog'">
             <div class="toolbar">
-              <span style="color:#666;font-size:13px">OTA 固件升级日志（固件包任务）。与指令 bootUpgrade / 批量下发区分。</span>
+              <span style="color:#666;font-size:13px">OTA 固件升级日志（固件包任务）。设备状态 0 排队 / 1 升级中 / 2 成功 / 3 失败。与指令 bootUpgrade / 批量下发区分。</span>
               <div class="spacer"></div>
               <button class="btn btn-primary btn-sm" @click="openDeviceOtaModal">＋ 固件升级</button>
             </div>
+            <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 与本条升级记录的 fromVersion 不相等即记成功（版本可回退；只比该单 fromVersion，不比设备当前版本，也不比目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。</div>
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>时间</th><th>版本</th><th>状态</th><th>进度</th><th>操作人</th><th>失败原因</th>
+                    <th>时间</th><th>任务</th><th>fromVersion</th><th>版本</th><th>设备状态</th><th>进度</th><th>操作人</th><th>失败原因</th><th>说明</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="r in currentDeviceUpgradeLogs" :key="r.id">
                     <td>{{ r.time }}</td>
+                    <td>
+                      <button v-if="r.taskId" class="btn-link btn" @click="openOtaTaskFromLog(r.taskId)">{{ r.taskId }}</button>
+                      <span v-else>—</span>
+                    </td>
+                    <td>{{ displayNullable(upgradeFromVersion(r)) }}<div class="cell-sub">升级前 softwareVersion</div></td>
                     <td><code>{{ r.fromVer }}</code> → <code>{{ r.toVer }}</code></td>
-                    <td><span class="tag" :class="upgradeStatusTag(r.status)">{{ r.status }}</span></td>
+                    <td><span class="tag" :class="upgradeStatusTag(r.status)">{{ otaDeviceStatusText(r.status) }}</span></td>
                     <td>
                       <div class="ota-progress">
                         <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
                         <span>{{ r.progress || 0 }}%</span>
                       </div>
+                      <div class="ota-progress-pkgs" v-if="upgradePackageLine(r)">{{ upgradePackageLine(r) }}</div>
                     </td>
                     <td>{{ r.operator }}</td>
-                    <td>{{ r.failReason || '—' }}</td>
+                    <td :class="{'ota-fail-reason': !!r.failReason}">{{ r.failReason || '—' }}</td>
+                    <td>{{ upgradeSuccessNote(r) || '—' }}</td>
                   </tr>
-                  <tr v-if="!currentDeviceUpgradeLogs.length"><td colspan="6"><div class="empty-hint">暂无升级日志；点击「固件升级」提交 mock 任务</div></td></tr>
+                  <tr v-if="!currentDeviceUpgradeLogs.length"><td colspan="9"><div class="empty-hint">暂无升级日志；点击「固件升级」提交 mock 任务</div></td></tr>
                 </tbody>
               </table>
             </div>
-            <div class="table-note">状态：排队 / 升级中 / 成功 / 失败。目标版本来自品类固件基线 FIRMWARES。</div>
+            <div class="table-note">进度除百分比外展示 sentPackage、remainPackage，有则显示 totalPackage。成功仍看 upgradeStatus。fromVersion 为升级前 softwareVersion，未上报则为 —。D013 的成功记录是智能井盖信息包兜底（softwareVersion ≠ 本单 fromVersion）。</div>
           </template>
 
           <template v-else-if="deviceDetailTab==='snChange'">
@@ -5069,7 +6127,7 @@ createApp({
               <div class="hint" v-else>对账接入后自动回填；勿填 probe: 前缀。</div>
             </div>
             <div class="form-item"><label>硬件型号</label><input class="input input-full" v-model="deviceForm.model" /></div>
-            <div class="form-item"><label>固件版本</label><input class="input input-full" v-model="deviceForm.firmware" /></div>
+            <div class="form-item"><label>firmwareVersion（OTA 固件版本）</label><input class="input input-full" v-model="deviceForm.firmware" /><div class="hint">OTA 固件版本，不要填成信息包 softwareVersion。</div></div>
           </div>
           <div class="form-section-title">坐标与地址</div>
           <div class="form-row">
@@ -6102,15 +7160,23 @@ createApp({
 
     <div v-if="showDeleteConfirm" class="overlay" @click.self="showDeleteConfirm=false">
       <div class="modal confirm-box">
-        <div class="modal-header"><span>确认删除</span><button class="close-x" @click="showDeleteConfirm=false">×</button></div>
+        <div class="modal-header"><span>{{ deleteTarget.blocked ? '删除失败' : '确认删除' }}</span><button class="close-x" @click="showDeleteConfirm=false">×</button></div>
         <div class="modal-body">
           <div class="confirm-icon">!</div>
-          <div>
+          <div v-if="deleteTarget.blocked">
+            <div style="font-weight:600;color:var(--error);margin-bottom:8px">{{ FIRMWARE_DELETE_REFUSED }}</div>
+            <div v-if="deleteTarget.type==='固件批量'" style="font-size:13px;color:#666">整批未删除。</div>
+          </div>
+          <div v-else>
             <div style="font-weight:500;margin-bottom:6px">确定删除{{ deleteTarget.type }}「{{ deleteTarget.name }}」吗？</div>
-            <div style="font-size:13px;color:#666">删除后不可恢复，已关联设备将失去对应配置引用。</div>
+            <div v-if="deleteTarget.type==='固件版本' || deleteTarget.type==='固件批量'" style="font-size:13px;color:#666">{{ FIRMWARE_DELETE_WARN }}</div>
+            <div v-else style="font-size:13px;color:#666">删除后不可恢复，已关联设备将失去对应配置引用。</div>
           </div>
         </div>
-        <div class="modal-footer"><button class="btn" @click="showDeleteConfirm=false">取消</button><button class="btn btn-danger" @click="doDelete">删除</button></div>
+        <div class="modal-footer">
+          <button class="btn" @click="showDeleteConfirm=false">{{ deleteTarget.blocked ? '关闭' : '取消' }}</button>
+          <button v-if="!deleteTarget.blocked" class="btn btn-danger" @click="doDelete">删除</button>
+        </div>
       </div>
     </div>
 
@@ -6282,22 +7348,31 @@ createApp({
 
     <!-- 品类 · 批量 OTA -->
     <div v-if="showCategoryOtaModal" class="overlay" @click.self="showCategoryOtaModal=false">
-      <div class="modal modal-lg">
+      <div class="modal modal-ota">
         <div class="modal-header"><span>批量固件升级 · {{ currentCategory && currentCategory.name }}</span><button class="close-x" @click="showCategoryOtaModal=false">×</button></div>
         <div class="modal-body">
+          <div class="banner-muted" style="margin-bottom:12px">创建规则：<b>categoryId 必填</b>（当前 <code>{{ currentCategory && currentCategory.id }}</code>）；<b>packageUrl 或 firmwareId</b> 至少一项；<b>deviceIds 合计 ≤ {{ OTA_DEVICE_CAP }}</b>。超时 timeoutMinutes 默认 {{ OTA_TIMEOUT_DEFAULT }} 分钟，超时失败原因「升级超时（超过N分钟无应答）」。</div>
           <div class="form-row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
             <div class="form-item" style="min-width:200px">
               <label><span class="req">*</span>目标版本</label>
               <select class="select input-full" v-model="categoryOtaTargetVer" @change="onCategoryOtaTargetChange">
                 <option value="">请选择</option>
                 <option v-for="f in categoryFirmwares" :key="f.id+'-ver'" :value="f.upgradeVersion || f.currentVersion">
-                  {{ f.model }} · {{ f.upgradeVersion || f.currentVersion }}
+                  {{ f.model }} · {{ f.upgradeVersion || f.currentVersion }}（{{ f.id }}）
                 </option>
               </select>
             </div>
-            <div class="form-item" style="min-width:280px;flex:1">
-              <label><span class="req">*</span>包地址 packageUrl</label>
-              <input class="input input-full" v-model="categoryOtaPackageUrl" placeholder="从固件行带出；可手填兜底" />
+            <div class="form-item" style="min-width:220px;flex:1">
+              <label>包地址 packageUrl</label>
+              <input class="input input-full" v-model="categoryOtaPackageUrl" placeholder="与 firmwareId 至少填一项" />
+            </div>
+            <div class="form-item" style="min-width:120px">
+              <label>firmwareId</label>
+              <input class="input input-full" v-model="categoryOtaFirmwareId" placeholder="与 packageUrl 至少一项" />
+            </div>
+            <div class="form-item" style="min-width:140px">
+              <label>超时 timeoutMinutes</label>
+              <input class="input input-full" type="number" min="1" v-model.number="categoryOtaTimeoutMinutes" placeholder="30" />
             </div>
             <div class="form-item" style="padding-bottom:6px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
@@ -6305,24 +7380,29 @@ createApp({
               </label>
             </div>
           </div>
-          <div class="hint" v-if="!categoryOtaPackageUrl" style="color:#b45309;margin-bottom:8px">无包地址时需填写后才能提交。</div>
-          <div class="toolbar">
-            <span style="color:#666;font-size:13px">可升级（版本落后）{{ categoryOtaUpgradeableDevices.length }} 台 · 已选 {{ categoryOtaSelectedIds.length }}</span>
-            <div class="spacer"></div>
-            <button class="btn btn-sm" @click="toggleCategoryOtaDevicesAll">全选/取消</button>
+          <div class="hint" style="margin-bottom:8px">留空或非法的 timeoutMinutes 按默认 30 分钟。关闭「仅在线」可看到待接入设备的预检排除。</div>
+          <div class="form-item" style="margin-bottom:8px">
+            <label>追加 deviceIds（可选，逗号分隔）</label>
+            <input class="input input-full" v-model="categoryOtaExtraIds" placeholder="例如 D003,D-NOT-FOUND — 跨品类或不存在会在创建结果中排除" />
           </div>
-          <div class="table-wrap" style="max-height:320px;overflow:auto">
+          <div class="toolbar">
+            <span style="color:#666;font-size:13px">可纳入 {{ categoryOtaUpgradeableDevices.length }} 台 · 预检排除 {{ categoryOtaCandidateDevices.length - categoryOtaUpgradeableDevices.length }} · 已选 {{ categoryOtaSelectedIds.length }} / {{ OTA_DEVICE_CAP }}</span>
+            <div class="spacer"></div>
+            <button class="btn btn-sm" @click="toggleCategoryOtaDevicesAll">全选可纳入</button>
+          </div>
+          <div class="table-wrap" style="max-height:280px;overflow:auto">
             <table class="data-table">
-              <thead><tr><th style="width:40px"></th><th>设备</th><th>IMEI</th><th>当前固件</th><th>生命周期</th></tr></thead>
+              <thead><tr><th style="width:40px"></th><th>设备</th><th>IMEI</th><th>当前固件</th><th>生命周期</th><th>预检</th></tr></thead>
               <tbody>
-                <tr v-for="d in categoryOtaUpgradeableDevices" :key="d.id" :class="{'row-selected': isCategoryOtaDeviceSelected(d.id)}">
+                <tr v-for="d in categoryOtaCandidateDevices" :key="d.id" :class="{'row-selected': isCategoryOtaDeviceSelected(d.id)}">
                   <td><input type="checkbox" :checked="isCategoryOtaDeviceSelected(d.id)" @change="toggleCategoryOtaDevice(d.id)" /></td>
                   <td>{{ d.name }}</td>
                   <td><code>{{ d.imei }}</code></td>
                   <td><code>{{ d.firmware || '—' }}</code></td>
                   <td>{{ d.lifecycle }}</td>
+                  <td :class="{'ota-exclude-reason': !!d.excludeReason}">{{ d.excludeReason || '可纳入' }}</td>
                 </tr>
-                <tr v-if="!categoryOtaUpgradeableDevices.length"><td colspan="5"><div class="empty-hint">无版本落后的可升级设备</div></td></tr>
+                <tr v-if="!categoryOtaCandidateDevices.length"><td colspan="6"><div class="empty-hint">本品类在当前筛选下没有设备</div></td></tr>
               </tbody>
             </table>
           </div>
@@ -6330,6 +7410,21 @@ createApp({
         <div class="modal-footer">
           <button class="btn" @click="showCategoryOtaModal=false">取消</button>
           <button class="btn btn-primary" @click="submitCategoryOta">提交批量升级任务</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showCancelOtaConfirm" class="overlay" @click.self="showCancelOtaConfirm=false">
+      <div class="modal">
+        <div class="modal-header"><span>取消升级任务</span><button class="close-x" @click="showCancelOtaConfirm=false">×</button></div>
+        <div class="modal-body">
+          <p style="margin:0 0 12px">确认取消任务 <code>{{ cancelOtaTarget && cancelOtaTarget.id }}</code>？任务状态将变为 <b>2 已取消</b>。</p>
+          <div class="banner-tip">未完成设备（0 排队 / 1 升级中）记为失败，失败原因「任务已取消」。已成功的设备不回滚。</div>
+          <div class="banner-muted">本任务超时阈值 {{ otaTimeoutMinutesOf(cancelOtaTarget) }} 分钟。若未取消而设备无应答，失败原因为「{{ otaTaskTimeoutReason(cancelOtaTarget) }}」。</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="showCancelOtaConfirm=false">返回</button>
+          <button class="btn btn-danger" @click="doCancelOtaTask">确认取消</button>
         </div>
       </div>
     </div>
