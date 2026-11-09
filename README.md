@@ -42,7 +42,7 @@ python3 -m http.server 8877
 
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
 - **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。
-- **品类固件登记**（与 `iot-category-firmware-create-tip.md` 一致）：只允许 POST 新建。PUT 拒绝文案：「暂不支持修改固件信息，请删除后重新上传登记」。POST 必填 `categoryId` + `packageUrl` + `upgradeVersion`。上传文件后 `packageName` = `file.name`；`packageUrl` 由 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）回填。`releaseDate` 无输入，不传时后端默认今天，界面只读展示。列表列：`packageName` / `upgradeVersion` / `packageUrl` / `releaseDate`。DELETE 确认框提示「若已被 OTA 任务或设备升级记录引用则无法删除」；失败时原样展示后端文案「升级包已被 OTA 任务/设备升级记录使用，不能删除」（含相同 `packageUrl`）。批量删除中任一条被引用则整批失败、一条都不删。
+- **品类固件登记**（与 `iot-category-firmware-create-tip.md` 一致）：只允许 POST 新建。PUT 拒绝文案：「暂不支持修改固件信息，请删除后重新上传登记」。POST 必填 `categoryId` + `packageUrl` + `upgradeVersion`。上传文件后 `packageName` = `file.name`；`packageUrl` 由 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）回填；返回 `fileSize`（字节）写入 `packageSize`，列表与登记页按 KB/MB 展示，空为 —。`releaseDate` 无输入，不传时后端默认今天，界面只读展示。列表列：`packageName` / `upgradeVersion` / `packageUrl` / `packageSize` / `releaseDate`。落库注明 `iot_category_firmware_add_package_size_v1.sql`（本原型不写 SQL）。对齐 BE tip `4f0ae50c`。DELETE 确认框提示「若已被 OTA 任务或设备升级记录引用则无法删除」；失败时原样展示后端文案「升级包已被 OTA 任务/设备升级记录使用，不能删除」（含相同 `packageUrl`）。批量删除中任一条被引用则整批失败、一条都不删。
 - **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`categoryId` 必填；`packageUrl` 或 `firmwareId`；`deviceIds` 合计 ≤200。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。升级记录展示 `fromVersion`（升级前 softwareVersion，可空）。进度除百分比外展示 `sentPackage`、`remainPackage`，有则显示 `totalPackage`。成功仍由 `upgradeStatus` 决定：末包应答 remain=0 记成功。智能井盖兜底：末包后无最终应答时，实时信息包 `softwareVersion` **不等于本条升级记录的 `fromVersion`** 即记成功（版本可回退；只比该单 `fromVersion`，不比设备当前版本，也不比目标版本）；回写用信息包实际版本。`fromVersion` 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。
 
 - 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
@@ -69,7 +69,7 @@ python3 -m http.server 8877
 | 4 | 物模型详情壳 + Tab | `#detail` |
 | 4a–4i | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **升级任务** / **指令** / **批量下发** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#otaTasks` `#commands` `#batchDispatch` `#rules` / `#categoryRules` |
 | 4h | 新建/编辑指令（模态：bitIndex 1-based / payloadOffset 1-based / hasParam / paramMin·paramMax / dataType·unit·required） | `#editCommand` |
-| 5–7 | 编辑测点 / 安装字段 / **登记固件**（仅 POST：`categoryId` + `packageUrl` + `upgradeVersion`；`packageName`=文件名；`releaseDate` 只读默认今天；PUT：「暂不支持修改固件信息，请删除后重新上传登记」；删除确认：「若已被 OTA 任务或设备升级记录引用则无法删除」；失败原样「升级包已被 OTA 任务/设备升级记录使用，不能删除」，批量任一条被引用则整批失败） | `#editPoint` `#editInstall` `#firmware` / `#editFirmware` |
+| 5–7 | 编辑测点 / 安装字段 / **登记固件**（仅 POST：`categoryId` + `packageUrl` + `upgradeVersion`；`packageName`=文件名；`packageSize`=上传 `fileSize`，KB/MB，空「—」；`releaseDate` 只读默认今天；无编辑；删除被引用则失败） | `#editPoint` `#editInstall` `#firmware` / `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
 
 ## 设备台账屏幕
