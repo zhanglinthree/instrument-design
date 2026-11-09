@@ -20,7 +20,7 @@ python3 -m http.server 8877
 
 ## 模块切换
 
-侧栏：**设备管控**（工作台 / 设备台账 / **升级监控** / 物模型）与一级分组 **在线监控**（设备数据 / 在线率统计 / 设备对比）；同壳同配色，高亮当前模块。HTML 原型无真实登录与权限；正式产品首页由权限决定（用户有权的第一个菜单页），不固定落在工作台。
+侧栏：**设备管控**（工作台 / 设备台账 / 物模型）、一级分组 **OTA / 升级**（**升级任务** / **升级监控** / **历史升级记录**）与一级分组 **在线监控**（设备数据 / 在线率统计 / 设备对比）；同壳同配色，高亮当前模块。HTML 原型无真实登录与权限；正式产品首页由权限决定（用户有权的第一个菜单页），不固定落在工作台。
 
 ## 产品口径（本期）
 
@@ -41,7 +41,7 @@ python3 -m http.server 8877
 - **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
 
 - **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
-- **OTA 固件升级（双入口）**：① 设备档案「固件升级」→ 选品类固件目标版本 → Tab「升级日志」；② 品类「固件基线」行「批量升级」→ 多选设备 → Tab「升级任务」。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。
+- **OTA 固件升级（三个独立侧栏页，无新 BE 接口）**：① **升级任务** `#otaTasks`（组件 `iot/iot-device/IotOtaTask`，路由 `/iot/iot-ota-task`）全量任务；品类详情留「发起任务 / 查看任务」（可带 `categoryId`），固件基线行「批量升级」仍发起。② **升级监控** `#upgradeMonitor`（组件 `iot/iot-device/IotDeviceUpgradeMonitor`，路由 `/iot/iot-device-upgrade-monitor`）。③ **历史升级记录** `#upgradeHistory`（组件 `iot/iot-device/IotDeviceUpgrade`，路由 `/iot/iot-device-upgrade`，`GET /iot/deviceUpgrade`）。设备档案保留「本机升级记录」切片，并链到历史页筛该设备。任务行「监控」→ `#upgradeMonitor?taskId=`。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。
 - **品类固件登记**（与 `iot-category-firmware-create-tip.md` 一致）：只允许 POST 新建。PUT 拒绝文案：「暂不支持修改固件信息，请删除后重新上传登记」。POST 必填 `categoryId` + `packageUrl` + `upgradeVersion`。上传文件后 `packageName` = `file.name`；`packageUrl` 由 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）回填；返回 `fileSize`（字节）写入 `packageSize`，列表与登记页按 KB/MB 展示，空为 —。`releaseDate` 无输入，不传时后端默认今天，界面只读展示。列表列：`packageName` / `upgradeVersion` / `packageUrl` / `packageSize` / `releaseDate`。落库注明 `iot_category_firmware_add_package_size_v1.sql`（本原型不写 SQL）。对齐 BE tip `4f0ae50c`。DELETE 确认框提示「若已被 OTA 任务或设备升级记录引用则无法删除」；失败时原样展示后端文案「升级包已被 OTA 任务/设备升级记录使用，不能删除」（含相同 `packageUrl`）。批量删除中任一条被引用则整批失败、一条都不删。
 - **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`categoryId` 必填；`packageUrl` 或 `firmwareId`；`deviceIds` 合计 ≤200。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。升级记录展示 `fromVersion`（升级前 softwareVersion，可空）。进度除百分比外展示 `sentPackage`、`remainPackage`，有则显示 `totalPackage`。成功仍由 `upgradeStatus` 决定：末包应答 remain=0 记成功。智能井盖兜底：末包后无最终应答时，实时信息包 `softwareVersion` **不等于本条升级记录的 `fromVersion`** 即记成功（版本可回退；只比该单 `fromVersion`，不比设备当前版本，也不比目标版本）；回写用信息包实际版本。`fromVersion` 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。
 
@@ -67,7 +67,7 @@ python3 -m http.server 8877
 | 2 | 新建品类（模态） | `#createCategory` |
 | 3 | 编辑品类（模态） | `#editCategory` |
 | 4 | 物模型详情壳 + Tab | `#detail` |
-| 4a–4i | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **升级任务** / **指令** / **批量下发** / **归属规则** | `#props` `#events` `#points` `#install` `#firmware` `#otaTasks` `#commands` `#batchDispatch` `#rules` / `#categoryRules` |
+| 4a–4i | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **指令** / **批量下发** / **归属规则**。升级任务已升格为侧栏页；品类详情顶栏与固件基线留「发起任务 / 查看任务」 | `#props` `#events` `#points` `#install` `#firmware` `#commands` `#batchDispatch` `#rules` / `#categoryRules` |
 | 4h | 新建/编辑指令（模态：bitIndex 1-based / payloadOffset 1-based / hasParam / paramMin·paramMax / dataType·unit·required） | `#editCommand` |
 | 5–7 | 编辑测点 / 安装字段 / **登记固件**（仅 POST：`categoryId` + `packageUrl` + `upgradeVersion`；`packageName`=文件名；`packageSize`=上传 `fileSize`，KB/MB，空「—」；`releaseDate` 只读默认今天；无编辑；删除被引用则失败） | `#editPoint` `#editInstall` `#firmware` / `#editFirmware` |
 | 8 | 删除确认 | `#deleteConfirm` |
@@ -81,13 +81,14 @@ python3 -m http.server 8877
 | 3 | 设备列表 | `#devices` |
 | 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
 | 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
-| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **升级日志** / 发送记录…）。档案区分 **firmwareVersion**（OTA 固件版本）与 **softwareVersion**（信息包整数，可空）；基本信息含 hardwareVersion；双 IMSI：chinaTelecomImsi / chinaMobileImsi；安装经纬度仍用 lng/lat（井盖信息包有效 GPS 会覆盖）；信息包区解析 messageInfoJson，按 packageType（message1 / message3 / message32769）展示出厂时间、温度、重启、IP、电池、姿态等。未上报信息包时这些字段为 —。样例：`#deviceDetail`（D001·message1）、`#deviceDetail?id=D003`（message3）、`#deviceDetail?id=D013`（message32769）、`#deviceDetail?id=D010`（全空） | `#deviceDetail` |
+| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **本机升级记录** / 发送记录…）。档案区分 **firmwareVersion**（OTA 固件版本）与 **softwareVersion**（信息包整数，可空）；基本信息含 hardwareVersion；双 IMSI：chinaTelecomImsi / chinaMobileImsi；安装经纬度仍用 lng/lat（井盖信息包有效 GPS 会覆盖）；信息包区解析 messageInfoJson，按 packageType（message1 / message3 / message32769）展示出厂时间、温度、重启、IP、电池、姿态等。未上报信息包时这些字段为 —。样例：`#deviceDetail`（D001·message1）、`#deviceDetail?id=D003`（message3）、`#deviceDetail?id=D013`（message32769）、`#deviceDetail?id=D010`（全空） | `#deviceDetail` |
 | 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
 | 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
-| 4b2 | 设备档案 · **升级日志**（OTA：time / taskId / **fromVersion** / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度百分比 + **sentPackage** · **remainPackage**（有则 **totalPackage**）/ 操作人 / failReason；成功仍看 upgradeStatus，应答 remain=0；井盖兜底 softwareVersion ≠ 本单 fromVersion，空 fromVersion 跳过） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` / `#deviceDetail?id=D013&tab=upgradeLog` |
+| 4b2 | 设备档案 · **本机升级记录**（本机切片，仍可直达）。OTA：time / taskId / **fromVersion** / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度百分比 + **sentPackage** · **remainPackage**（有则 **totalPackage**）/ 操作人 / failReason；成功仍看 upgradeStatus，应答 remain=0；井盖兜底 softwareVersion ≠ 本单 fromVersion，空 fromVersion 跳过。页内链到历史升级记录并带 deviceId | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` / `#deviceDetail?id=D013&tab=upgradeLog` |
 | 4c0 | 品类详情 · **批量下发**（选一条 batchable 指令 → 共享参数 → 多选设备筛项目/在线 → dryRun → 批量 mock） | `#batchDispatch` |
-| 4c1 | 品类详情 · **升级任务**列表 + 详情。状态 **0 进行中 / 1 已完成 / 2 已取消 / 3 失败**；进行中可取消；详情含 timeoutMinutes（默认 30）、创建结果「排除: …」、设备进度 `deviceUpgrade?taskId=`。样例：进行中 OT01、已完成 OT02（超时 30）、已取消 OT03（超时 45）、失败 OT04（超时 20） | `#otaTasks` · `#otaTasks?id=OT01` `#otaTasks?id=OT02` `#otaTasks?id=OT03` `#otaTasks?id=OT04` |
-| 4c2 | **升级在线监控**（组件 `iot/iot-device/IotDeviceUpgradeMonitor`，路由建议 `/iot/iot-device-upgrade-monitor`）。约 4 秒轮询 `GET /iot/deviceUpgrade/monitor`（可选 `taskId`）。卡片 `summary.upgradingCount` / `queuedCount`，副文案 `transferringCount` + `awaitingConfirmCount`；`stageBreakdown`：`queued` / `transferring` / `awaitingConfirm`（库状态仍 0–3）。明细 `items`：`stageLabel`、sent/remain（有则 total）、行内 `estimatedCompleteAt`。全部完成时间 `eta.estimatedCompleteAt`，旁注 `eta.estimateBasis`（粗估）。`runningTasks` 点进 `?taskId=`。历史成功/失败仍走 `GET /iot/deviceUpgrade`。对齐 BE `fcc75bc9`。 | `#upgradeMonitor` · `#upgradeMonitor?taskId=OT01` |
+| 4c1 | **升级任务**（侧栏，组件 `iot/iot-device/IotOtaTask`，路由 `/iot/iot-ota-task`）。全量列表 + 详情，可按 `categoryId` 筛。状态 **0 进行中 / 1 已完成 / 2 已取消 / 3 失败**；进行中可取消；详情含 timeoutMinutes（默认 30）、创建结果「排除: …」、设备进度 `deviceUpgrade?taskId=`。行内「监控」→ `#upgradeMonitor?taskId=`。样例：进行中 OT01、已完成 OT02（超时 30）、已取消 OT03（超时 45）、失败 OT04（超时 20） | `#otaTasks` · `#otaTasks?categoryId=C001` · `#otaTasks?id=OT01` `#otaTasks?id=OT02` `#otaTasks?id=OT03` `#otaTasks?id=OT04` |
+| 4c2 | **升级监控**（组件 `iot/iot-device/IotDeviceUpgradeMonitor`，路由 `/iot/iot-device-upgrade-monitor`）。约 4 秒轮询 `GET /iot/deviceUpgrade/monitor`（可选 `taskId`）。卡片 `summary.upgradingCount` / `queuedCount`，副文案 `transferringCount` + `awaitingConfirmCount`；`stageBreakdown`：`queued` / `transferring` / `awaitingConfirm`（库状态仍 0–3）。明细 `items`：`stageLabel`、sent/remain（有则 total）、行内 `estimatedCompleteAt`。全部完成时间 `eta.estimatedCompleteAt`，旁注 `eta.estimateBasis`（粗估）。`runningTasks` 点进 `?taskId=`。历史成功/失败仍走 `GET /iot/deviceUpgrade`。对齐 BE `fcc75bc9`。 | `#upgradeMonitor` · `#upgradeMonitor?taskId=OT01` |
+| 4c3 | **历史升级记录**（侧栏，组件 `iot/iot-device/IotDeviceUpgrade`，路由 `/iot/iot-device-upgrade`）。全量成功/失败，绑 `GET /iot/deviceUpgrade`。含进度包字段（sentPackage / remainPackage，有则 totalPackage）、设备状态、失败原因、井盖兜底说明（softwareVersion ≠ 本单 fromVersion）。可按 deviceId 筛。默认不列排队/升级中 | `#upgradeHistory` · `#upgradeHistory?deviceId=D013` · `#upgradeHistory?deviceId=D001` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
