@@ -1033,6 +1033,10 @@ createApp({
     const categoryOtaTimeoutMinutes = ref(OTA_TIMEOUT_DEFAULT);
     const categoryOtaExtraIds = ref('');
     const currentOtaTaskId = ref('');
+    const otaTaskCategoryFilter = ref('');
+    const upgradeHistoryDeviceId = ref('');
+    const upgradeHistoryStatusFilter = ref('done'); // done=成功+失败 | success | fail | all
+    const upgradeHistoryKeyword = ref('');
     const showCancelOtaConfirm = ref(false);
     const cancelOtaTargetId = ref('');
     const otaCreateResult = ref({
@@ -1296,6 +1300,13 @@ createApp({
       return { id: d.id, name: d.name, imei: d.imei };
     }
 
+    function deviceCategoryLabel(deviceId) {
+      const d = deviceList.value.find(x => x.id === deviceId);
+      if (!d || !d.categoryId) return '—';
+      const c = CATEGORIES.find(x => x.id === d.categoryId);
+      return c ? c.name : d.categoryName || d.categoryId;
+    }
+
     function parseExtraDeviceIds(text) {
       return String(text || '').split(/[\s,，;；]+/).map(s => s.trim()).filter(Boolean);
     }
@@ -1332,10 +1343,10 @@ createApp({
       return FIRMWARES.filter(f => !f.categoryId || f.categoryId === cid);
     });
 
-    const categoryOtaTaskList = computed(() => {
-      const cid = currentCategory.value?.id;
+    const otaTaskList = computed(() => {
+      const cid = otaTaskCategoryFilter.value;
       return categoryOtaTasks.value
-        .filter(t => t.categoryId === cid)
+        .filter(t => !cid || t.categoryId === cid)
         .slice()
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     });
@@ -1402,10 +1413,10 @@ createApp({
       return categoryOtaCandidateDevices.value.filter(d => !d.excludeReason);
     });
 
-    const categoryOtaFailureRows = computed(() => {
-      const ids = new Set(categoryOtaTaskList.value.map(t => t.id));
+    const otaTaskFailureRows = computed(() => {
+      const ids = new Set(otaTaskList.value.map(t => t.id));
       const taskById = {};
-      categoryOtaTaskList.value.forEach(t => { taskById[t.id] = t; });
+      otaTaskList.value.forEach(t => { taskById[t.id] = t; });
       return deviceUpgradeLogs.value
         .filter(r => ids.has(r.taskId) && otaDeviceStatusMeta(r.status).code === 3)
         .map(r => ({ ...r, task: taskById[r.taskId] }))
@@ -1816,24 +1827,31 @@ createApp({
             sendLog: '设备发送记录',
             snChange: '设备号变更',
             children: '子设备',
-            upgradeLog: '升级日志',
+            upgradeLog: '本机升级记录',
           })[deviceDetailTab.value] || '档案';
           return { parent: '设备台账', current: name + ' · ' + tabLabel };
         }
         if (screen.value === 'editDevice') return { parent: currentDevice.value?.name || '设备', current: deviceFormMode.value === 'create' ? '新建设备档案' : '编辑设备档案' };
         if (screen.value === 'aepReconcile') return { parent: '设备台账', current: 'AEP 对账' };
+        return { parent: '设备管控', current: '设备台账' };
+      }
+      if (module.value === 'ota') {
+        if (screen.value === 'otaTasks') {
+          const id = currentOtaTaskId.value;
+          return { parent: 'OTA / 升级', current: id ? ('升级任务 · ' + id) : '升级任务' };
+        }
         if (screen.value === 'upgradeMonitor') {
           const id = upgradeMonitorTaskId.value;
-          return { parent: '设备台账', current: id ? ('升级在线监控 · ' + id) : '升级在线监控' };
+          return { parent: 'OTA / 升级', current: id ? ('升级监控 · ' + id) : '升级监控' };
         }
-        return { parent: '设备管控', current: '设备台账' };
+        if (screen.value === 'upgradeHistory') {
+          const id = upgradeHistoryDeviceId.value;
+          return { parent: 'OTA / 升级', current: id ? ('历史升级记录 · ' + id) : '历史升级记录' };
+        }
+        return { parent: '设备管控', current: 'OTA / 升级' };
       }
       if (screen.value === 'list') return { parent: '设备管控', current: '物模型 · 品类列表' };
       if (screen.value === 'detail') {
-        if (detailTab.value === 'otaTasks') {
-          const id = currentOtaTaskId.value;
-          return { parent: currentCategory.value.name, current: id ? ('升级任务 · ' + id) : '升级任务' };
-        }
         return { parent: '物模型', current: currentCategory.value.name + ' · 详情' };
       }
       if (screen.value === 'editPoint') return { parent: currentCategory.value.name, current: pointFormMode.value === 'create' ? '添加测点' : '编辑测点' };
@@ -1846,6 +1864,7 @@ createApp({
       if (module.value === 'cockpit') return '一期原型 · 工作台';
       if (module.value === 'ledger') return '一期原型 · 设备台账';
       if (module.value === 'monitor') return '一期原型 · 在线监控';
+      if (module.value === 'ota') return '一期原型 · OTA / 升级';
       return '一期原型 · 物模型';
     });
 
@@ -3173,10 +3192,8 @@ createApp({
       if (!accepted.length) {
         otaCreateResult.value = { taskId: '', ...resultBase };
         showCategoryOtaModal.value = false;
-        currentOtaTaskId.value = '';
-        detailTab.value = 'otaTasks';
-        if ((location.hash || '') !== '#otaTasks') location.hash = '#otaTasks';
         showToast('没有可纳入的设备，创建结果仅含排除项', 'warn');
+        openOtaTaskList(cat.id);
         return;
       }
       const task = {
@@ -3238,6 +3255,66 @@ createApp({
       task.pending = pending;
     }
 
+    function otaTasksHash(opts) {
+      const q = new URLSearchParams();
+      if (opts && opts.categoryId) q.set('categoryId', opts.categoryId);
+      if (opts && opts.id) q.set('id', opts.id);
+      const s = q.toString();
+      return s ? ('#otaTasks?' + s) : '#otaTasks';
+    }
+
+    function applyOtaTaskRoute(id, categoryId) {
+      module.value = 'ota';
+      screen.value = 'otaTasks';
+      currentOtaTaskId.value = id || '';
+      otaTaskCategoryFilter.value = categoryId || '';
+      const task = id ? categoryOtaTasks.value.find(t => t.id === id) : null;
+      const cid = categoryId || (task && task.categoryId) || '';
+      if (cid) {
+        const cat = CATEGORIES.find(c => c.id === cid);
+        if (cat) currentCategory.value = cat;
+      }
+    }
+
+    function openOtaTaskList(categoryId) {
+      const cid = categoryId || '';
+      applyOtaTaskRoute('', cid);
+      const next = otaTasksHash({ categoryId: cid });
+      if (location.hash !== next) location.hash = next;
+    }
+
+    function setOtaTaskCategoryFilter(categoryId) {
+      openOtaTaskList(categoryId || '');
+    }
+
+    function openCategoryOtaTasks() {
+      const id = currentCategory.value && currentCategory.value.id;
+      openOtaTaskList(id || '');
+    }
+
+    function startCategoryOtaTask(fw) {
+      if (!currentCategory.value || !currentCategory.value.id) {
+        showToast('请先进入品类后再发起任务', 'warn');
+        return;
+      }
+      openCategoryBatchOta(fw || null);
+    }
+
+    function startOtaTaskFromPage() {
+      const cid = otaTaskCategoryFilter.value;
+      if (!cid) {
+        showToast('请先按品类筛选，再发起任务', 'warn');
+        return;
+      }
+      const cat = CATEGORIES.find(c => c.id === cid);
+      if (!cat) {
+        showToast('未找到品类 ' + cid, 'warn');
+        return;
+      }
+      currentCategory.value = cat;
+      openCategoryBatchOta(null);
+    }
+
     function openOtaTaskDetail(taskOrId) {
       const id = typeof taskOrId === 'string' ? taskOrId : (taskOrId && taskOrId.id);
       if (!id) return;
@@ -3246,20 +3323,17 @@ createApp({
         const cat = CATEGORIES.find(c => c.id === task.categoryId);
         if (cat) currentCategory.value = cat;
       }
-      module.value = 'thing';
-      screen.value = 'detail';
-      detailTab.value = 'otaTasks';
-      currentOtaTaskId.value = id;
-      const next = '#otaTasks?id=' + encodeURIComponent(id);
+      const categoryId = otaTaskCategoryFilter.value || '';
+      applyOtaTaskRoute(id, categoryId);
+      const next = otaTasksHash({ id, categoryId });
       if (location.hash !== next) location.hash = next;
     }
 
     function closeOtaTaskDetail() {
-      currentOtaTaskId.value = '';
-      detailTab.value = 'otaTasks';
-      if ((location.hash || '').indexOf('#otaTasks') === 0 && location.hash !== '#otaTasks') {
-        location.hash = '#otaTasks';
-      }
+      const categoryId = otaTaskCategoryFilter.value || '';
+      applyOtaTaskRoute('', categoryId);
+      const next = otaTasksHash({ categoryId });
+      if (location.hash !== next) location.hash = next;
     }
 
     function openOtaTaskFromLog(taskId) {
@@ -3313,6 +3387,65 @@ createApp({
       if (has(row.remainPackage)) parts.push('剩余 ' + row.remainPackage);
       if (has(row.totalPackage)) parts.push('共 ' + row.totalPackage);
       return parts.join(' · ');
+    }
+    const upgradeHistoryRows = computed(() => {
+      const deviceId = upgradeHistoryDeviceId.value;
+      const kw = String(upgradeHistoryKeyword.value || '').trim().toLowerCase();
+      const st = upgradeHistoryStatusFilter.value;
+      return deviceUpgradeLogs.value
+        .filter(function (r) {
+          const code = otaDeviceStatusMeta(r.status).code;
+          if (st === 'done' && code !== 2 && code !== 3) return false;
+          if (st === 'success' && code !== 2) return false;
+          if (st === 'fail' && code !== 3) return false;
+          if (deviceId && r.deviceId !== deviceId) return false;
+          if (kw) {
+            const brief = otaDeviceBrief(r.deviceId);
+            const dev = deviceList.value.find(d => d.id === r.deviceId);
+            const blob = [
+              r.deviceId, brief.name, brief.imei, r.taskId, r.failReason,
+              r.toVer, r.fromVer, dev && dev.categoryName, dev && dev.categoryId,
+              upgradeFromVersion(r), upgradeSuccessNote(r)
+            ].join(' ').toLowerCase();
+            if (blob.indexOf(kw) < 0) return false;
+          }
+          return true;
+        })
+        .slice()
+        .sort((a, b) => String(b.time).localeCompare(String(a.time)));
+    });
+    const upgradeHistoryCounts = computed(() => {
+      const deviceId = upgradeHistoryDeviceId.value;
+      let success = 0, fail = 0, other = 0;
+      deviceUpgradeLogs.value.forEach(function (r) {
+        if (deviceId && r.deviceId !== deviceId) return;
+        const code = otaDeviceStatusMeta(r.status).code;
+        if (code === 2) success += 1;
+        else if (code === 3) fail += 1;
+        else other += 1;
+      });
+      return { success, fail, other };
+    });
+    function openUpgradeHistory(deviceId) {
+      const id = deviceId || '';
+      upgradeHistoryDeviceId.value = id;
+      upgradeHistoryStatusFilter.value = 'done';
+      upgradeHistoryKeyword.value = '';
+      module.value = 'ota';
+      screen.value = 'upgradeHistory';
+      const next = id ? ('#upgradeHistory?deviceId=' + encodeURIComponent(id)) : '#upgradeHistory';
+      if (location.hash !== next) location.hash = next;
+    }
+    function clearUpgradeHistoryDevice() {
+      openUpgradeHistory('');
+    }
+    function openDeviceUpgradeSlice(deviceId) {
+      const d = deviceList.value.find(x => x.id === deviceId);
+      if (!d) {
+        showToast('未找到设备 ' + deviceId, 'warn');
+        return;
+      }
+      location.hash = '#deviceDetail?id=' + encodeURIComponent(deviceId) + '&tab=upgradeLog';
     }
     const UPGRADE_MONITOR_POLL_MS = 4000;
     const upgradeMonitorTaskId = ref('');
@@ -4224,6 +4357,12 @@ createApp({
     }
 
     function jump(hash) {
+      const normalized = hash || 'cockpit';
+      const current = (location.hash || '').replace(/^#/, '');
+      if (current !== normalized) {
+        location.hash = normalized;
+        return;
+      }
       resetOverlays();
       let tabFromQuery = null;
       let queryParams = null;
@@ -4255,12 +4394,9 @@ createApp({
         commands: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; },
         batchDispatch: () => { openDetail(CATEGORIES[0]); detailTab.value = 'batchDispatch'; resetBatchDispatchState(); },
         otaTasks: () => {
-          const id = queryParams && queryParams.get('id');
-          const task = id ? categoryOtaTasks.value.find(t => t.id === id) : null;
-          const cat = (task && CATEGORIES.find(c => c.id === task.categoryId)) || CATEGORIES[0];
-          openDetail(cat);
-          detailTab.value = 'otaTasks';
-          currentOtaTaskId.value = id || '';
+          const id = (queryParams && queryParams.get('id')) || '';
+          const categoryId = (queryParams && queryParams.get('categoryId')) || '';
+          applyOtaTaskRoute(id, categoryId);
         },
         editCommand: () => { openDetail(CATEGORIES[0]); detailTab.value = 'commands'; openEditCommand(commandList.value.find(c => c.code === 'installHeightMm') || commandList.value.find(c => Number(c.hasParam) === 1) || commandList.value[0]); },
         editPoint: () => { openDetail(CATEGORIES[0]); openEditPoint(POINTS[0]); },
@@ -4285,10 +4421,18 @@ createApp({
         deviceUpgradeLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'),
         deviceOta: () => { openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'); openDeviceOtaModal(); },
         upgradeMonitor: () => {
-          module.value = 'ledger';
+          module.value = 'ota';
           screen.value = 'upgradeMonitor';
           upgradeMonitorTaskId.value = (queryParams && queryParams.get('taskId')) || '';
           startUpgradeMonitorPoll();
+        },
+        upgradeHistory: () => {
+          module.value = 'ota';
+          screen.value = 'upgradeHistory';
+          upgradeHistoryDeviceId.value = (queryParams && queryParams.get('deviceId')) || '';
+          const status = queryParams && queryParams.get('status');
+          upgradeHistoryStatusFilter.value = (status === 'all' || status === 'success' || status === 'fail' || status === 'done') ? status : 'done';
+          upgradeHistoryKeyword.value = '';
         },
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
@@ -4377,20 +4521,23 @@ createApp({
       batchPreviewHex, batchPreviewOk, batchJobSummary, batchableCategoryCommands, batchSelectedCommand,
       batchCandidateDevices, onBatchCommandChange, isBatchDeviceSelected, toggleBatchDevice,
       toggleBatchDevicesAll, dryRunBatchDispatch, confirmBatchDispatch, resetBatchDispatchState,
-      deviceUpgradeLogs, currentDeviceUpgradeLogs, categoryOtaTasks, categoryOtaTaskList,
+      deviceUpgradeLogs, currentDeviceUpgradeLogs, categoryOtaTasks, otaTaskList,
       showDeviceOtaModal, deviceOtaTargetVer, deviceOtaPackageUrl, deviceOtaFirmwareOptions, openDeviceOtaModal, onDeviceOtaTargetChange, submitDeviceOta,
       showCategoryOtaModal, categoryOtaFirmwareId, categoryOtaTargetVer, categoryOtaPackageUrl, categoryOtaSelectedIds,
       categoryOtaOnlineOnly, categoryOtaTimeoutMinutes, categoryOtaExtraIds, categoryFirmwares,
-      categoryOtaUpgradeableDevices, categoryOtaCandidateDevices, categoryOtaFailureRows,
-      currentOtaTaskId, currentOtaTask, currentOtaTaskDevices, otaCreateResult,
+      categoryOtaUpgradeableDevices, categoryOtaCandidateDevices, otaTaskFailureRows,
+      currentOtaTaskId, otaTaskCategoryFilter, currentOtaTask, currentOtaTaskDevices, otaCreateResult,
       otaTaskStatusMeta, otaTaskStatusText, otaDeviceStatusMeta, otaDeviceStatusText,
-      otaTimeoutMinutesOf, otaTaskTimeoutReason, otaDeviceBrief,
-      openOtaTaskDetail, closeOtaTaskDetail, openOtaTaskFromLog,
+      otaTimeoutMinutesOf, otaTaskTimeoutReason, otaDeviceBrief, deviceCategoryLabel,
+      openOtaTaskDetail, closeOtaTaskDetail, openOtaTaskFromLog, openOtaTaskList, setOtaTaskCategoryFilter,
+      openCategoryOtaTasks, startCategoryOtaTask, startOtaTaskFromPage,
       askCancelOtaTask, doCancelOtaTask, showCancelOtaConfirm, cancelOtaTarget,
       OTA_TIMEOUT_DEFAULT, OTA_DEVICE_CAP, OTA_CANCEL_REASON,
       openCategoryBatchOta, onCategoryOtaTargetChange, isCategoryOtaDeviceSelected, toggleCategoryOtaDevice,
       toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, upgradeFromVersion, upgradeSuccessNote, upgradePackageLine, compareSemver,
       upgradeMonitorView, upgradeMonitorTaskId, upgradeMonitorPolledAt, openUpgradeMonitor, UPGRADE_MONITOR_POLL_MS,
+      upgradeHistoryRows, upgradeHistoryCounts, upgradeHistoryDeviceId, upgradeHistoryStatusFilter, upgradeHistoryKeyword,
+      openUpgradeHistory, clearUpgradeHistoryDevice, openDeviceUpgradeSlice,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
       deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess, sendLogTypeLabel, sendLogDryRunLabel,
@@ -4443,9 +4590,12 @@ createApp({
       <nav class="sidebar-nav">
         <div class="nav-group-title">设备管控</div>
         <div class="nav-item" :class="{active: module==='cockpit'}" @click="jump('cockpit')"><span class="dot"></span>工作台</div>
-        <div class="nav-item" :class="{active: module==='ledger' && screen!=='upgradeMonitor'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
-        <div class="nav-item" :class="{active: screen==='upgradeMonitor'}" @click="jump('upgradeMonitor')"><span class="dot"></span>升级监控</div>
+        <div class="nav-item" :class="{active: module==='ledger'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
         <div class="nav-item" :class="{active: module==='thing'}" @click="jump('list')"><span class="dot"></span>物模型</div>
+        <div class="nav-group-title">OTA / 升级</div>
+        <div class="nav-item" :class="{active: module==='ota' && screen==='otaTasks'}" @click="jump('otaTasks')"><span class="dot"></span>升级任务</div>
+        <div class="nav-item" :class="{active: module==='ota' && screen==='upgradeMonitor'}" @click="jump('upgradeMonitor')"><span class="dot"></span>升级监控</div>
+        <div class="nav-item" :class="{active: module==='ota' && screen==='upgradeHistory'}" @click="jump('upgradeHistory')"><span class="dot"></span>历史升级记录</div>
         <div class="nav-group-title">在线监控</div>
         <div class="nav-item" :class="{active: module==='monitor' && (screen==='monitorList' || screen==='monitorDetail' || screen==='monitorCurve')}" @click="jump('monitor')"><span class="dot"></span>设备数据</div>
         <div class="nav-item" :class="{active: module==='monitor' && screen==='monitorOnlineRate'}" @click="goMonitorOnlineRate()"><span class="dot"></span>在线率统计</div>
@@ -4808,8 +4958,10 @@ createApp({
                 </span>
               </div>
             </div>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" @click="openDevicesForCategory(currentCategory)">查看设备</button>
+              <button class="btn" @click="startCategoryOtaTask()">发起任务</button>
+              <button class="btn" @click="openCategoryOtaTasks()">查看任务</button>
               <button class="btn" @click="openEditCategory(currentCategory)">编辑品类</button>
               <button class="btn btn-primary" @click="detailTab='rules'">归属规则</button>
             </div>
@@ -4821,7 +4973,6 @@ createApp({
             <div class="tab" :class="{active: detailTab==='points'}" @click="detailTab='points'">测点字典</div>
             <div class="tab" :class="{active: detailTab==='install'}" @click="detailTab='install'">安装参数模板</div>
             <div class="tab" :class="{active: detailTab==='firmware'}" @click="detailTab='firmware'">固件基线</div>
-            <div class="tab" :class="{active: detailTab==='otaTasks'}" @click="closeOtaTaskDetail()">升级任务</div>
             <div class="tab" :class="{active: detailTab==='commands'}" @click="detailTab='commands'">指令</div>
             <div class="tab" :class="{active: detailTab==='batchDispatch'}" @click="detailTab='batchDispatch'; resetBatchDispatchState()">批量下发</div>
             <div class="tab" :class="{active: detailTab==='rules'}" @click="detailTab='rules'">归属规则</div>
@@ -4874,6 +5025,7 @@ createApp({
               <span style="color:#666;font-size:13px">只支持新建。POST 必填 <code>categoryId</code> + <code>packageUrl</code> + <code>upgradeVersion</code>。<code>packageName</code> 取上传文件名；<code>packageSize</code> 取上传返回的 fileSize；<code>releaseDate</code> 不手填，缺省为今天。</span>
               <div class="spacer"></div>
               <button class="btn btn-sm" @click="confirmBatchDeleteFirmware" :disabled="!firmwareSelectedIds.length">批量删除<span v-if="firmwareSelectedIds.length">（{{ firmwareSelectedIds.length }}）</span></button>
+              <button class="btn btn-sm" @click="openCategoryOtaTasks">查看任务</button>
               <button class="btn btn-primary btn-sm" @click="openCreateFirmware">＋ 登记固件版本</button>
             </div>
             <div class="table-wrap">
@@ -4902,166 +5054,6 @@ createApp({
               </table>
             </div>
             <div class="table-note">列顺序：packageName / upgradeVersion / packageUrl / packageSize / releaseDate。packageSize 为字节，展示为 KB/MB，空为 —。上传 POST /storage/file（path=firmware）后把返回 fileSize 写入 packageSize。落库脚本 iot_category_firmware_add_package_size_v1.sql（本原型不写 SQL）。被引用或 packageUrl 相同则不能删除；批量任一条被引用则整批失败。</div>
-          </div>
-          <div v-else-if="detailTab==='otaTasks'">
-            <template v-if="currentOtaTask">
-              <div class="toolbar">
-                <button class="btn btn-sm" @click="closeOtaTaskDetail">← 返回任务列表</button>
-                <div class="spacer"></div>
-                <button v-if="otaTaskStatusMeta(currentOtaTask.status).code===0" class="btn btn-danger btn-sm" @click="askCancelOtaTask(currentOtaTask)">取消任务</button>
-                <span v-else class="cell-sub">已结束的任务不可取消</span>
-              </div>
-              <div class="info-section">
-                <div class="info-section-title">
-                  <span>升级任务 {{ currentOtaTask.id }}</span>
-                  <span class="tag" :class="otaTaskStatusMeta(currentOtaTask.status).tag">{{ otaTaskStatusText(currentOtaTask.status) }}</span>
-                </div>
-                <div class="kv-grid">
-                  <div class="k">任务状态</div>
-                  <div class="v"><code>{{ otaTaskStatusMeta(currentOtaTask.status).code }}</code> {{ otaTaskStatusMeta(currentOtaTask.status).label }} <span class="cell-sub">0 进行中 / 1 已完成 / 2 已取消 / 3 失败</span></div>
-                  <div class="k">categoryId</div><div class="v"><code>{{ currentOtaTask.categoryId }}</code></div>
-                  <div class="k">目标版本</div><div class="v"><code>{{ currentOtaTask.toVer }}</code> <span class="cell-sub">{{ currentOtaTask.fromVerHint }}</span></div>
-                  <div class="k">firmwareId</div><div class="v"><code>{{ currentOtaTask.firmwareId || '—' }}</code></div>
-                  <div class="k">packageUrl</div><div class="v"><code>{{ currentOtaTask.packageUrl || '—' }}</code></div>
-                  <div class="k">timeoutMinutes</div>
-                  <div class="v">{{ otaTimeoutMinutesOf(currentOtaTask) }} 分钟<span v-if="otaTimeoutMinutesOf(currentOtaTask)===30">（默认）</span></div>
-                  <div class="k">创建 / 操作人</div><div class="v">{{ currentOtaTask.createdAt }} · {{ currentOtaTask.operator }}</div>
-                  <div class="k" v-if="currentOtaTask.cancelledAt">取消时间</div>
-                  <div class="v" v-if="currentOtaTask.cancelledAt">{{ currentOtaTask.cancelledAt }}</div>
-                  <div class="k">进度</div>
-                  <div class="v">纳入 {{ currentOtaTask.deviceCount }} · 成功 {{ currentOtaTask.success }} · 失败 {{ currentOtaTask.fail }} · 排队/进行 {{ currentOtaTask.pending }}</div>
-                </div>
-              </div>
-              <div class="banner-tip">取消：仅状态 <b>0 进行中</b> 可取消。确认后任务变为 <b>2 已取消</b>；未完成设备（0 排队 / 1 升级中）记为 <b>3 失败</b>，失败原因「任务已取消」。已成功（2）不回滚。</div>
-              <div class="banner-muted">超时：设备超过本任务 timeoutMinutes（当前 <b>{{ otaTimeoutMinutesOf(currentOtaTask) }}</b> 分钟，未配置时默认 30）无应答，记为失败，失败原因「{{ otaTaskTimeoutReason(currentOtaTask) }}」。</div>
-              <div class="ota-result" v-if="currentOtaTask.excluded && currentOtaTask.excluded.length">
-                <div class="ota-result-title">创建结果 · 排除 {{ currentOtaTask.excluded.length }} 台</div>
-                <div class="cell-sub" style="margin-bottom:8px">被排除的设备不进入 deviceUpgrade。原因以「排除: 」开头。</div>
-                <div class="table-wrap">
-                  <table class="data-table">
-                    <thead><tr><th>deviceId</th><th>设备</th><th>排除原因</th></tr></thead>
-                    <tbody>
-                      <tr v-for="ex in currentOtaTask.excluded" :key="currentOtaTask.id+ex.deviceId">
-                        <td><code>{{ ex.deviceId }}</code></td>
-                        <td>{{ ex.name || '—' }}</td>
-                        <td class="ota-exclude-reason">{{ ex.reason }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="ota-result" v-else>
-                <div class="ota-result-title">创建结果</div>
-                <div class="cell-sub">本次无设备被排除，纳入 {{ currentOtaTask.deviceCount }} 台。</div>
-              </div>
-              <div class="info-section-title" style="margin-top:4px">设备升级进度 · <code>deviceUpgrade?taskId={{ currentOtaTask.id }}</code></div>
-              <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 与本条升级记录的 fromVersion 不相等即记成功（版本可回退；只比该单 fromVersion，不比设备当前版本，也不比目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。</div>
-              <div class="table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr><th>设备</th><th>fromVersion</th><th>版本</th><th>设备状态</th><th>进度</th><th>失败原因</th><th>说明</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="r in currentOtaTaskDevices" :key="r.id">
-                      <td>{{ otaDeviceBrief(r.deviceId).name }}<div class="cell-sub"><code>{{ r.deviceId }}</code></div></td>
-                      <td>{{ displayNullable(upgradeFromVersion(r)) }}<div class="cell-sub">升级前 softwareVersion</div></td>
-                      <td><code>{{ r.fromVer }}</code> → <code>{{ r.toVer }}</code></td>
-                      <td><span class="tag" :class="otaDeviceStatusMeta(r.status).tag">{{ otaDeviceStatusText(r.status) }}</span></td>
-                      <td>
-                        <div class="ota-progress">
-                          <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
-                          <span>{{ r.progress || 0 }}%</span>
-                        </div>
-                        <div class="ota-progress-pkgs" v-if="upgradePackageLine(r)">{{ upgradePackageLine(r) }}</div>
-                      </td>
-                      <td :class="{'ota-fail-reason': !!r.failReason}">{{ r.failReason || '—' }}</td>
-                      <td>{{ upgradeSuccessNote(r) || '—' }}</td>
-                    </tr>
-                    <tr v-if="!currentOtaTaskDevices.length"><td colspan="7"><div class="empty-hint">该任务暂无设备进度</div></td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="table-note">进度除百分比外展示已发 sentPackage、剩余 remainPackage；有 totalPackage 时一并显示。成功仍看 upgradeStatus。fromVersion 是升级前 softwareVersion，可空。状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败。</div>
-            </template>
-            <template v-else-if="currentOtaTaskId">
-              <div class="toolbar">
-                <button class="btn btn-sm" @click="closeOtaTaskDetail">← 返回任务列表</button>
-              </div>
-              <div class="empty-hint">未找到升级任务 {{ currentOtaTaskId }}</div>
-            </template>
-            <template v-else>
-              <div class="toolbar">
-                <span style="color:#666;font-size:13px">品类 OTA 任务。状态 0 进行中 / 1 已完成 / 2 已取消 / 3 失败。从「固件基线」行「批量升级」创建。</span>
-                <div class="spacer"></div>
-                <button class="btn btn-sm" @click="detailTab='firmware'">← 固件基线</button>
-              </div>
-              <div class="banner-tip">取消：仅 <b>0 进行中</b> 可点「取消」。取消后未完成设备失败原因「任务已取消」。超时：超过任务 timeoutMinutes（默认 <b>30</b> 分钟）无应答，失败原因「升级超时（超过N分钟无应答）」。</div>
-              <div class="ota-result" v-if="otaCreateResult">
-                <div class="ota-result-title">创建结果<span v-if="otaCreateResult.taskId"> · {{ otaCreateResult.taskId }}</span><span v-else> · 未生成任务</span></div>
-                <div class="cell-sub" style="margin-bottom:8px">{{ otaCreateResult.at }} · categoryId <code>{{ otaCreateResult.categoryId }}</code> · 目标 <code>{{ otaCreateResult.toVer }}</code> · 超时 {{ otaCreateResult.timeoutMinutes }} 分钟<span v-if="otaCreateResult.timeoutMinutes===30">（默认）</span> · 纳入 {{ otaCreateResult.accepted }} · 排除 {{ otaCreateResult.excluded.length }}</div>
-                <div class="cell-sub" v-if="otaCreateResult.acceptedDevices && otaCreateResult.acceptedDevices.length" style="margin-bottom:8px">纳入：<span v-for="(d, i) in otaCreateResult.acceptedDevices" :key="d.deviceId">{{ i ? '、' : '' }}{{ d.name }}（{{ d.deviceId }}）</span></div>
-                <div class="table-wrap" v-if="otaCreateResult.excluded.length">
-                  <table class="data-table">
-                    <thead><tr><th>deviceId</th><th>设备</th><th>排除原因</th></tr></thead>
-                    <tbody>
-                      <tr v-for="ex in otaCreateResult.excluded" :key="'cr-'+ex.deviceId">
-                        <td><code>{{ ex.deviceId }}</code></td>
-                        <td>{{ ex.name || '—' }}</td>
-                        <td class="ota-exclude-reason">{{ ex.reason }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div class="table-note" v-else>本次无设备被排除。</div>
-              </div>
-              <div class="table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>任务 ID</th><th>创建时间</th><th>目标版本</th><th>超时</th><th>纳入</th><th>成功</th><th>失败</th><th>排队/进行</th><th>排除</th><th>状态</th><th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="t in categoryOtaTaskList" :key="t.id" class="row-clickable" @click="openOtaTaskDetail(t)">
-                      <td><code>{{ t.id }}</code></td>
-                      <td>{{ t.createdAt }}</td>
-                      <td><code>{{ t.toVer }}</code></td>
-                      <td>{{ otaTimeoutMinutesOf(t) }} 分钟<span v-if="otaTimeoutMinutesOf(t)===30" class="cell-sub"> · 默认</span></td>
-                      <td>{{ t.deviceCount }}</td>
-                      <td>{{ t.success }}</td>
-                      <td>{{ t.fail }}</td>
-                      <td>{{ t.pending }}</td>
-                      <td>{{ (t.excluded && t.excluded.length) || 0 }}</td>
-                      <td><span class="tag" :class="otaTaskStatusMeta(t.status).tag">{{ otaTaskStatusText(t.status) }}</span></td>
-                      <td class="actions" @click.stop>
-                        <button class="btn-link btn" @click="openOtaTaskDetail(t)">详情</button>
-                        <button v-if="otaTaskStatusMeta(t.status).code===0" class="btn-link btn danger" @click="askCancelOtaTask(t)">取消</button>
-                      </td>
-                    </tr>
-                    <tr v-if="!categoryOtaTaskList.length"><td colspan="11"><div class="empty-hint">暂无升级任务</div></td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="table-note">任务状态：0 进行中 / 1 已完成 / 2 已取消 / 3 失败。设备状态（不变）：0 排队 / 1 升级中 / 2 成功 / 3 失败。设备进度走 deviceUpgrade?taskId=。</div>
-              <div class="info-section-title" style="margin-top:16px">设备失败原因</div>
-              <div class="table-wrap">
-                <table class="data-table">
-                  <thead><tr><th>任务</th><th>超时</th><th>设备</th><th>fromVersion</th><th>设备状态</th><th>失败原因</th></tr></thead>
-                  <tbody>
-                    <tr v-for="r in categoryOtaFailureRows" :key="'fail-'+r.id">
-                      <td><button class="btn-link btn" @click="openOtaTaskDetail(r.taskId)">{{ r.taskId }}</button></td>
-                      <td>{{ r.task ? otaTimeoutMinutesOf(r.task) : '—' }} 分钟</td>
-                      <td>{{ otaDeviceBrief(r.deviceId).name }}<div class="cell-sub"><code>{{ r.deviceId }}</code></div></td>
-                      <td>{{ displayNullable(upgradeFromVersion(r)) }}</td>
-                      <td><span class="tag" :class="otaDeviceStatusMeta(r.status).tag">{{ otaDeviceStatusText(r.status) }}</span></td>
-                      <td class="ota-fail-reason">{{ r.failReason || '—' }}</td>
-                    </tr>
-                    <tr v-if="!categoryOtaFailureRows.length"><td colspan="6"><div class="empty-hint">暂无失败设备</div></td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="table-note">常见失败原因：「任务已取消」（取消进行中任务后，未完成设备）；「升级超时（超过N分钟无应答）」，N 取该任务 timeoutMinutes，未填时默认 30。</div>
-            </template>
           </div>
           <div v-else-if="detailTab==='batchDispatch'">
             <div class="banner-tip" style="margin-bottom:12px">品类批量下发：选 <b>一条</b> 可批量指令 → 填共享参数 → 多选设备（可筛项目/仅在线）→ dryRun 样例 → 确认批量发送。与「指令」定义 Tab、设备档案单点发分离；不含 OTA 固件包。</div>
@@ -5335,20 +5327,273 @@ createApp({
         </div>
 
 
-        <!-- ===== 升级在线监控 ===== -->
-        <div v-else-if="module==='ledger' && screen==='upgradeMonitor'" class="page-card" data-screen="upgrade-monitor">
+        <!-- ===== OTA：升级任务 ===== -->
+        <div v-else-if="module==='ota' && screen==='otaTasks'" class="page-card" data-screen="ota-tasks">
           <div class="page-header">
             <div>
-              <h1 class="page-title">升级在线监控</h1>
+              <h1 class="page-title">升级任务</h1>
+              <p class="page-desc">组件 <code>iot/iot-device/IotOtaTask</code> · 路由建议 <code>/iot/iot-ota-task</code> · 本页 <code>#otaTasks</code>。全量任务列表（原品类详情「升级任务」Tab）。创建 / 取消 / 超时 / 排除结果仍用 otaTask 口径。无新后端接口。</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" @click="jump('upgradeMonitor')">升级监控</button>
+              <button class="btn" @click="openUpgradeHistory()">历史升级记录</button>
+            </div>
+          </div>
+            <template v-if="currentOtaTask">
+              <div class="toolbar">
+                <button class="btn btn-sm" @click="closeOtaTaskDetail">← 返回任务列表</button>
+                <div class="spacer"></div>
+                <button class="btn btn-sm" @click="openUpgradeMonitor(currentOtaTask.id)">监控</button>
+                <button v-if="otaTaskStatusMeta(currentOtaTask.status).code===0" class="btn btn-danger btn-sm" @click="askCancelOtaTask(currentOtaTask)">取消任务</button>
+                <span v-else class="cell-sub">已结束的任务不可取消</span>
+              </div>
+              <div class="info-section">
+                <div class="info-section-title">
+                  <span>升级任务 {{ currentOtaTask.id }}</span>
+                  <span class="tag" :class="otaTaskStatusMeta(currentOtaTask.status).tag">{{ otaTaskStatusText(currentOtaTask.status) }}</span>
+                </div>
+                <div class="kv-grid">
+                  <div class="k">任务状态</div>
+                  <div class="v"><code>{{ otaTaskStatusMeta(currentOtaTask.status).code }}</code> {{ otaTaskStatusMeta(currentOtaTask.status).label }} <span class="cell-sub">0 进行中 / 1 已完成 / 2 已取消 / 3 失败</span></div>
+                  <div class="k">categoryId</div><div class="v"><code>{{ currentOtaTask.categoryId }}</code> {{ categoryName(currentOtaTask.categoryId) }}</div>
+                  <div class="k">目标版本</div><div class="v"><code>{{ currentOtaTask.toVer }}</code> <span class="cell-sub">{{ currentOtaTask.fromVerHint }}</span></div>
+                  <div class="k">firmwareId</div><div class="v"><code>{{ currentOtaTask.firmwareId || '—' }}</code></div>
+                  <div class="k">packageUrl</div><div class="v"><code>{{ currentOtaTask.packageUrl || '—' }}</code></div>
+                  <div class="k">timeoutMinutes</div>
+                  <div class="v">{{ otaTimeoutMinutesOf(currentOtaTask) }} 分钟<span v-if="otaTimeoutMinutesOf(currentOtaTask)===30">（默认）</span></div>
+                  <div class="k">创建 / 操作人</div><div class="v">{{ currentOtaTask.createdAt }} · {{ currentOtaTask.operator }}</div>
+                  <div class="k" v-if="currentOtaTask.cancelledAt">取消时间</div>
+                  <div class="v" v-if="currentOtaTask.cancelledAt">{{ currentOtaTask.cancelledAt }}</div>
+                  <div class="k">进度</div>
+                  <div class="v">纳入 {{ currentOtaTask.deviceCount }} · 成功 {{ currentOtaTask.success }} · 失败 {{ currentOtaTask.fail }} · 排队/进行 {{ currentOtaTask.pending }}</div>
+                </div>
+              </div>
+              <div class="banner-tip">取消：仅状态 <b>0 进行中</b> 可取消。确认后任务变为 <b>2 已取消</b>；未完成设备（0 排队 / 1 升级中）记为 <b>3 失败</b>，失败原因「任务已取消」。已成功（2）不回滚。</div>
+              <div class="banner-muted">超时：设备超过本任务 timeoutMinutes（当前 <b>{{ otaTimeoutMinutesOf(currentOtaTask) }}</b> 分钟，未配置时默认 30）无应答，记为失败，失败原因「{{ otaTaskTimeoutReason(currentOtaTask) }}」。</div>
+              <div class="ota-result" v-if="currentOtaTask.excluded && currentOtaTask.excluded.length">
+                <div class="ota-result-title">创建结果 · 排除 {{ currentOtaTask.excluded.length }} 台</div>
+                <div class="cell-sub" style="margin-bottom:8px">被排除的设备不进入 deviceUpgrade。原因以「排除: 」开头。</div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>deviceId</th><th>设备</th><th>排除原因</th></tr></thead>
+                    <tbody>
+                      <tr v-for="ex in currentOtaTask.excluded" :key="currentOtaTask.id+ex.deviceId">
+                        <td><code>{{ ex.deviceId }}</code></td>
+                        <td>{{ ex.name || '—' }}</td>
+                        <td class="ota-exclude-reason">{{ ex.reason }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="ota-result" v-else>
+                <div class="ota-result-title">创建结果</div>
+                <div class="cell-sub">本次无设备被排除，纳入 {{ currentOtaTask.deviceCount }} 台。</div>
+              </div>
+              <div class="info-section-title" style="margin-top:4px">设备升级进度 · <code>deviceUpgrade?taskId={{ currentOtaTask.id }}</code></div>
+              <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 与本条升级记录的 fromVersion 不相等即记成功（版本可回退；只比该单 fromVersion，不比设备当前版本，也不比目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。</div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>设备</th><th>fromVersion</th><th>版本</th><th>设备状态</th><th>进度</th><th>失败原因</th><th>说明</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in currentOtaTaskDevices" :key="r.id">
+                      <td>{{ otaDeviceBrief(r.deviceId).name }}<div class="cell-sub"><code>{{ r.deviceId }}</code></div></td>
+                      <td>{{ displayNullable(upgradeFromVersion(r)) }}<div class="cell-sub">升级前 softwareVersion</div></td>
+                      <td><code>{{ r.fromVer }}</code> → <code>{{ r.toVer }}</code></td>
+                      <td><span class="tag" :class="otaDeviceStatusMeta(r.status).tag">{{ otaDeviceStatusText(r.status) }}</span></td>
+                      <td>
+                        <div class="ota-progress">
+                          <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
+                          <span>{{ r.progress || 0 }}%</span>
+                        </div>
+                        <div class="ota-progress-pkgs" v-if="upgradePackageLine(r)">{{ upgradePackageLine(r) }}</div>
+                      </td>
+                      <td :class="{'ota-fail-reason': !!r.failReason}">{{ r.failReason || '—' }}</td>
+                      <td>{{ upgradeSuccessNote(r) || '—' }}</td>
+                    </tr>
+                    <tr v-if="!currentOtaTaskDevices.length"><td colspan="7"><div class="empty-hint">该任务暂无设备进度</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-note">进度除百分比外展示已发 sentPackage、剩余 remainPackage；有 totalPackage 时一并显示。成功仍看 upgradeStatus。fromVersion 是升级前 softwareVersion，可空。状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败。</div>
+            </template>
+            <template v-else-if="currentOtaTaskId">
+              <div class="toolbar">
+                <button class="btn btn-sm" @click="closeOtaTaskDetail">← 返回任务列表</button>
+              </div>
+              <div class="empty-hint">未找到升级任务 {{ currentOtaTaskId }}</div>
+            </template>
+            <template v-else>
+              <div class="toolbar">
+                <span style="color:#666;font-size:13px">全量 OTA 任务。状态 0 进行中 / 1 已完成 / 2 已取消 / 3 失败。品类详情「发起任务」或固件基线「批量升级」创建。</span>
+                <div class="spacer"></div>
+                <button class="btn btn-primary btn-sm" @click="startOtaTaskFromPage">发起任务</button>
+              </div>
+              <div class="toolbar">
+                <label style="font-size:13px;color:#666">品类 categoryId</label>
+                <select class="select" :value="otaTaskCategoryFilter" @change="setOtaTaskCategoryFilter($event.target.value)">
+                  <option value="">全部品类</option>
+                  <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}（{{ c.id }}）</option>
+                </select>
+                <span v-if="otaTaskCategoryFilter" class="cell-sub">当前 {{ otaTaskCategoryFilter }} · <button class="btn-link btn" @click="setOtaTaskCategoryFilter('')">查看全部</button></span>
+              </div>
+              <div class="banner-tip">取消：仅 <b>0 进行中</b> 可点「取消」。取消后未完成设备失败原因「任务已取消」。超时：超过任务 timeoutMinutes（默认 <b>30</b> 分钟）无应答，失败原因「升级超时（超过N分钟无应答）」。</div>
+              <div class="ota-result" v-if="otaCreateResult && (!otaTaskCategoryFilter || otaCreateResult.categoryId===otaTaskCategoryFilter)">
+                <div class="ota-result-title">创建结果<span v-if="otaCreateResult.taskId"> · {{ otaCreateResult.taskId }}</span><span v-else> · 未生成任务</span></div>
+                <div class="cell-sub" style="margin-bottom:8px">{{ otaCreateResult.at }} · categoryId <code>{{ otaCreateResult.categoryId }}</code> · 目标 <code>{{ otaCreateResult.toVer }}</code> · 超时 {{ otaCreateResult.timeoutMinutes }} 分钟<span v-if="otaCreateResult.timeoutMinutes===30">（默认）</span> · 纳入 {{ otaCreateResult.accepted }} · 排除 {{ otaCreateResult.excluded.length }}</div>
+                <div class="cell-sub" v-if="otaCreateResult.acceptedDevices && otaCreateResult.acceptedDevices.length" style="margin-bottom:8px">纳入：<span v-for="(d, i) in otaCreateResult.acceptedDevices" :key="d.deviceId">{{ i ? '、' : '' }}{{ d.name }}（{{ d.deviceId }}）</span></div>
+                <div class="table-wrap" v-if="otaCreateResult.excluded.length">
+                  <table class="data-table">
+                    <thead><tr><th>deviceId</th><th>设备</th><th>排除原因</th></tr></thead>
+                    <tbody>
+                      <tr v-for="ex in otaCreateResult.excluded" :key="'cr-'+ex.deviceId">
+                        <td><code>{{ ex.deviceId }}</code></td>
+                        <td>{{ ex.name || '—' }}</td>
+                        <td class="ota-exclude-reason">{{ ex.reason }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="table-note" v-else>本次无设备被排除。</div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>任务 ID</th><th>品类</th><th>创建时间</th><th>目标版本</th><th>超时</th><th>纳入</th><th>成功</th><th>失败</th><th>排队/进行</th><th>排除</th><th>状态</th><th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="t in otaTaskList" :key="t.id" class="row-clickable" @click="openOtaTaskDetail(t)">
+                      <td><code>{{ t.id }}</code></td>
+                      <td>{{ categoryName(t.categoryId) }}<div class="cell-sub"><code>{{ t.categoryId }}</code></div></td>
+                      <td>{{ t.createdAt }}</td>
+                      <td><code>{{ t.toVer }}</code></td>
+                      <td>{{ otaTimeoutMinutesOf(t) }} 分钟<span v-if="otaTimeoutMinutesOf(t)===30" class="cell-sub"> · 默认</span></td>
+                      <td>{{ t.deviceCount }}</td>
+                      <td>{{ t.success }}</td>
+                      <td>{{ t.fail }}</td>
+                      <td>{{ t.pending }}</td>
+                      <td>{{ (t.excluded && t.excluded.length) || 0 }}</td>
+                      <td><span class="tag" :class="otaTaskStatusMeta(t.status).tag">{{ otaTaskStatusText(t.status) }}</span></td>
+                      <td class="actions" @click.stop>
+                        <button class="btn-link btn" @click="openOtaTaskDetail(t)">详情</button>
+                        <button class="btn-link btn" @click="openUpgradeMonitor(t.id)">监控</button>
+                        <button v-if="otaTaskStatusMeta(t.status).code===0" class="btn-link btn danger" @click="askCancelOtaTask(t)">取消</button>
+                      </td>
+                    </tr>
+                    <tr v-if="!otaTaskList.length"><td colspan="12"><div class="empty-hint">暂无升级任务</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-note">任务状态：0 进行中 / 1 已完成 / 2 已取消 / 3 失败。设备状态（不变）：0 排队 / 1 升级中 / 2 成功 / 3 失败。设备进度走 deviceUpgrade?taskId=。</div>
+              <div class="info-section-title" style="margin-top:16px">设备失败原因</div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>任务</th><th>超时</th><th>设备</th><th>fromVersion</th><th>设备状态</th><th>失败原因</th></tr></thead>
+                  <tbody>
+                    <tr v-for="r in otaTaskFailureRows" :key="'fail-'+r.id">
+                      <td><button class="btn-link btn" @click="openOtaTaskDetail(r.taskId)">{{ r.taskId }}</button></td>
+                      <td>{{ r.task ? otaTimeoutMinutesOf(r.task) : '—' }} 分钟</td>
+                      <td>{{ otaDeviceBrief(r.deviceId).name }}<div class="cell-sub"><code>{{ r.deviceId }}</code></div></td>
+                      <td>{{ displayNullable(upgradeFromVersion(r)) }}</td>
+                      <td><span class="tag" :class="otaDeviceStatusMeta(r.status).tag">{{ otaDeviceStatusText(r.status) }}</span></td>
+                      <td class="ota-fail-reason">{{ r.failReason || '—' }}</td>
+                    </tr>
+                    <tr v-if="!otaTaskFailureRows.length"><td colspan="6"><div class="empty-hint">暂无失败设备</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-note">常见失败原因：「任务已取消」（取消进行中任务后，未完成设备）；「升级超时（超过N分钟无应答）」，N 取该任务 timeoutMinutes，未填时默认 30。</div>
+            </template>
+        </div>
+
+        <!-- ===== OTA：历史升级记录 ===== -->
+        <div v-else-if="module==='ota' && screen==='upgradeHistory'" class="page-card" data-screen="upgrade-history">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">历史升级记录</h1>
+              <p class="page-desc">组件 <code>iot/iot-device/IotDeviceUpgrade</code> · 路由建议 <code>/iot/iot-device-upgrade</code> · 本页 <code>#upgradeHistory</code>。全量成功/失败列表，绑 <code>GET /iot/deviceUpgrade</code>。在途看升级监控。无新后端接口。</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" @click="jump('otaTasks')">升级任务</button>
+              <button class="btn" @click="jump('upgradeMonitor')">升级监控</button>
+            </div>
+          </div>
+          <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 与本条升级记录的 fromVersion 不相等即记成功（版本可回退；只比该单 fromVersion，不比设备当前版本，也不比目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。</div>
+          <div class="stat-row">
+            <div class="stat-chip"><div class="sc-label">成功</div><div class="sc-value">{{ upgradeHistoryCounts.success }}</div></div>
+            <div class="stat-chip warn"><div class="sc-label">失败</div><div class="sc-value">{{ upgradeHistoryCounts.fail }}</div></div>
+            <div class="stat-chip"><div class="sc-label">排队/升级中（不在默认列表）</div><div class="sc-value">{{ upgradeHistoryCounts.other }}</div></div>
+          </div>
+          <div class="toolbar" style="margin-top:12px">
+            <div class="seg-group">
+              <button class="seg-btn" :class="{active: upgradeHistoryStatusFilter==='done'}" @click="upgradeHistoryStatusFilter='done'">成功/失败</button>
+              <button class="seg-btn" :class="{active: upgradeHistoryStatusFilter==='success'}" @click="upgradeHistoryStatusFilter='success'">仅成功</button>
+              <button class="seg-btn" :class="{active: upgradeHistoryStatusFilter==='fail'}" @click="upgradeHistoryStatusFilter='fail'">仅失败</button>
+              <button class="seg-btn" :class="{active: upgradeHistoryStatusFilter==='all'}" @click="upgradeHistoryStatusFilter='all'">全部状态</button>
+            </div>
+            <input class="input" v-model="upgradeHistoryKeyword" placeholder="设备 / 任务 / 失败原因" style="max-width:220px" />
+            <span v-if="upgradeHistoryDeviceId" class="tag tag-blue">deviceId {{ upgradeHistoryDeviceId }} · {{ otaDeviceBrief(upgradeHistoryDeviceId).name }} <button class="btn-link btn" @click="clearUpgradeHistoryDevice">清除</button></span>
+            <div class="spacer"></div>
+            <span style="color:#888;font-size:12px">{{ upgradeHistoryRows.length }} 条</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>时间</th><th>设备</th><th>品类</th><th>任务</th><th>fromVersion</th><th>版本</th><th>设备状态</th><th>进度</th><th>操作人</th><th>失败原因</th><th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in upgradeHistoryRows" :key="r.id">
+                  <td>{{ r.time }}</td>
+                  <td>
+                    {{ otaDeviceBrief(r.deviceId).name }}
+                    <div class="cell-sub"><code>{{ r.deviceId }}</code> · <button class="btn-link btn" @click="openDeviceUpgradeSlice(r.deviceId)">本机记录</button></div>
+                  </td>
+                  <td>{{ deviceCategoryLabel(r.deviceId) }}</td>
+                  <td>
+                    <button v-if="r.taskId" class="btn-link btn" @click="openOtaTaskFromLog(r.taskId)">{{ r.taskId }}</button>
+                    <span v-else>—</span>
+                  </td>
+                  <td>{{ displayNullable(upgradeFromVersion(r)) }}<div class="cell-sub">升级前 softwareVersion</div></td>
+                  <td><code>{{ r.fromVer }}</code> → <code>{{ r.toVer }}</code></td>
+                  <td><span class="tag" :class="upgradeStatusTag(r.status)">{{ otaDeviceStatusText(r.status) }}</span></td>
+                  <td>
+                    <div class="ota-progress">
+                      <div class="ota-progress-bar"><i :style="{width: (r.progress||0)+'%'}"></i></div>
+                      <span>{{ r.progress || 0 }}%</span>
+                    </div>
+                    <div class="ota-progress-pkgs" v-if="upgradePackageLine(r)">{{ upgradePackageLine(r) }}</div>
+                  </td>
+                  <td>{{ r.operator }}</td>
+                  <td :class="{'ota-fail-reason': !!r.failReason}">{{ r.failReason || '—' }}</td>
+                  <td>{{ upgradeSuccessNote(r) || '—' }}</td>
+                </tr>
+                <tr v-if="!upgradeHistoryRows.length"><td colspan="11"><div class="empty-hint">没有符合筛选的升级记录</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-note">进度除百分比外展示 sentPackage、remainPackage，有则显示 totalPackage。成功仍看 upgradeStatus。fromVersion 为升级前 softwareVersion，未上报则为 —。D013 的成功记录是智能井盖信息包兜底（softwareVersion ≠ 本单 fromVersion）。默认只列成功（2）和失败（3）；排队/升级中用「全部状态」，或到升级监控看在途。</div>
+        </div>
+
+        <!-- ===== 升级在线监控 ===== -->
+        <div v-else-if="module==='ota' && screen==='upgradeMonitor'" class="page-card" data-screen="upgrade-monitor">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">升级监控</h1>
               <p class="page-desc">组件 <code>iot/iot-device/IotDeviceUpgradeMonitor</code> · 路由建议 <code>/iot/iot-device-upgrade-monitor</code> · 本页 <code>#upgradeMonitor</code>。约 {{ UPGRADE_MONITOR_POLL_MS / 1000 }} 秒轮询 <code>GET /iot/deviceUpgrade/monitor</code><span v-if="upgradeMonitorTaskId">?taskId={{ upgradeMonitorTaskId }}</span>。最近刷新 {{ upgradeMonitorPolledAt || '—' }}。</p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" v-if="upgradeMonitorTaskId" @click="openUpgradeMonitor()">查看全部在途</button>
-              <button class="btn" @click="jump('deviceUpgradeLog')">历史升级记录</button>
+              <button class="btn" @click="openUpgradeHistory()">历史升级记录</button>
               <button class="btn" @click="jump('otaTasks')">升级任务</button>
             </div>
           </div>
-          <div class="banner-muted">历史成功/失败仍走 <code>GET /iot/deviceUpgrade</code>（设备升级日志 / 任务详情）。本页只看在途，不替代历史查询。库状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败；阶段 queued / transferring / awaitingConfirm 只是在途拆分。</div>
+          <div class="banner-muted">历史成功/失败仍走 <code>GET /iot/deviceUpgrade</code>（历史升级记录页）。本页只看在途，不替代历史查询。库状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败；阶段 queued / transferring / awaitingConfirm 只是在途拆分。</div>
           <div class="stat-row">
             <div class="stat-chip accent"><div class="sc-label">升级中 upgradingCount</div><div class="sc-value">{{ upgradeMonitorView.summary.upgradingCount }}</div></div>
             <div class="stat-chip warn"><div class="sc-label">排队 queuedCount</div><div class="sc-value">{{ upgradeMonitorView.summary.queuedCount }}</div></div>
@@ -5410,7 +5655,7 @@ createApp({
                 </tbody>
               </table>
             </div>
-            <div class="table-note">包进度为 sentPackage / remainPackage，有 totalPackage 时带「共」。行内预计完成是粗估。成功失败不在本表，请看升级日志。</div>
+            <div class="table-note">包进度为 sentPackage / remainPackage，有 totalPackage 时带「共」。行内预计完成是粗估。成功失败不在本表，请看历史升级记录。</div>
           </div>
         </div>
 
@@ -5663,7 +5908,7 @@ createApp({
             <div class="tab" :class="{active: deviceDetailTab==='profile'}" @click="setDeviceDetailTab('profile')">档案</div>
             <div class="tab" :class="{active: deviceDetailTab==='localData'}" @click="setDeviceDetailTab('localData')">本机数据</div>
             <div class="tab" :class="{active: deviceDetailTab==='dispatch'}" @click="setDeviceDetailTab('dispatch')">指令</div>
-            <div class="tab" :class="{active: deviceDetailTab==='upgradeLog'}" @click="setDeviceDetailTab('upgradeLog')">升级日志</div>
+            <div class="tab" :class="{active: deviceDetailTab==='upgradeLog'}" @click="setDeviceDetailTab('upgradeLog')">本机升级记录</div>
             <div class="tab" :class="{active: deviceDetailTab==='sendLog'}" @click="setDeviceDetailTab('sendLog')">设备发送记录</div>
             <div class="tab" :class="{active: deviceDetailTab==='snChange'}" @click="setDeviceDetailTab('snChange')">设备号变更</div>
             <div class="tab" v-if="canShowChildDevices" :class="{active: deviceDetailTab==='children'}" @click="setDeviceDetailTab('children')">子设备</div>
@@ -5972,8 +6217,9 @@ createApp({
 
           <template v-else-if="deviceDetailTab==='upgradeLog'">
             <div class="toolbar">
-              <span style="color:#666;font-size:13px">OTA 固件升级日志（固件包任务）。设备状态 0 排队 / 1 升级中 / 2 成功 / 3 失败。与指令 bootUpgrade / 批量下发区分。</span>
+              <span style="color:#666;font-size:13px">本机升级记录（切片）。设备状态 0 排队 / 1 升级中 / 2 成功 / 3 失败。全量成功/失败在历史升级记录。</span>
               <div class="spacer"></div>
+              <button class="btn btn-sm" @click="openUpgradeHistory(currentDevice.id)">历史升级记录</button>
               <button class="btn btn-primary btn-sm" @click="openDeviceOtaModal">＋ 固件升级</button>
             </div>
             <div class="banner-muted">成功仍由 upgradeStatus 决定，不新增状态：末包应答 remain=0 记为 2 成功。智能井盖兜底：末包已发但没有最终应答时，实时信息包 softwareVersion 与本条升级记录的 fromVersion 不相等即记成功（版本可回退；只比该单 fromVersion，不比设备当前版本，也不比目标版本）。回写用信息包实际版本。fromVersion 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。</div>
@@ -7337,7 +7583,7 @@ createApp({
             <input class="input input-full" v-model="deviceOtaPackageUrl" placeholder="选版本后自动带出；可手填兜底" />
           </div>
           <div class="hint" v-if="!deviceOtaPackageUrl" style="color:#b45309">无包地址时需填写后才能提交。</div>
-          <div class="hint">仅展示同型号固件基线；选版本带出 packageUrl；提交后写入本机「升级日志」。</div>
+          <div class="hint">仅展示同型号固件基线；选版本带出 packageUrl；提交后写入本机升级记录，并出现在历史升级记录。</div>
         </div>
         <div class="modal-footer">
           <button class="btn" @click="showDeviceOtaModal=false">取消</button>
