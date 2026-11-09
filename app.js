@@ -357,6 +357,7 @@ const DEVICE_UPGRADE_LOGS = [
   { id: 'UL11', deviceId: 'D001', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: 100, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 40, sentPackage: 4, remainPackage: 6, totalPackage: 10, operator: '李敏', failReason: otaTimeoutFailReason(20) },
   { id: 'UL12', deviceId: 'D002', taskId: 'OT04', time: '2026-10-18 08:40:00', fromVersion: null, fromVer: '1.1.2', toVer: '1.2.0', status: 3, progress: 0, sentPackage: 0, remainPackage: 10, operator: '李敏', failReason: otaTimeoutFailReason(20) },
   { id: 'UL13', deviceId: 'D013', taskId: 'OT02', time: '2026-10-21 09:12:00', fromVersion: 8, fromVer: '1.0.0', toVer: '1.0.0', status: 2, progress: 100, sentPackage: 11, remainPackage: 0, totalPackage: 11, operator: '李敏', failReason: '', successNote: '末包无最终应答；信息包 softwareVersion=9 ≠ 本单 fromVersion=8（可升可降），回写实际版本 9' },
+  { id: 'UL14', deviceId: 'D009', taskId: 'OT01', time: '2026-10-30 09:20:00', fromVersion: null, fromVer: '1.2.0', toVer: '1.3.0', status: 1, progress: 100, sentPackage: 13, remainPackage: 0, totalPackage: 13, operator: '李敏', failReason: '' },
 ];
 
 /* 品类级 OTA 任务。排除原因一律「排除: …」，出现在创建结果，不进入设备进度。 */
@@ -365,7 +366,7 @@ const CATEGORY_OTA_TASKS = [
     id: 'OT01', categoryId: 'C001', fromVerHint: '<1.3.0', toVer: '1.3.0', firmwareId: 'F1',
     packageUrl: 'https://example.com/fw/MF-LW-100/1.3.0.bin',
     createdAt: '2026-10-30 09:00:00', operator: '李敏',
-    deviceCount: 3, success: 0, fail: 0, pending: 3,
+    deviceCount: 4, success: 0, fail: 0, pending: 4,
     status: 0, timeoutMinutes: 30,
     excluded: [
       { deviceId: 'D007', name: '望江路井-待接入', reason: '排除: 设备待接入且无 AEP 设备号' },
@@ -1821,6 +1822,10 @@ createApp({
         }
         if (screen.value === 'editDevice') return { parent: currentDevice.value?.name || '设备', current: deviceFormMode.value === 'create' ? '新建设备档案' : '编辑设备档案' };
         if (screen.value === 'aepReconcile') return { parent: '设备台账', current: 'AEP 对账' };
+        if (screen.value === 'upgradeMonitor') {
+          const id = upgradeMonitorTaskId.value;
+          return { parent: '设备台账', current: id ? ('升级在线监控 · ' + id) : '升级在线监控' };
+        }
         return { parent: '设备管控', current: '设备台账' };
       }
       if (screen.value === 'list') return { parent: '设备管控', current: '物模型 · 品类列表' };
@@ -3309,6 +3314,114 @@ createApp({
       if (has(row.totalPackage)) parts.push('共 ' + row.totalPackage);
       return parts.join(' · ');
     }
+    const UPGRADE_MONITOR_POLL_MS = 4000;
+    const upgradeMonitorTaskId = ref('');
+    const upgradeMonitorPolledAt = ref('');
+    const upgradeMonitorTick = ref(0);
+    let upgradeMonitorTimer = null;
+    function upgradeMonitorStage(row) {
+      const code = otaDeviceStatusMeta(row.status).code;
+      if (code === 0) return { stage: 'queued', stageLabel: '排队' };
+      if (code === 1) {
+        if (Number(row.remainPackage) === 0) return { stage: 'awaitingConfirm', stageLabel: '待确认' };
+        return { stage: 'transferring', stageLabel: '传输中' };
+      }
+      return null;
+    }
+    function upgradeMonitorStamp(date) {
+      const p = function (n) { return String(n).padStart(2, '0'); };
+      return date.getFullYear() + '-' + p(date.getMonth() + 1) + '-' + p(date.getDate()) + ' ' + p(date.getHours()) + ':' + p(date.getMinutes());
+    }
+    function touchUpgradeMonitorPoll() {
+      upgradeMonitorPolledAt.value = upgradeMonitorStamp(new Date());
+    }
+    function stopUpgradeMonitorPoll() {
+      if (upgradeMonitorTimer) {
+        clearInterval(upgradeMonitorTimer);
+        upgradeMonitorTimer = null;
+      }
+    }
+    function startUpgradeMonitorPoll() {
+      stopUpgradeMonitorPoll();
+      touchUpgradeMonitorPoll();
+      upgradeMonitorTimer = setInterval(function () {
+        upgradeMonitorTick.value += 1;
+        touchUpgradeMonitorPoll();
+      }, UPGRADE_MONITOR_POLL_MS);
+    }
+    const upgradeMonitorView = computed(function () {
+      upgradeMonitorTick.value;
+      const taskId = upgradeMonitorTaskId.value;
+      const active = deviceUpgradeLogs.value.filter(function (row) {
+        if (taskId && row.taskId !== taskId) return false;
+        return !!upgradeMonitorStage(row);
+      });
+      const items = active.map(function (row) {
+        const stage = upgradeMonitorStage(row);
+        const remain = Number(row.remainPackage);
+        const sec = (Number.isFinite(remain) && remain > 0) ? remain * 30 : 120;
+        const brief = otaDeviceBrief(row.deviceId);
+        return {
+          id: row.id,
+          deviceId: row.deviceId,
+          deviceName: brief.name,
+          taskId: row.taskId || '',
+          fromVersion: upgradeFromVersion(row),
+          status: row.status,
+          statusText: otaDeviceStatusText(row.status),
+          statusTag: otaDeviceStatusMeta(row.status).tag,
+          stage: stage.stage,
+          stageLabel: stage.stageLabel,
+          progress: row.progress || 0,
+          sentPackage: row.sentPackage,
+          remainPackage: row.remainPackage,
+          totalPackage: row.totalPackage,
+          packageLine: upgradePackageLine(row),
+          estimatedCompleteAt: upgradeMonitorStamp(new Date(Date.now() + sec * 1000))
+        };
+      });
+      const countStage = function (key) { return items.filter(function (it) { return it.stage === key; }).length; };
+      const queuedCount = countStage('queued');
+      const transferringCount = countStage('transferring');
+      const awaitingConfirmCount = countStage('awaitingConfirm');
+      let latest = 0;
+      items.forEach(function (it) {
+        const remain = Number(it.remainPackage);
+        const sec = (Number.isFinite(remain) && remain > 0) ? remain * 30 : 120;
+        if (sec > latest) latest = sec;
+      });
+      const etaAt = items.length ? upgradeMonitorStamp(new Date(Date.now() + latest * 1000)) : '';
+      const runningTasks = categoryOtaTasks.value.filter(function (t) {
+        return otaTaskStatusMeta(t.status).code === 0;
+      }).map(function (t) {
+        const n = deviceUpgradeLogs.value.filter(function (row) {
+          return row.taskId === t.id && upgradeMonitorStage(row);
+        }).length;
+        return { taskId: t.id, toVer: t.toVer, activeCount: n };
+      });
+      return {
+        summary: {
+          upgradingCount: transferringCount + awaitingConfirmCount,
+          queuedCount: queuedCount,
+          transferringCount: transferringCount,
+          awaitingConfirmCount: awaitingConfirmCount
+        },
+        stageBreakdown: [
+          { stage: 'queued', label: '排队', count: queuedCount },
+          { stage: 'transferring', label: '传输中', count: transferringCount },
+          { stage: 'awaitingConfirm', label: '待确认', count: awaitingConfirmCount }
+        ],
+        items: items,
+        eta: {
+          estimatedCompleteAt: etaAt,
+          estimateBasis: '按在途剩余包粗估（约 30 秒/包；剩余 0 的待确认另加约 2 分钟），非精确倒计时'
+        },
+        runningTasks: runningTasks
+      };
+    });
+    function openUpgradeMonitor(taskId) {
+      location.hash = taskId ? ('#upgradeMonitor?taskId=' + encodeURIComponent(taskId)) : '#upgradeMonitor';
+    }
 
 
     function syncMonitorFromDevice(device) {
@@ -4123,6 +4236,7 @@ createApp({
           tabFromQuery = queryParams.get('tab');
         } catch (e) { tabFromQuery = null; queryParams = null; }
       }
+      if (key !== 'upgradeMonitor') stopUpgradeMonitorPoll();
       const map = {
         cockpit: () => goCockpit(),
         workbench: () => goCockpit(),
@@ -4170,6 +4284,12 @@ createApp({
         deviceSendLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'sendLog'),
         deviceUpgradeLog: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'),
         deviceOta: () => { openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'upgradeLog'); openDeviceOtaModal(); },
+        upgradeMonitor: () => {
+          module.value = 'ledger';
+          screen.value = 'upgradeMonitor';
+          upgradeMonitorTaskId.value = (queryParams && queryParams.get('taskId')) || '';
+          startUpgradeMonitorPoll();
+        },
         editDevice: () => { openDeviceDetail(deviceList.value[0]); openEditDevice(deviceList.value[0]); },
         aepReconcile: () => goAepReconcile(),
         importExport: () => { goDevices(); openImportModal(); },
@@ -4270,6 +4390,7 @@ createApp({
       OTA_TIMEOUT_DEFAULT, OTA_DEVICE_CAP, OTA_CANCEL_REASON,
       openCategoryBatchOta, onCategoryOtaTargetChange, isCategoryOtaDeviceSelected, toggleCategoryOtaDevice,
       toggleCategoryOtaDevicesAll, submitCategoryOta, upgradeStatusTag, upgradeFromVersion, upgradeSuccessNote, upgradePackageLine, compareSemver,
+      upgradeMonitorView, upgradeMonitorTaskId, upgradeMonitorPolledAt, openUpgradeMonitor, UPGRADE_MONITOR_POLL_MS,
       PACKET_FILTERS, PACKET_TYPE_TAG, PACKET_STATUS_TAG, packetTypeFilter, filteredDevicePackets, devicePacketTypeCounts,
       isPacketExpanded, togglePacketHex,
       deviceSendLogs, showSendLogModal, currentSendLog, openSendLogDetail, closeSendLogDetail, formatIdentifiers, sendLogSuccess, sendLogTypeLabel, sendLogDryRunLabel,
@@ -4322,7 +4443,8 @@ createApp({
       <nav class="sidebar-nav">
         <div class="nav-group-title">设备管控</div>
         <div class="nav-item" :class="{active: module==='cockpit'}" @click="jump('cockpit')"><span class="dot"></span>工作台</div>
-        <div class="nav-item" :class="{active: module==='ledger'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
+        <div class="nav-item" :class="{active: module==='ledger' && screen!=='upgradeMonitor'}" @click="jump('projects')"><span class="dot"></span>设备台账</div>
+        <div class="nav-item" :class="{active: screen==='upgradeMonitor'}" @click="jump('upgradeMonitor')"><span class="dot"></span>升级监控</div>
         <div class="nav-item" :class="{active: module==='thing'}" @click="jump('list')"><span class="dot"></span>物模型</div>
         <div class="nav-group-title">在线监控</div>
         <div class="nav-item" :class="{active: module==='monitor' && (screen==='monitorList' || screen==='monitorDetail' || screen==='monitorCurve')}" @click="jump('monitor')"><span class="dot"></span>设备数据</div>
@@ -5212,6 +5334,85 @@ createApp({
           </div>
         </div>
 
+
+        <!-- ===== 升级在线监控 ===== -->
+        <div v-else-if="module==='ledger' && screen==='upgradeMonitor'" class="page-card" data-screen="upgrade-monitor">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">升级在线监控</h1>
+              <p class="page-desc">组件 <code>iot/iot-device/IotDeviceUpgradeMonitor</code> · 路由建议 <code>/iot/iot-device-upgrade-monitor</code> · 本页 <code>#upgradeMonitor</code>。约 {{ UPGRADE_MONITOR_POLL_MS / 1000 }} 秒轮询 <code>GET /iot/deviceUpgrade/monitor</code><span v-if="upgradeMonitorTaskId">?taskId={{ upgradeMonitorTaskId }}</span>。最近刷新 {{ upgradeMonitorPolledAt || '—' }}。</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" v-if="upgradeMonitorTaskId" @click="openUpgradeMonitor()">查看全部在途</button>
+              <button class="btn" @click="jump('deviceUpgradeLog')">历史升级记录</button>
+              <button class="btn" @click="jump('otaTasks')">升级任务</button>
+            </div>
+          </div>
+          <div class="banner-muted">历史成功/失败仍走 <code>GET /iot/deviceUpgrade</code>（设备升级日志 / 任务详情）。本页只看在途，不替代历史查询。库状态仍是 0 排队 / 1 升级中 / 2 成功 / 3 失败；阶段 queued / transferring / awaitingConfirm 只是在途拆分。</div>
+          <div class="stat-row">
+            <div class="stat-chip accent"><div class="sc-label">升级中 upgradingCount</div><div class="sc-value">{{ upgradeMonitorView.summary.upgradingCount }}</div></div>
+            <div class="stat-chip warn"><div class="sc-label">排队 queuedCount</div><div class="sc-value">{{ upgradeMonitorView.summary.queuedCount }}</div></div>
+          </div>
+          <div class="table-note" style="margin-top:0">其中传输中 transferringCount {{ upgradeMonitorView.summary.transferringCount }} · 待确认 awaitingConfirmCount {{ upgradeMonitorView.summary.awaitingConfirmCount }}</div>
+          <div class="info-section" style="margin-top:16px">
+            <div class="info-section-title">阶段 stageBreakdown</div>
+            <div class="stat-row">
+              <div class="stat-chip" v-for="s in upgradeMonitorView.stageBreakdown" :key="s.stage">
+                <div class="sc-label">{{ s.label }} {{ s.stage }}</div>
+                <div class="sc-value">{{ s.count }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="info-section">
+            <div class="info-section-title">预计全部完成</div>
+            <div class="kv-grid">
+              <div class="k">eta.estimatedCompleteAt</div>
+              <div class="v">{{ upgradeMonitorView.eta.estimatedCompleteAt || '—' }}</div>
+              <div class="k">eta.estimateBasis</div>
+              <div class="v">{{ upgradeMonitorView.eta.estimateBasis }}</div>
+            </div>
+          </div>
+          <div class="info-section">
+            <div class="info-section-title">进行中任务 runningTasks</div>
+            <div v-if="upgradeMonitorView.runningTasks.length" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-sm" v-for="t in upgradeMonitorView.runningTasks" :key="t.taskId" @click="openUpgradeMonitor(t.taskId)">
+                {{ t.taskId }} · {{ t.toVer }} · 在途 {{ t.activeCount }}
+              </button>
+            </div>
+            <div v-else class="empty-hint">当前没有进行中的批量任务</div>
+          </div>
+          <div class="info-section">
+            <div class="info-section-title">在途明细 items</div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>设备</th><th>任务</th><th>阶段 stageLabel</th><th>库状态</th><th>fromVersion</th><th>包进度</th><th>预计完成 estimatedCompleteAt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="it in upgradeMonitorView.items" :key="it.id">
+                    <td>{{ it.deviceName }}<div class="cell-sub"><code>{{ it.deviceId }}</code></div></td>
+                    <td><button v-if="it.taskId" class="btn-link btn" @click="openOtaTaskDetail(it.taskId)">{{ it.taskId }}</button><span v-else>—</span></td>
+                    <td>{{ it.stageLabel }}<div class="cell-sub"><code>{{ it.stage }}</code></div></td>
+                    <td><span class="tag" :class="it.statusTag">{{ it.statusText }}</span></td>
+                    <td>{{ displayNullable(it.fromVersion) }}</td>
+                    <td>
+                      <div class="ota-progress">
+                        <div class="ota-progress-bar"><i :style="{width: (it.progress||0)+'%'}"></i></div>
+                        <span>{{ it.progress || 0 }}%</span>
+                      </div>
+                      <div class="ota-progress-pkgs">{{ it.packageLine || '—' }}</div>
+                    </td>
+                    <td>{{ it.estimatedCompleteAt }}</td>
+                  </tr>
+                  <tr v-if="!upgradeMonitorView.items.length"><td colspan="7"><div class="empty-hint">没有在途升级</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-note">包进度为 sentPackage / remainPackage，有 totalPackage 时带「共」。行内预计完成是粗估。成功失败不在本表，请看升级日志。</div>
+          </div>
+        </div>
 
         <!-- ===== 设备台账：项目列表 ===== -->
         <div v-else-if="module==='ledger' && screen==='projects'" class="page-card" data-screen="ledger-projects">

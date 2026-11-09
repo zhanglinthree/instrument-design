@@ -20,7 +20,7 @@ python3 -m http.server 8877
 
 ## 模块切换
 
-侧栏：**设备管控**（工作台 / 设备台账 / 物模型）与一级分组 **在线监控**（设备数据 / 在线率统计 / 设备对比）；同壳同配色，高亮当前模块。HTML 原型无真实登录与权限；正式产品首页由权限决定（用户有权的第一个菜单页），不固定落在工作台。
+侧栏：**设备管控**（工作台 / 设备台账 / **升级监控** / 物模型）与一级分组 **在线监控**（设备数据 / 在线率统计 / 设备对比）；同壳同配色，高亮当前模块。HTML 原型无真实登录与权限；正式产品首页由权限决定（用户有权的第一个菜单页），不固定落在工作台。
 
 ## 产品口径（本期）
 
@@ -87,6 +87,7 @@ python3 -m http.server 8877
 | 4b2 | 设备档案 · **升级日志**（OTA：time / taskId / **fromVersion** / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度百分比 + **sentPackage** · **remainPackage**（有则 **totalPackage**）/ 操作人 / failReason；成功仍看 upgradeStatus，应答 remain=0；井盖兜底 softwareVersion ≠ 本单 fromVersion，空 fromVersion 跳过） | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` / `#deviceDetail?id=D013&tab=upgradeLog` |
 | 4c0 | 品类详情 · **批量下发**（选一条 batchable 指令 → 共享参数 → 多选设备筛项目/在线 → dryRun → 批量 mock） | `#batchDispatch` |
 | 4c1 | 品类详情 · **升级任务**列表 + 详情。状态 **0 进行中 / 1 已完成 / 2 已取消 / 3 失败**；进行中可取消；详情含 timeoutMinutes（默认 30）、创建结果「排除: …」、设备进度 `deviceUpgrade?taskId=`。样例：进行中 OT01、已完成 OT02（超时 30）、已取消 OT03（超时 45）、失败 OT04（超时 20） | `#otaTasks` · `#otaTasks?id=OT01` `#otaTasks?id=OT02` `#otaTasks?id=OT03` `#otaTasks?id=OT04` |
+| 4c2 | **升级在线监控**（组件 `iot/iot-device/IotDeviceUpgradeMonitor`，路由建议 `/iot/iot-device-upgrade-monitor`）。约 4 秒轮询 `GET /iot/deviceUpgrade/monitor`（可选 `taskId`）。卡片 `summary.upgradingCount` / `queuedCount`，副文案 `transferringCount` + `awaitingConfirmCount`；`stageBreakdown`：`queued` / `transferring` / `awaitingConfirm`（库状态仍 0–3）。明细 `items`：`stageLabel`、sent/remain（有则 total）、行内 `estimatedCompleteAt`。全部完成时间 `eta.estimatedCompleteAt`，旁注 `eta.estimateBasis`（粗估）。`runningTasks` 点进 `?taskId=`。历史成功/失败仍走 `GET /iot/deviceUpgrade`。对齐 BE `fcc75bc9`。 | `#upgradeMonitor` · `#upgradeMonitor?taskId=OT01` |
 | 5 | 编辑设备档案 | `#editDevice` |
 | 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
 | 7 | 导入说明弹窗 | `#importExport` |
