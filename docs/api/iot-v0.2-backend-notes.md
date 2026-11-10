@@ -14,9 +14,9 @@
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
-| GET | `/iotCategory` | query | 筛选 keyword/industry/status；回填 deviceCount、ruleCount |
-| POST | `/iotCategory` | insert | body: name*, code*, industry*, description, status*（默认 draft） |
-| PUT | `/iotCategory` | update | |
+| GET | `/iotCategory` | query | 筛选 keyword/industry/status；发起升级另传 `upgradeSupported=1`，只返回已打开升级的品类。回填 deviceCount、ruleCount |
+| POST | `/iotCategory` | insert | body: name*, code*, industry*, description, status*（默认 draft）；`upgradeSupported` 默认 0 |
+| PUT | `/iotCategory` | update | 含 `upgradeSupported`（1 支持 / 0 不支持）。落库 `iot_category_add_upgrade_supported_v1.sql`；执行后打开 `manhole_cover` 等需要升级的品类 |
 | DELETE | `/iotCategory/{id}` | delete | **有设备引用则拒绝**；否则事务内级联删子资源后删品类 |
 | DELETE | `/iotCategory/batch/{ids}` | delete | 同上（任一 id 有设备引用则整批失败） |
 | GET | `/iotCategory/{id}` | query | 含 deviceCount、ruleCount |
@@ -85,4 +85,11 @@
 - AEP 对账同步已提供 `POST /iotDevice/aepDiff/sync`；**AEP OpenAPI 真列表客户端未接**（可用 body 快照）  
 - missing 侧 AEP 补建延后  
 - 前端页面仍待  
-- 菜单 SQL 需在目标库手工执行 `db/iot_menu_permission_v0.2.sql` 后角色授权  
+- 菜单 SQL 需在目标库手工执行 `db/iot_menu_permission_v0.2.sql` 后角色授权
+
+## 8. 品类升级开关与统一升级任务（对齐 BE 5209f1c）
+
+- 字段 `upgradeSupported`：`1` 支持 / `0` 不支持，默认 `0`。品类列表与品类详情 OTA 模块同一开关，保存 `PUT /iotCategory`。
+- 落库 `iot_category_add_upgrade_supported_v1.sql`（本设计仓不写 SQL）。执行后把智能井盖（`manhole_cover`）等需要升级的品类打开。
+- 发起升级选品类：`GET /iotCategory?upgradeSupported=1`。未打开的品类不进选择器；若仍创建，后端拒绝。
+- 单台与批量都 `POST /iot/otaTask`：单台 `deviceId` + `categoryId`，批量 `deviceIds` + `categoryId`。先创建升级任务，再挂设备升级记录。  
