@@ -63,6 +63,7 @@
 | modelVersion | string | 如 `v1.2.0` |
 | ruleCount | int | 只读统计 |
 | status | string | dict: `iot_category_status` |
+| upgradeSupported | int | 是否支持升级：`1` 支持 / `0` 不支持，默认 `0`。保存 `PUT /iotCategory`。发起升级用 `GET /iotCategory?upgradeSupported=1`。落库 `iot_category_add_upgrade_supported_v1.sql`（设计仓不写 SQL）；执行后打开 `manhole_cover` 等需要升级的品类 |
 | updatedAt | datetime | |
 
 **创建/编辑**：`name*`, `code*`, `industry*`, `desc`, `status*`  
