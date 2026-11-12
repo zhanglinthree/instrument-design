@@ -37,6 +37,11 @@ const shots = [
   { hash: 'monitorCurve', file: 'monitor-03-curve.png' },
   { hash: 'monitorOnlineRate', file: 'monitor-04-online-rate.png' },
   { hash: 'monitorCurveLong', file: 'monitor-05-curve-long-cycle.png' },
+  { hash: 'categoryStandard?categoryId=C001', file: 'data-trust-01-standard.png' },
+  { hash: 'categoryStandard?categoryId=C001&tab=tip', file: 'data-trust-02-tip.png' },
+  { hash: 'dataTrustJudgement?id=J102', file: 'data-trust-03-judgement.png' },
+  { hash: 'dataTrustGap', file: 'data-trust-04-gap.png' },
+  { hash: 'dataTrustStats', file: 'data-trust-05-stats.png' },
 ];
 
 (async () => {

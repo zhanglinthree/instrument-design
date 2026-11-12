@@ -760,6 +760,10 @@ function matchPackageTypeFilter(packageType, filterKey) {
 
 /** mock rows · 字段对齐 iot_protocol_data：id(=数据ID) / receiveTime / packageType / parsedJson / contentHex / status；query by deviceId */
 const PROTOCOL_PACKETS = [
+  { id: 'PK015', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-09-30 16:42:20', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901001": [ { "yewei": 3.42, "wendu": 28.6, "yaqiang": 101.3 }, { "yewei": 11.2, "wendu": null, "yaqiang": 101.3 } ] } }', contentHex: '3C3C000101020D5C011E2785000B20NULL650D0D', status: '成功', note: '一条报文拍平为 S101、S102' },
+  { id: 'PK016', deviceId: 'D002', serialNum: 'MF20260901002', receiveTime: '2026-09-30 16:20:00', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901002": [ { "yewei": 3.38, "wendu": 27.9, "yaqiang": 100.8 } ] } }', contentHex: '3C3C000101020D340117276000000D0D', status: '成功', note: '报文保持入包数据集；sample S103 同窗口覆盖后测值另记' },
+  { id: 'PK017', deviceId: 'D004', serialNum: 'MF20251108088', receiveTime: '2026-08-10 14:00:00', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20251108088": [ { "yaqiang": 280 } ] } }', contentHex: '3C3C000101180D0D', status: '成功' },
+  { id: 'PK018', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-09-30 08:00:30', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901001": [ { "yewei": 3.20, "wendu": 25.1, "yaqiang": 101.0 } ] } }', contentHex: '3C3C000101020C8000FB6500000D0D', status: '成功', note: '补报，落入 08:00 时点窗口，缺报 G2 改为已补回' },
   { id: 'PK001', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-14 09:18:33', packageType: 'dataPackage1', parsedJson: '{ "data": { "MF20260901001": [ { "yewei": 3.42, "wendu": 28.6, "yaqiang": 101.3 } ] } }', contentHex: '3C3C000101020D5C011E278500000D0D', status: '成功' },
   { id: 'PK002', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-14 09:17:01', packageType: 'messagePackage1', parsedJson: '{ "imei": "860123456789012", "fw": "1.2.0", "probes": 1 }', contentHex: 'B2B2003C860123456789012F010200011A1A', status: '成功' },
   { id: 'PK003', deviceId: 'D001', serialNum: 'MF20260901001', receiveTime: '2026-10-13 22:05:12', packageType: 'upgradePackage65535', parsedJson: '{ "chunk": 3, "total": 12, "left": 9, "parse": "0xFFFF" }', contentHex: 'F0F000800003000C0009414243440D0D', status: '成功' },
@@ -973,6 +977,321 @@ function buildMergeCurveSvg(entries) {
   ];
   return { path: paths[0] ? paths[0].path : '', paths, w, h, padL, padR, padT, padB, lines: [], yTicks, ymin: 0, ymax: 1, color: paths[0] ? paths[0].color : CURVE_SERIES_COLORS[0] };
 }
+
+/* ========== 数据可信 · 品类标准（独立于物模型三个页签） ==========
+ * 标识符复用 PROPERTIES / POINTS，不另起字段名。
+ * 三层：报文 PROTOCOL_PACKETS、拍平 sample、判断记录。互不覆盖。
+ * 判断在 sample 入库（含覆盖更新）之后，不拦截入库。
+ */
+const DT_MARKS = [
+  { code: 'RANGE_HIGH', name: '超上限', assertionType: 'range' },
+  { code: 'RANGE_LOW', name: '超下限', assertionType: 'range' },
+  { code: 'TYPE_MISMATCH', name: '类型不符', assertionType: 'type' },
+  { code: 'UNIT_MISMATCH', name: '单位不符', assertionType: 'unit' },
+  { code: 'ENUM_INVALID', name: '枚举非法', assertionType: 'enum' },
+  { code: 'NULL_VALUE', name: '空值', assertionType: 'null' },
+  { code: 'REQUIRED_MISS', name: '缺必报', assertionType: 'required' },
+  { code: 'TREND_JUMP', name: '趋势跳变', assertionType: 'trend' },
+  { code: 'CROSS_FIELD', name: '跨字段不一致', assertionType: 'cross' },
+  { code: 'PEER_DEVIATION', name: '同品类偏离', assertionType: 'peer' },
+  { code: 'NEIGHBOR_MISS', name: '对照对象缺失', assertionType: 'neighbor' },
+  { code: 'NEIGHBOR_DIFF', name: '相邻偏差', assertionType: 'neighbor' },
+];
+const DT_STATUS_LABEL = { draft: '草稿', published: '已发布', superseded: '被新版本替代' };
+const DT_STATUS_TAG = { draft: 'tag-orange', published: 'tag-green', superseded: 'tag-gray' };
+const DT_ASSERT_LABEL = { required: '必报', type: '类型与单位', range: '量程', enum: '枚举', null: '空值' };
+const DT_REL_LABEL = { cross: '跨字段', trend: '同时段趋势', peer: '同项目同品类', neighbor: '相邻设备' };
+const DT_ITEM_STATUS_LABEL = { pass: '已执行通过', fail: '已执行失败', skip: '未执行' };
+const DT_ITEM_STATUS_TAG = { pass: 'tag-green', fail: 'tag-red', skip: 'tag-gray' };
+
+function dtDeep(obj) { return JSON.parse(JSON.stringify(obj)); }
+function dtPropOf(categoryId, identifier) {
+  return PROPERTIES.find(p => p.categoryId === categoryId && p.identifier === identifier) || null;
+}
+function dtPointOf(identifier) {
+  return POINTS.find(p => p.code === identifier) || null;
+}
+function dtParseCycleSec(reportCycle, fallback) {
+  const n = parseInt(reportCycle, 10);
+  return Number.isFinite(n) && n > 0 ? n : (fallback || 60);
+}
+
+function dtPushAssert(bag, standardId, identifier, type, enabled, params) {
+  bag.assertions.push({
+    id: standardId + '-as-' + identifier + '-' + type,
+    standardId, identifier, type, enabled: !!enabled, params: params || {},
+  });
+}
+function dtMetricAsserts(bag, standardId, identifier, prop, point, opts) {
+  const required = !!(opts && opts.required);
+  const participate = !(opts && opts.participate === false);
+  dtPushAssert(bag, standardId, identifier, 'required', participate && required, {});
+  dtPushAssert(bag, standardId, identifier, 'type', participate, {
+    dataType: prop ? prop.dataType : (point ? point.dataType : 'float'),
+    unit: prop ? (prop.unit || '') : (point ? point.unit : ''),
+    cite: 'property',
+  });
+  if (point) {
+    dtPushAssert(bag, standardId, identifier, 'range', participate, {
+      min: point.min, max: point.max, cite: 'point', pointCode: point.code,
+    });
+  } else {
+    dtPushAssert(bag, standardId, identifier, 'range', participate, {
+      min: opts && opts.min != null ? opts.min : null,
+      max: opts && opts.max != null ? opts.max : null,
+      cite: 'standard', pointCode: '',
+    });
+  }
+  dtPushAssert(bag, standardId, identifier, 'enum', participate && prop && prop.dataType === 'enum', {
+    values: (opts && opts.enumValues) || '',
+  });
+  dtPushAssert(bag, standardId, identifier, 'null', participate && required, { allowNull: !required });
+}
+
+function dtFloodBundle(standardId) {
+  const bag = { mappings: [], assertions: [], relations: [], timeliness: [], offline: [], markRefs: [] };
+  ['yewei', 'wendu', 'yaqiang', 'dianya'].forEach(identifier => {
+    const prop = dtPropOf('C001', identifier);
+    bag.mappings.push({
+      id: standardId + '-map-' + identifier,
+      standardId, identifier,
+      sourceKey: 'data[].' + identifier,
+      enabled: identifier !== 'dianya',
+    });
+    dtMetricAsserts(bag, standardId, identifier, prop, dtPointOf(identifier), {
+      required: !!(prop && prop.required),
+      participate: identifier !== 'dianya',
+    });
+  });
+  bag.relations.push(
+    { id: standardId + '-rel-cross', standardId, type: 'cross', targets: [], fields: ['yewei', 'yaqiang'], threshold: 'yewei>8 且 yaqiang<90', windowSec: 0, enabled: true },
+    { id: standardId + '-rel-trend', standardId, type: 'trend', targets: [], fields: ['yewei'], threshold: '变化>2', windowSec: 600, enabled: true },
+    { id: standardId + '-rel-peer', standardId, type: 'peer', targets: ['同项目同品类'], fields: ['yaqiang'], threshold: '偏离中位数>30', windowSec: 600, enabled: true },
+    { id: standardId + '-rel-neighbor', standardId, type: 'neighbor', targets: ['D001', 'D002'], fields: ['yewei'], threshold: '差值>0.5', windowSec: 120, enabled: true }
+  );
+  const yeweiPoint = dtPointOf('yewei');
+  const intervalSec = yeweiPoint ? yeweiPoint.cycle : 60;
+  bag.timeliness.push({
+    id: standardId + '-time', standardId, mode: 'fixed',
+    intervalSec, windowSec: Math.round(intervalSec / 2), windowManual: false,
+    completenessEnabled: true, intervalCite: 'point.yewei.cycle',
+  });
+  bag.offline.push({ id: standardId + '-off', standardId, thresholdCount: 3, thresholdDurationSec: null });
+  DT_MARKS.forEach(m => bag.markRefs.push({ id: standardId + '-mk-' + m.code, standardId, code: m.code, enabled: true }));
+  return bag;
+}
+function dtBundleSimple(standardId, categoryId, specs, extra) {
+  const bag = { mappings: [], assertions: [], relations: [], timeliness: [], offline: [], markRefs: [] };
+  specs.forEach(spec => {
+    const prop = dtPropOf(categoryId, spec.identifier);
+    const point = dtPointOf(spec.identifier);
+    bag.mappings.push({
+      id: standardId + '-map-' + spec.identifier,
+      standardId, identifier: spec.identifier,
+      sourceKey: 'data[].' + spec.identifier,
+      enabled: spec.enabled !== false,
+    });
+    dtMetricAsserts(bag, standardId, spec.identifier, prop, spec.citePoint === false ? null : point, {
+      required: spec.required != null ? spec.required : !!(prop && prop.required),
+      participate: spec.enabled !== false,
+      min: spec.min, max: spec.max, enumValues: spec.enumValues || '',
+    });
+  });
+  (extra && extra.relations || []).forEach(rel => {
+    bag.relations.push(Object.assign({ id: standardId + '-rel-' + rel.type, standardId, targets: [], enabled: true }, rel));
+  });
+  const first = specs[0];
+  const prop0 = first ? dtPropOf(categoryId, first.identifier) : null;
+  const point0 = first && first.citePoint !== false ? dtPointOf(first.identifier) : null;
+  const intervalSec = point0 ? point0.cycle : dtParseCycleSec(prop0 && prop0.reportCycle, 300);
+  bag.timeliness.push({
+    id: standardId + '-time', standardId, mode: 'fixed',
+    intervalSec, windowSec: Math.round(intervalSec / 2), windowManual: false,
+    completenessEnabled: true,
+    intervalCite: point0 ? ('point.' + point0.code + '.cycle') : 'standard',
+  });
+  bag.offline.push({
+    id: standardId + '-off', standardId,
+    thresholdCount: extra && extra.thresholdCount != null ? extra.thresholdCount : 3,
+    thresholdDurationSec: extra && extra.thresholdDurationSec != null ? extra.thresholdDurationSec : null,
+  });
+  DT_MARKS.forEach(m => bag.markRefs.push({ id: standardId + '-mk-' + m.code, standardId, code: m.code, enabled: true }));
+  return bag;
+}
+function dtMergeBags(parts) {
+  const all = { mappings: [], assertions: [], relations: [], timeliness: [], offline: [], markRefs: [] };
+  parts.forEach(bag => {
+    Object.keys(all).forEach(k => { all[k] = all[k].concat(bag[k] || []); });
+  });
+  return all;
+}
+
+const DT_STANDARDS_SEED = [
+  { id: 'STD-C001-1', categoryId: 'C001', version: 1, status: 'superseded', effectiveAt: '2026-08-01 00:00:00', supersededAt: '2026-10-01 00:00:00', createdAt: '2026-07-20 11:00:00', copiedFrom: null },
+  { id: 'STD-C001-2', categoryId: 'C001', version: 2, status: 'published', effectiveAt: '2026-10-01 00:00:00', supersededAt: null, createdAt: '2026-09-28 16:40:00', copiedFrom: 1 },
+  { id: 'STD-C001-3', categoryId: 'C001', version: 3, status: 'draft', effectiveAt: null, supersededAt: null, createdAt: '2026-11-10 09:12:00', copiedFrom: 2 },
+  { id: 'STD-C002-1', categoryId: 'C002', version: 1, status: 'published', effectiveAt: '2026-09-01 00:00:00', supersededAt: null, createdAt: '2026-08-20 10:00:00', copiedFrom: null },
+  { id: 'STD-C003-1', categoryId: 'C003', version: 1, status: 'published', effectiveAt: '2026-08-10 00:00:00', supersededAt: null, createdAt: '2026-08-01 09:00:00', copiedFrom: null },
+];
+const DT_CHILDREN = dtMergeBags([
+  dtFloodBundle('STD-C001-1'),
+  dtFloodBundle('STD-C001-2'),
+  dtFloodBundle('STD-C001-3'),
+  dtBundleSimple('STD-C002-1', 'C002', [
+    { identifier: 'ph', required: true, citePoint: false, min: 0, max: 14 },
+    { identifier: 'do', required: true, citePoint: false, min: 0, max: 20 },
+    { identifier: 'turb', required: false, citePoint: false, min: 0, max: 1000 },
+  ], { thresholdCount: 6 }),
+  dtBundleSimple('STD-C003-1', 'C003', [
+    { identifier: 'yaqiang', required: true, citePoint: true },
+  ], { thresholdCount: 3 }),
+]);
+DT_CHILDREN.relations.forEach(rel => {
+  if (rel.standardId === 'STD-C001-1' && rel.type === 'peer') rel.enabled = false;
+});
+/* 管网压力表的测点字典周期是积水仪 yaqiang 的 60s，对不上本品类 reportCycle 900s，间隔在标准里改用上报属性周期。量程仍引用测点字典 min/max。 */
+DT_CHILDREN.timeliness.forEach(t => {
+  if (t.standardId === 'STD-C003-1') {
+    t.intervalSec = 900;
+    t.windowSec = 450;
+    t.intervalCite = 'property.yaqiang.reportCycle';
+  }
+});
+
+const DT_OVERRIDES_SEED = [
+  { id: 'OV-PJ01', scopeType: 'project', scopeId: 'PJ01', categoryId: 'C001', intervalSec: 90, windowSec: 45, windowManual: false, enabled: true },
+  { id: 'OV-D001', scopeType: 'device', scopeId: 'D001', categoryId: 'C001', intervalSec: 120, windowSec: 60, windowManual: false, enabled: true },
+];
+
+/* 测值 JSON 与 qualityJson 分开。qualityJson 只收录有异常标记的指标。 */
+const DT_SAMPLES_SEED = [
+  { id: 'S101', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', messageId: 'PK015', externalId: null, sampleTime: '2026-09-30 16:42:18', values: { yewei: 3.42, wendu: 28.6, yaqiang: 101.3 }, judgeId: 'J101', qualityJson: {} },
+  { id: 'S102', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', messageId: 'PK015', externalId: null, sampleTime: '2026-09-30 16:41:00', values: { yewei: 11.2, wendu: null, yaqiang: 101.3 }, judgeId: 'J102', qualityJson: { yewei: ['RANGE_HIGH'], wendu: ['NULL_VALUE'] } },
+  { id: 'S103', deviceId: 'D002', categoryId: 'C001', projectId: 'PJ01', messageId: 'PK016', externalId: null, sampleTime: '2026-09-30 16:20:00', values: { yewei: 11.5, wendu: 27.9, yaqiang: 100.8 }, judgeId: 'J103b', qualityJson: { yewei: ['RANGE_HIGH'] } },
+  { id: 'S104', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', messageId: 'PK005', externalId: null, sampleTime: '2026-09-30 15:00:00', values: { yewei: 3.10, wendu: 26.0, yaqiang: 100.2 }, judgeId: 'J104', qualityJson: {} },
+  { id: 'S105', deviceId: 'D009', categoryId: 'C001', projectId: null, messageId: null, externalId: 'EXT-LEVEL-20260930-01', sampleTime: '2026-09-30 14:10:00', values: { yewei: 2.20, wendu: 22.0, yaqiang: 99.0 }, judgeId: 'J105', qualityJson: {} },
+  { id: 'S106', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', messageId: 'PK018', externalId: null, sampleTime: '2026-09-30 08:00:30', values: { yewei: 3.20, wendu: 25.1, yaqiang: 101.0 }, judgeId: 'J106', qualityJson: {} },
+  { id: 'S107', deviceId: 'D002', categoryId: 'C001', projectId: 'PJ01', messageId: 'PK008', externalId: null, sampleTime: '2026-09-30 16:41:50', values: { yewei: 3.38, wendu: 27.9, yaqiang: 100.8 }, judgeId: 'J107', qualityJson: {} },
+  { id: 'S201', deviceId: 'D004', categoryId: 'C003', projectId: 'PJ03', messageId: 'PK017', externalId: null, sampleTime: '2026-08-10 14:00:00', values: { yaqiang: 280 }, judgeId: 'J201', qualityJson: { yaqiang: ['RANGE_HIGH'] } },
+];
+
+const DT_FLOOD_RELS = [
+  { type: 'cross', fields: ['yewei', 'yaqiang'], targets: [] },
+  { type: 'trend', fields: ['yewei'], targets: [] },
+  { type: 'peer', fields: ['yaqiang'], targets: ['同项目同品类'] },
+  { type: 'neighbor', fields: ['yewei'], targets: ['D001', 'D002'] },
+];
+function dtItemsAllPass(judgementId, identifiers, relations) {
+  const items = [];
+  identifiers.forEach(identifier => {
+    ['required', 'type', 'range', 'null'].forEach(type => {
+      items.push({
+        id: judgementId + '-' + identifier + '-' + type,
+        judgementId, identifier, kind: 'assert', assertType: type,
+        pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [],
+      });
+    });
+  });
+  (relations || []).forEach(rel => {
+    items.push({
+      id: judgementId + '-rel-' + rel.type,
+      judgementId, identifier: rel.fields[0], kind: 'relation', assertType: rel.type, relationType: rel.type,
+      pass: true, marks: [], reason: '', status: 'pass', relatedRefs: (rel.targets && rel.targets.length) ? rel.targets.slice() : rel.fields.slice(),
+    });
+  });
+  return items;
+}
+function dtHead(partial) {
+  return Object.assign({
+    externalId: null, scopeType: 'category', scopeId: '', intervalSec: 60, windowSec: 30,
+    standardVersion: 2, overallPass: true,
+  }, partial);
+}
+const DT_JUDGEMENTS_SEED = [
+  dtHead({ id: 'J101', messageId: 'PK015', sampleId: 'S101', deviceId: 'D001', projectId: 'PJ01', categoryId: 'C001', scopeType: 'device', scopeId: 'D001', intervalSec: 120, windowSec: 60, judgedAt: '2026-09-30 16:42:20', overallPass: true, values: { yewei: 3.42, wendu: 28.6, yaqiang: 101.3 } }),
+  dtHead({ id: 'J102', messageId: 'PK015', sampleId: 'S102', deviceId: 'D001', projectId: 'PJ01', categoryId: 'C001', scopeType: 'device', scopeId: 'D001', intervalSec: 120, windowSec: 60, judgedAt: '2026-09-30 16:41:02', overallPass: false, values: { yewei: 11.2, wendu: null, yaqiang: 101.3 } }),
+  dtHead({ id: 'J103a', messageId: 'PK016', sampleId: 'S103', deviceId: 'D002', projectId: 'PJ01', categoryId: 'C001', scopeType: 'project', scopeId: 'PJ01', intervalSec: 90, windowSec: 45, judgedAt: '2026-09-30 16:20:05', overallPass: true, values: { yewei: 3.38, wendu: 27.9, yaqiang: 100.8 }, kept: true }),
+  dtHead({ id: 'J103b', messageId: 'PK016', sampleId: 'S103', deviceId: 'D002', projectId: 'PJ01', categoryId: 'C001', scopeType: 'project', scopeId: 'PJ01', intervalSec: 90, windowSec: 45, judgedAt: '2026-09-30 16:25:40', overallPass: false, values: { yewei: 11.5, wendu: 27.9, yaqiang: 100.8 }, replaces: 'J103a' }),
+  dtHead({ id: 'J104', messageId: 'PK005', sampleId: 'S104', deviceId: 'D001', projectId: 'PJ01', categoryId: 'C001', scopeType: 'device', scopeId: 'D001', intervalSec: 120, windowSec: 60, judgedAt: '2026-09-30 15:00:03', overallPass: true, values: { yewei: 3.10, wendu: 26.0, yaqiang: 100.2 } }),
+  dtHead({ id: 'J105', messageId: null, externalId: 'EXT-LEVEL-20260930-01', sampleId: 'S105', deviceId: 'D009', projectId: null, categoryId: 'C001', scopeType: 'category', scopeId: 'C001', intervalSec: 60, windowSec: 30, judgedAt: '2026-09-30 14:10:04', overallPass: true, values: { yewei: 2.20, wendu: 22.0, yaqiang: 99.0 } }),
+  dtHead({ id: 'J106', messageId: 'PK018', sampleId: 'S106', deviceId: 'D001', projectId: 'PJ01', categoryId: 'C001', scopeType: 'device', scopeId: 'D001', intervalSec: 120, windowSec: 60, judgedAt: '2026-09-30 08:00:36', overallPass: true, values: { yewei: 3.20, wendu: 25.1, yaqiang: 101.0 } }),
+  dtHead({ id: 'J107', messageId: 'PK008', sampleId: 'S107', deviceId: 'D002', projectId: 'PJ01', categoryId: 'C001', scopeType: 'project', scopeId: 'PJ01', intervalSec: 90, windowSec: 45, judgedAt: '2026-09-30 16:41:52', overallPass: true, values: { yewei: 3.38, wendu: 27.9, yaqiang: 100.8 } }),
+  dtHead({ id: 'J201', messageId: 'PK017', sampleId: 'S201', deviceId: 'D004', projectId: 'PJ03', categoryId: 'C003', scopeType: 'category', scopeId: 'C003', intervalSec: 900, windowSec: 450, standardVersion: 1, judgedAt: '2026-08-10 14:00:02', overallPass: false, values: { yaqiang: 280 } }),
+];
+let DT_JUDGEMENT_ITEMS_SEED = []
+  .concat(dtItemsAllPass('J101', ['yewei', 'wendu', 'yaqiang'], DT_FLOOD_RELS))
+  .concat(dtItemsAllPass('J103a', ['yewei', 'wendu', 'yaqiang'], DT_FLOOD_RELS))
+  .concat(dtItemsAllPass('J105', ['yewei', 'wendu', 'yaqiang'], DT_FLOOD_RELS))
+  .concat(dtItemsAllPass('J106', ['yewei', 'wendu', 'yaqiang'], DT_FLOOD_RELS))
+  .concat(dtItemsAllPass('J107', ['yewei', 'wendu', 'yaqiang'], DT_FLOOD_RELS));
+DT_JUDGEMENT_ITEMS_SEED = DT_JUDGEMENT_ITEMS_SEED.concat(dtItemsAllPass('J104', ['yewei', 'wendu', 'yaqiang'], DT_FLOOD_RELS));
+DT_JUDGEMENT_ITEMS_SEED.forEach(item => {
+  if (item.judgementId === 'J104' && item.relationType === 'neighbor') {
+    item.reason = '对照对象缺失';
+    item.relatedRefs = ['D002'];
+    item.pass = true;
+    item.marks = [];
+    item.status = 'pass';
+  }
+});
+DT_JUDGEMENT_ITEMS_SEED = DT_JUDGEMENT_ITEMS_SEED.concat([
+  { id: 'J102-yewei-required', judgementId: 'J102', identifier: 'yewei', kind: 'assert', assertType: 'required', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-yewei-type', judgementId: 'J102', identifier: 'yewei', kind: 'assert', assertType: 'type', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-yewei-range', judgementId: 'J102', identifier: 'yewei', kind: 'assert', assertType: 'range', pass: false, marks: ['RANGE_HIGH'], reason: '测值 11.2 超出量程上限 10（引用测点字典 yewei.max）', status: 'fail', relatedRefs: [] },
+  { id: 'J102-yewei-null', judgementId: 'J102', identifier: 'yewei', kind: 'assert', assertType: 'null', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-wendu-required', judgementId: 'J102', identifier: 'wendu', kind: 'assert', assertType: 'required', pass: true, marks: [], reason: '键存在', status: 'pass', relatedRefs: [] },
+  { id: 'J102-wendu-type', judgementId: 'J102', identifier: 'wendu', kind: 'assert', assertType: 'type', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-wendu-range', judgementId: 'J102', identifier: 'wendu', kind: 'assert', assertType: 'range', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-wendu-null', judgementId: 'J102', identifier: 'wendu', kind: 'assert', assertType: 'null', pass: false, marks: ['NULL_VALUE'], reason: '测值为空', status: 'fail', relatedRefs: [] },
+  { id: 'J102-yaqiang-required', judgementId: 'J102', identifier: 'yaqiang', kind: 'assert', assertType: 'required', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-yaqiang-type', judgementId: 'J102', identifier: 'yaqiang', kind: 'assert', assertType: 'type', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-yaqiang-range', judgementId: 'J102', identifier: 'yaqiang', kind: 'assert', assertType: 'range', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-yaqiang-null', judgementId: 'J102', identifier: 'yaqiang', kind: 'assert', assertType: 'null', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J102-rel-cross', judgementId: 'J102', identifier: 'yewei', kind: 'relation', assertType: 'cross', relationType: 'cross', pass: false, marks: [], reason: '依赖 yewei 单条已失败，关联中停', status: 'skip', relatedRefs: ['yaqiang'] },
+  { id: 'J102-rel-trend', judgementId: 'J102', identifier: 'yewei', kind: 'relation', assertType: 'trend', relationType: 'trend', pass: false, marks: [], reason: '依赖 yewei 单条已失败，关联中停', status: 'skip', relatedRefs: ['yewei'] },
+  { id: 'J102-rel-peer', judgementId: 'J102', identifier: 'yaqiang', kind: 'relation', assertType: 'peer', relationType: 'peer', pass: true, marks: [], reason: '不依赖已失败指标，继续执行；偏离未超阈值', status: 'pass', relatedRefs: ['PJ01', 'C001'] },
+  { id: 'J102-rel-neighbor', judgementId: 'J102', identifier: 'yewei', kind: 'relation', assertType: 'neighbor', relationType: 'neighbor', pass: false, marks: [], reason: '依赖 yewei 单条已失败，关联中停', status: 'skip', relatedRefs: ['D002'] },
+  { id: 'J103b-yewei-required', judgementId: 'J103b', identifier: 'yewei', kind: 'assert', assertType: 'required', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-yewei-type', judgementId: 'J103b', identifier: 'yewei', kind: 'assert', assertType: 'type', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-yewei-range', judgementId: 'J103b', identifier: 'yewei', kind: 'assert', assertType: 'range', pass: false, marks: ['RANGE_HIGH'], reason: '覆盖后测值 11.5 超出量程上限 10', status: 'fail', relatedRefs: [] },
+  { id: 'J103b-yewei-null', judgementId: 'J103b', identifier: 'yewei', kind: 'assert', assertType: 'null', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-wendu-required', judgementId: 'J103b', identifier: 'wendu', kind: 'assert', assertType: 'required', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-wendu-type', judgementId: 'J103b', identifier: 'wendu', kind: 'assert', assertType: 'type', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-wendu-range', judgementId: 'J103b', identifier: 'wendu', kind: 'assert', assertType: 'range', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-wendu-null', judgementId: 'J103b', identifier: 'wendu', kind: 'assert', assertType: 'null', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-yaqiang-required', judgementId: 'J103b', identifier: 'yaqiang', kind: 'assert', assertType: 'required', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-yaqiang-type', judgementId: 'J103b', identifier: 'yaqiang', kind: 'assert', assertType: 'type', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-yaqiang-range', judgementId: 'J103b', identifier: 'yaqiang', kind: 'assert', assertType: 'range', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-yaqiang-null', judgementId: 'J103b', identifier: 'yaqiang', kind: 'assert', assertType: 'null', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J103b-rel-cross', judgementId: 'J103b', identifier: 'yewei', kind: 'relation', assertType: 'cross', relationType: 'cross', pass: false, marks: [], reason: '依赖 yewei 单条已失败，关联中停', status: 'skip', relatedRefs: ['yaqiang'] },
+  { id: 'J103b-rel-trend', judgementId: 'J103b', identifier: 'yewei', kind: 'relation', assertType: 'trend', relationType: 'trend', pass: false, marks: [], reason: '依赖 yewei 单条已失败，关联中停', status: 'skip', relatedRefs: ['yewei'] },
+  { id: 'J103b-rel-peer', judgementId: 'J103b', identifier: 'yaqiang', kind: 'relation', assertType: 'peer', relationType: 'peer', pass: true, marks: [], reason: '不依赖已失败指标，继续执行', status: 'pass', relatedRefs: ['PJ01'] },
+  { id: 'J103b-rel-neighbor', judgementId: 'J103b', identifier: 'yewei', kind: 'relation', assertType: 'neighbor', relationType: 'neighbor', pass: false, marks: [], reason: '依赖 yewei 单条已失败，关联中停', status: 'skip', relatedRefs: ['D001'] },
+  { id: 'J201-yaqiang-required', judgementId: 'J201', identifier: 'yaqiang', kind: 'assert', assertType: 'required', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J201-yaqiang-type', judgementId: 'J201', identifier: 'yaqiang', kind: 'assert', assertType: 'type', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+  { id: 'J201-yaqiang-range', judgementId: 'J201', identifier: 'yaqiang', kind: 'assert', assertType: 'range', pass: false, marks: ['RANGE_HIGH'], reason: '测值 280 超出量程上限 200（引用测点字典 yaqiang.max）', status: 'fail', relatedRefs: [] },
+  { id: 'J201-yaqiang-null', judgementId: 'J201', identifier: 'yaqiang', kind: 'assert', assertType: 'null', pass: true, marks: [], reason: '', status: 'pass', relatedRefs: [] },
+]);
+
+const DT_GAPS_SEED = [
+  { id: 'G1', deviceId: 'D007', categoryId: 'C001', projectId: 'PJ01', slotTime: '2026-09-30 10:00:00', periodStart: '', periodEnd: '', type: 'missing', status: 'open', filledSampleId: null, offlineReached: false },
+  { id: 'G2', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', slotTime: '2026-09-30 08:00:00', periodStart: '', periodEnd: '', type: 'missing', status: 'filled', filledSampleId: 'S106', offlineReached: false },
+  { id: 'G5', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', slotTime: '2026-09-29 22:00:00', periodStart: '', periodEnd: '', type: 'missing', status: 'open', filledSampleId: null, offlineReached: false },
+  { id: 'G3', deviceId: 'D003', categoryId: 'C002', projectId: 'PJ02', slotTime: '', periodStart: '2026-09-28 00:00:00', periodEnd: '', type: 'offline', status: 'open', filledSampleId: null, offlineReached: true },
+  { id: 'G4', deviceId: 'D006', categoryId: 'C005', projectId: 'PJ05', slotTime: '', periodStart: '2026-07-01 10:00:00', periodEnd: '2026-07-20 08:00:00', type: 'offline', status: 'recovered', filledSampleId: null, offlineReached: true },
+];
+
+/* 汇总示意。完整率 = 应报 / 实收；有效率 = 无异常标记指标次数 / 参与判断指标次数。不做门槛拦截。 */
+const DT_STATS_SEED = [
+  { id: 'ST-C001', categoryId: 'C001', projectId: '', deviceId: '', expected: 4320, received: 4102, judgedMetrics: 12306, abnormalMetrics: 214 },
+  { id: 'ST-C001-PJ01', categoryId: 'C001', projectId: 'PJ01', deviceId: '', expected: 2880, received: 2760, judgedMetrics: 8280, abnormalMetrics: 126 },
+  { id: 'ST-D001', categoryId: 'C001', projectId: 'PJ01', deviceId: 'D001', expected: 720, received: 690, judgedMetrics: 2070, abnormalMetrics: 18 },
+  { id: 'ST-D002', categoryId: 'C001', projectId: 'PJ01', deviceId: 'D002', expected: 720, received: 705, judgedMetrics: 2115, abnormalMetrics: 6 },
+  { id: 'ST-D009', categoryId: 'C001', projectId: '', deviceId: 'D009', expected: 48, received: 40, judgedMetrics: 120, abnormalMetrics: 0 },
+  { id: 'ST-C002-PJ02', categoryId: 'C002', projectId: 'PJ02', deviceId: '', expected: 576, received: 520, judgedMetrics: 1560, abnormalMetrics: 90 },
+  { id: 'ST-D003', categoryId: 'C002', projectId: 'PJ02', deviceId: 'D003', expected: 288, received: 240, judgedMetrics: 720, abnormalMetrics: 64 },
+  { id: 'ST-D004', categoryId: 'C003', projectId: 'PJ03', deviceId: 'D004', expected: 96, received: 84, judgedMetrics: 84, abnormalMetrics: 12 },
+];
 
 createApp({
   setup() {
@@ -1870,6 +2189,13 @@ createApp({
         }
         return { parent: '设备管控', current: 'OTA / 升级' };
       }
+      if (module.value === 'dataTrust') {
+        if (screen.value === 'categoryStandard') return { parent: '数据可信', current: '品类标准' };
+        if (screen.value === 'dataTrustJudgement') return { parent: '数据可信', current: '判断查询' };
+        if (screen.value === 'dataTrustGap') return { parent: '数据可信', current: '缺报与离线' };
+        if (screen.value === 'dataTrustStats') return { parent: '数据可信', current: '完整率/有效率' };
+        return { parent: '数据可信', current: '目录' };
+      }
       if (screen.value === 'list') return { parent: '设备管控', current: '物模型 · 品类列表' };
       if (screen.value === 'detail') {
         return { parent: '物模型', current: currentCategory.value.name + ' · 详情' };
@@ -1885,6 +2211,7 @@ createApp({
       if (module.value === 'ledger') return '一期原型 · 设备台账';
       if (module.value === 'monitor') return '一期原型 · 在线监控';
       if (module.value === 'ota') return '一期原型 · OTA / 升级';
+      if (module.value === 'dataTrust') return '一期原型 · 数据可信';
       return '一期原型 · 物模型';
     });
 
@@ -4082,7 +4409,17 @@ createApp({
       if (!row || !pts.length) return [];
       const baseTs = row.lastReportAt && row.lastReportAt !== '—' ? row.lastReportAt : '2026-10-14 09:18:33';
       // ~36h 跨度 + DESC，便于默认 24h 窗过滤示意；曲线 /history 仍升序另算
-      return genReportSamples(pts, { count: 48, spanSec: 36 * 3600, baseTs });
+      const generated = genReportSamples(pts, { count: 48, spanSec: 36 * 3600, baseTs }).map(r => ({
+        id: r.id, time: r.time, values: r.values, qualityJson: {}, judgeId: '', fromTrust: false,
+      }));
+      const trust = dtSamples.value.filter(s => s.deviceId === row.id).map(s => ({
+        id: s.id, time: s.sampleTime, values: s.values || {},
+        qualityJson: s.qualityJson || {}, judgeId: s.judgeId || '', fromTrust: true,
+      }));
+      return generated.concat(trust).sort((a, b) => {
+        if (a.time === b.time) return (a.fromTrust ? 0 : 1) - (b.fromTrust ? 0 : 1);
+        return a.time < b.time ? 1 : -1;
+      });
     });
     const monReportSamples = computed(() => {
       const all = monReportSamplesAll.value;
@@ -4462,6 +4799,577 @@ createApp({
       goMonitorCompare(ids.slice(0, CMP_MAX));
     }
 
+    /* ---- 数据可信 ---- */
+    const dtStandards = ref(DT_STANDARDS_SEED.map(s => dtDeep(s)));
+    const dtMappings = ref(DT_CHILDREN.mappings.map(s => dtDeep(s)));
+    const dtAssertions = ref(DT_CHILDREN.assertions.map(s => dtDeep(s)));
+    const dtRelations = ref(DT_CHILDREN.relations.map(s => dtDeep(s)));
+    const dtTimeliness = ref(DT_CHILDREN.timeliness.map(s => dtDeep(s)));
+    const dtOffline = ref(DT_CHILDREN.offline.map(s => dtDeep(s)));
+    const dtMarkRefs = ref(DT_CHILDREN.markRefs.map(s => dtDeep(s)));
+    const dtOverrides = ref(DT_OVERRIDES_SEED.map(s => dtDeep(s)));
+    const dtSamples = ref(DT_SAMPLES_SEED.map(s => dtDeep(s)));
+    const dtJudgements = ref(DT_JUDGEMENTS_SEED.map(s => dtDeep(s)));
+    const dtJudgementItems = ref(DT_JUDGEMENT_ITEMS_SEED.map(s => dtDeep(s)));
+    const dtGaps = ref(DT_GAPS_SEED.map(s => dtDeep(s)));
+    const dtStats = ref(DT_STATS_SEED.map(s => dtDeep(s)));
+    const dtCategoryId = ref('C001');
+    const dtViewStandardId = ref('');
+    const dtShowHistory = ref(false);
+    const dtStdTab = ref('standard');
+    const dtOverrideScopeType = ref('project');
+    const dtOverrideScopeId = ref('PJ01');
+    const dtOverrideInterval = ref(90);
+    const dtOverrideWindow = ref(45);
+    const dtJCategory = ref('');
+    const dtJProject = ref('');
+    const dtJDevice = ref('');
+    const dtJBegin = ref('');
+    const dtJEnd = ref('');
+    const dtJMetric = ref('');
+    const dtJOnlyAbnormal = ref(false);
+    const dtJCurrentId = ref('');
+    const dtGDevice = ref('');
+    const dtGBegin = ref('');
+    const dtGEnd = ref('');
+    const dtGStatus = ref('');
+    const dtSCategory = ref('');
+    const dtSProject = ref('');
+    const dtSDevice = ref('');
+    const dtDeviceIntervalInput = ref('');
+    const dtDeviceWindowInput = ref('');
+
+    function dtNow() { return '2026-11-12 10:30:00'; }
+    function dtStatusLabel(status) { return DT_STATUS_LABEL[status] || status || '—'; }
+    function dtStatusTag(status) { return DT_STATUS_TAG[status] || 'tag-gray'; }
+    function dtAssertLabel(type) { return DT_ASSERT_LABEL[type] || type || '—'; }
+    function dtRelLabel(type) { return DT_REL_LABEL[type] || type || '—'; }
+    function dtItemStatusLabel(status) { return DT_ITEM_STATUS_LABEL[status] || status || '—'; }
+    function dtItemStatusTag(status) { return DT_ITEM_STATUS_TAG[status] || 'tag-gray'; }
+    function dtMarkName(code) {
+      const m = DT_MARKS.find(x => x.code === code);
+      return m ? (m.name + '（' + code + '）') : code;
+    }
+    function dtDeviceName(id) {
+      if (!id) return '—';
+      const d = deviceList.value.find(x => x.id === id) || DEVICES.find(x => x.id === id);
+      return d ? (d.name + ' · ' + id) : id;
+    }
+    function dtProjectName(id) {
+      if (!id) return '—';
+      const p = PROJECTS.find(x => x.id === id);
+      return p ? p.name : id;
+    }
+    function dtCategoryName(id) {
+      const c = CATEGORIES.find(x => x.id === id);
+      return c ? c.name : (id || '—');
+    }
+    function dtSampleById(id) { return dtSamples.value.find(s => s.id === id) || null; }
+    function dtFindOverride(scopeType, scopeId, categoryId) {
+      if (!scopeId) return null;
+      return dtOverrides.value.find(o => o.enabled && o.scopeType === scopeType && o.scopeId === scopeId && o.categoryId === categoryId) || null;
+    }
+    function dtPublishedOf(categoryId) {
+      return dtStandards.value.find(s => s.categoryId === categoryId && s.status === 'published') || null;
+    }
+    function dtPublishedTimeliness(categoryId) {
+      const std = dtPublishedOf(categoryId);
+      if (!std) return null;
+      return dtTimeliness.value.find(t => t.standardId === std.id) || null;
+    }
+    function dtResolveInterval(device) {
+      if (!device) return { intervalSec: null, windowSec: null, source: 'category', label: '继承自品类', overrideId: null, categoryInterval: null, projectInterval: null };
+      const tim = dtPublishedTimeliness(device.categoryId);
+      const baseInterval = tim ? tim.intervalSec : null;
+      const baseWindow = tim ? tim.windowSec : null;
+      const proj = device.projectId ? dtFindOverride('project', device.projectId, device.categoryId) : null;
+      const dev = dtFindOverride('device', device.id, device.categoryId);
+      if (dev) {
+        return { intervalSec: dev.intervalSec, windowSec: dev.windowSec, source: 'device', label: '已覆盖', overrideId: dev.id, categoryInterval: baseInterval, projectInterval: proj ? proj.intervalSec : null };
+      }
+      if (proj) {
+        return { intervalSec: proj.intervalSec, windowSec: proj.windowSec, source: 'project', label: '继承自项目', overrideId: null, categoryInterval: baseInterval, projectInterval: proj.intervalSec };
+      }
+      return { intervalSec: baseInterval, windowSec: baseWindow, source: 'category', label: '继承自品类', overrideId: null, categoryInterval: baseInterval, projectInterval: null };
+    }
+    const dtStandardsOfCategory = computed(() => {
+      return dtStandards.value.filter(s => s.categoryId === dtCategoryId.value).slice().sort((a, b) => b.version - a.version);
+    });
+    const dtEffectiveStandard = computed(() => dtStandardsOfCategory.value.find(s => s.status === 'published') || null);
+    const dtDraftStandard = computed(() => dtStandardsOfCategory.value.find(s => s.status === 'draft') || null);
+    const dtViewStandard = computed(() => {
+      if (dtViewStandardId.value) {
+        return dtStandards.value.find(s => s.id === dtViewStandardId.value) || dtEffectiveStandard.value || dtDraftStandard.value;
+      }
+      return dtEffectiveStandard.value || dtDraftStandard.value || null;
+    });
+    const dtViewReadonly = computed(() => !dtViewStandard.value || dtViewStandard.value.status !== 'draft');
+    function dtRowsOf(list) {
+      const id = dtViewStandard.value && dtViewStandard.value.id;
+      if (!id) return [];
+      return list.value.filter(row => row.standardId === id);
+    }
+    const dtViewMappings = computed(() => dtRowsOf(dtMappings).map(m => {
+      const prop = dtPropOf(dtCategoryId.value, m.identifier);
+      const point = dtPointOf(m.identifier);
+      return Object.assign({}, m, {
+        name: prop ? prop.name : (point ? point.name : m.identifier),
+        dataType: prop ? prop.dataType : (point ? point.dataType : '—'),
+        unit: prop ? (prop.unit || '—') : (point ? point.unit : '—'),
+      });
+    }));
+    const dtViewAssertionGroups = computed(() => {
+      const rows = dtRowsOf(dtAssertions);
+      const ids = [];
+      rows.forEach(r => { if (ids.indexOf(r.identifier) < 0) ids.push(r.identifier); });
+      return ids.map(identifier => {
+        const prop = dtPropOf(dtCategoryId.value, identifier);
+        const point = dtPointOf(identifier);
+        const byType = {};
+        rows.filter(r => r.identifier === identifier).forEach(r => { byType[r.type] = r; });
+        return {
+          identifier,
+          name: prop ? prop.name : (point ? point.name : identifier),
+          byType,
+        };
+      });
+    });
+    const dtViewRelations = computed(() => dtRowsOf(dtRelations));
+    const dtViewTimeliness = computed(() => dtRowsOf(dtTimeliness)[0] || null);
+    const dtViewOffline = computed(() => dtRowsOf(dtOffline)[0] || null);
+    const dtViewMarkRefs = computed(() => {
+      const refs = dtRowsOf(dtMarkRefs);
+      return DT_MARKS.map(m => {
+        const hit = refs.find(r => r.code === m.code);
+        return { code: m.code, name: m.name, assertionType: m.assertionType, enabled: hit ? hit.enabled : false, row: hit };
+      });
+    });
+    const dtOverridesOfCategory = computed(() => dtOverrides.value.filter(o => o.categoryId === dtCategoryId.value));
+    const dtEffectivePreview = computed(() => {
+      return deviceList.value.filter(d => d.categoryId === dtCategoryId.value).slice(0, 8).map(d => ({
+        device: d, eff: dtResolveInterval(d),
+      }));
+    });
+    const dtScopeOptions = computed(() => {
+      if (dtOverrideScopeType.value === 'device') {
+        return deviceList.value.filter(d => d.categoryId === dtCategoryId.value).map(d => ({ id: d.id, label: d.name + ' · ' + d.id }));
+      }
+      return PROJECTS.map(p => ({ id: p.id, label: p.name + ' · ' + p.id }));
+    });
+    function dtGuardDraft() {
+      if (!dtViewReadonly.value) return true;
+      showToast('已发布或历史版本只读。改规则请从当前版复制出新草稿再发布', 'warn');
+      return false;
+    }
+    function dtCreateDraft() {
+      const cat = dtCategoryId.value;
+      if (dtDraftStandard.value) {
+        dtViewStandardId.value = dtDraftStandard.value.id;
+        dtStdTab.value = 'standard';
+        showToast('已有草稿 v' + dtDraftStandard.value.version + '，请在草稿上修改或先发布', 'warn');
+        return;
+      }
+      const src = dtEffectiveStandard.value;
+      const versions = dtStandardsOfCategory.value.map(s => s.version);
+      const nextVer = (versions.length ? Math.max.apply(null, versions) : 0) + 1;
+      const id = 'STD-' + cat + '-' + nextVer;
+      dtStandards.value.unshift({
+        id, categoryId: cat, version: nextVer, status: 'draft',
+        effectiveAt: null, supersededAt: null, createdAt: dtNow(),
+        copiedFrom: src ? src.version : null,
+      });
+      if (src) dtCloneChildren(src.id, id);
+      else dtSeedFromModel(id, cat);
+      dtViewStandardId.value = id;
+      dtShowHistory.value = false;
+      dtStdTab.value = 'standard';
+      showToast('已复制出草稿 v' + nextVer + (src ? ('（来自 v' + src.version + '）') : '（来自物模型）'), 'ok');
+    }
+    function dtCloneChildren(fromId, toId) {
+      function copy(list) {
+        list.value.filter(row => row.standardId === fromId).forEach(row => {
+          const c = dtDeep(row);
+          c.standardId = toId;
+          c.id = toId + String(row.id).slice(fromId.length);
+          list.value.push(c);
+        });
+      }
+      copy(dtMappings); copy(dtAssertions); copy(dtRelations); copy(dtTimeliness); copy(dtOffline); copy(dtMarkRefs);
+    }
+    function dtSeedFromModel(standardId, categoryId) {
+      const props = PROPERTIES.filter(p => p.categoryId === categoryId);
+      props.forEach(p => {
+        const point = dtPointOf(p.identifier);
+        dtMappings.value.push({ id: standardId + '-map-' + p.identifier, standardId, identifier: p.identifier, sourceKey: 'data[].' + p.identifier, enabled: p.showInMonitor !== false });
+        dtMetricAsserts({ assertions: dtAssertions.value }, standardId, p.identifier, p, point, { required: !!p.required, participate: true });
+      });
+      const point0 = props.length ? dtPointOf(props[0].identifier) : null;
+      const intervalSec = point0 ? point0.cycle : dtParseCycleSec(props[0] && props[0].reportCycle, 60);
+      dtTimeliness.value.push({
+        id: standardId + '-time', standardId, mode: 'fixed', intervalSec,
+        windowSec: Math.round(intervalSec / 2), windowManual: false, completenessEnabled: true,
+        intervalCite: point0 ? ('point.' + point0.code + '.cycle') : 'standard',
+      });
+      dtOffline.value.push({ id: standardId + '-off', standardId, thresholdCount: 3, thresholdDurationSec: null });
+      DT_MARKS.forEach(m => dtMarkRefs.value.push({ id: standardId + '-mk-' + m.code, standardId, code: m.code, enabled: true }));
+    }
+    function dtPublish() {
+      const cur = dtViewStandard.value;
+      if (!cur || cur.status !== 'draft') {
+        showToast('只有草稿可以发布。已发布版本只读', 'warn');
+        return;
+      }
+      const at = dtNow();
+      dtStandards.value.forEach(s => {
+        if (s.categoryId === cur.categoryId && s.status === 'published') {
+          s.status = 'superseded';
+          s.supersededAt = at;
+        }
+      });
+      cur.status = 'published';
+      cur.effectiveAt = at;
+      dtViewStandardId.value = cur.id;
+      showToast('v' + cur.version + ' 已发布。判断只使用当时已发布且在生效范围内的版本', 'ok');
+    }
+    function dtViewVersion(row) {
+      dtViewStandardId.value = row.id;
+      dtStdTab.value = 'standard';
+      dtShowHistory.value = false;
+    }
+    function dtBackToEffective() {
+      dtViewStandardId.value = '';
+      dtShowHistory.value = false;
+    }
+    function dtToggleMapping(row) {
+      if (!dtGuardDraft()) return;
+      const hit = dtMappings.value.find(m => m.id === row.id);
+      if (hit) hit.enabled = !hit.enabled;
+    }
+    function dtToggleAssertion(row) {
+      if (!row || !dtGuardDraft()) return;
+      row.enabled = !row.enabled;
+    }
+    function dtToggleRelation(row) {
+      if (!row || !dtGuardDraft()) return;
+      row.enabled = !row.enabled;
+    }
+    function dtToggleMark(row) {
+      if (!row || !dtGuardDraft()) return;
+      row.enabled = !row.enabled;
+    }
+    function dtSetRangeCite(row, cite) {
+      if (!row || !dtGuardDraft()) return;
+      row.params.cite = cite;
+      if (cite === 'point') {
+        const point = dtPointOf(row.params.pointCode || row.identifier);
+        if (point) { row.params.min = point.min; row.params.max = point.max; row.params.pointCode = point.code; }
+      }
+    }
+    function dtOnIntervalInput(tim) {
+      if (!tim || dtViewReadonly.value) return;
+      const n = Number(tim.intervalSec);
+      if (!tim.windowManual && Number.isFinite(n) && n > 0) tim.windowSec = Math.round(n / 2);
+    }
+    function dtMarkWindowManual(tim) {
+      if (!tim || dtViewReadonly.value) return;
+      tim.windowManual = true;
+    }
+    function dtSetOfflineMode(off, mode) {
+      if (!off || !dtGuardDraft()) return;
+      if (mode === 'count') {
+        off.thresholdDurationSec = null;
+        if (off.thresholdCount == null) off.thresholdCount = 3;
+      } else {
+        off.thresholdCount = null;
+        if (off.thresholdDurationSec == null) off.thresholdDurationSec = 180;
+      }
+    }
+    function dtSaveOverrideForm() {
+      const scopeId = dtOverrideScopeId.value;
+      const intervalSec = Number(dtOverrideInterval.value);
+      if (!scopeId) { showToast('请选择项目或设备', 'warn'); return; }
+      if (!Number.isFinite(intervalSec) || intervalSec <= 0) { showToast('间隔须为正数秒', 'warn'); return; }
+      let windowSec = Number(dtOverrideWindow.value);
+      if (!Number.isFinite(windowSec) || windowSec < 0) windowSec = Math.round(intervalSec / 2);
+      const exist = dtOverrides.value.find(o => o.scopeType === dtOverrideScopeType.value && o.scopeId === scopeId && o.categoryId === dtCategoryId.value);
+      if (exist) {
+        exist.intervalSec = intervalSec;
+        exist.windowSec = windowSec;
+        exist.windowManual = windowSec !== Math.round(intervalSec / 2);
+        exist.enabled = true;
+      } else {
+        dtOverrides.value.push({
+          id: 'OV-' + dtOverrideScopeType.value + '-' + scopeId + '-' + dtCategoryId.value,
+          scopeType: dtOverrideScopeType.value, scopeId, categoryId: dtCategoryId.value,
+          intervalSec, windowSec, windowManual: windowSec !== Math.round(intervalSec / 2), enabled: true,
+        });
+      }
+      showToast('已保存间隔覆盖。未覆盖的对象继续继承', 'ok');
+    }
+    function dtRestoreOverride(row) {
+      dtOverrides.value = dtOverrides.value.filter(o => o.id !== row.id);
+      showToast('已恢复继承', 'ok');
+    }
+    function dtSyncDeviceIntervalInputs(d) {
+      if (!d) { dtDeviceIntervalInput.value = ''; dtDeviceWindowInput.value = ''; return; }
+      const dev = dtFindOverride('device', d.id, d.categoryId);
+      dtDeviceIntervalInput.value = dev ? dev.intervalSec : '';
+      dtDeviceWindowInput.value = dev ? dev.windowSec : '';
+    }
+    const dtDeviceIntervalView = computed(() => dtResolveInterval(currentDevice.value));
+    watch(() => currentDevice.value && currentDevice.value.id, () => {
+      dtSyncDeviceIntervalInputs(currentDevice.value);
+    }, { immediate: true });
+    function dtSaveDeviceOverride() {
+      const d = currentDevice.value;
+      if (!d || !d.categoryId) { showToast('设备未关联品类，不能覆盖间隔', 'warn'); return; }
+      const intervalSec = Number(dtDeviceIntervalInput.value);
+      if (!Number.isFinite(intervalSec) || intervalSec <= 0) { showToast('间隔须为正数秒', 'warn'); return; }
+      let windowSec = Number(dtDeviceWindowInput.value);
+      if (!Number.isFinite(windowSec) || windowSec < 0) windowSec = Math.round(intervalSec / 2);
+      const exist = dtOverrides.value.find(o => o.scopeType === 'device' && o.scopeId === d.id && o.categoryId === d.categoryId);
+      if (exist) {
+        exist.intervalSec = intervalSec;
+        exist.windowSec = windowSec;
+        exist.windowManual = windowSec !== Math.round(intervalSec / 2);
+        exist.enabled = true;
+      } else {
+        dtOverrides.value.push({
+          id: 'OV-device-' + d.id, scopeType: 'device', scopeId: d.id, categoryId: d.categoryId,
+          intervalSec, windowSec, windowManual: windowSec !== Math.round(intervalSec / 2), enabled: true,
+        });
+      }
+      dtSyncDeviceIntervalInputs(d);
+      showToast('设备间隔已覆盖。窗口默认为间隔的一半', 'ok');
+    }
+    function dtRestoreDeviceOverride() {
+      const d = currentDevice.value;
+      if (!d) return;
+      dtOverrides.value = dtOverrides.value.filter(o => !(o.scopeType === 'device' && o.scopeId === d.id && o.categoryId === d.categoryId));
+      dtSyncDeviceIntervalInputs(d);
+      showToast('已恢复继承', 'ok');
+    }
+    function openCategoryStandard(cat) {
+      const id = (cat && cat.id) || (currentCategory.value && currentCategory.value.id) || 'C001';
+      jump('categoryStandard?categoryId=' + encodeURIComponent(id));
+    }
+    const dtMetricOptions = computed(() => {
+      const cid = dtJCategory.value;
+      const props = cid ? getCategoryProperties(cid) : PROPERTIES;
+      const seen = {};
+      const list = [];
+      props.forEach(p => {
+        if (seen[p.identifier]) return;
+        seen[p.identifier] = true;
+        list.push({ identifier: p.identifier, name: p.name });
+      });
+      return list;
+    });
+    function dtFormatValues(values) {
+      if (!values) return '—';
+      const keys = Object.keys(values);
+      if (!keys.length) return '—';
+      return keys.map(k => k + '=' + (values[k] == null ? 'null' : values[k])).join('，');
+    }
+    function dtJudgementReasonText(j) {
+      const fails = dtJudgementItems.value.filter(i => i.judgementId === j.id && i.status === 'fail' && i.marks && i.marks.length);
+      if (!fails.length) {
+        const note = dtJudgementItems.value.find(i => i.judgementId === j.id && i.reason === '对照对象缺失');
+        return note ? '对照对象缺失（本条仍合格）' : '—';
+      }
+      return fails.map(i => i.identifier + ' ' + i.marks.map(dtMarkName).join('/')).join('；');
+    }
+    function dtScopeText(j) {
+      if (!j) return '—';
+      if (j.scopeType === 'device') return '设备覆盖 ' + dtDeviceName(j.scopeId) + ' · 间隔 ' + j.intervalSec + 's · 窗口 ' + j.windowSec + 's';
+      if (j.scopeType === 'project') return '项目覆盖 ' + dtProjectName(j.scopeId) + ' · 间隔 ' + j.intervalSec + 's · 窗口 ' + j.windowSec + 's';
+      return '品类已发布版本 ' + dtCategoryName(j.categoryId) + ' · 间隔 ' + j.intervalSec + 's · 窗口 ' + j.windowSec + 's';
+    }
+    const dtFilteredJudgements = computed(() => {
+      return dtJudgements.value.filter(j => {
+        if (dtJCategory.value && j.categoryId !== dtJCategory.value) return false;
+        if (dtJProject.value && j.projectId !== dtJProject.value) return false;
+        if (dtJDevice.value && j.deviceId !== dtJDevice.value) return false;
+        if (dtJBegin.value && String(j.judgedAt) < dtJBegin.value) return false;
+        if (dtJEnd.value && String(j.judgedAt) > (dtJEnd.value.length <= 10 ? dtJEnd.value + ' 23:59:59' : dtJEnd.value)) return false;
+        if (dtJMetric.value && !(j.values && Object.prototype.hasOwnProperty.call(j.values, dtJMetric.value))) return false;
+        if (dtJOnlyAbnormal.value && j.overallPass) return false;
+        return true;
+      }).slice().sort((a, b) => String(b.judgedAt).localeCompare(String(a.judgedAt)));
+    });
+    const dtCurrentJudgement = computed(() => dtJudgements.value.find(j => j.id === dtJCurrentId.value) || null);
+    const dtCurrentItems = computed(() => dtJudgementItems.value.filter(i => i.judgementId === dtJCurrentId.value));
+    const dtCurrentSample = computed(() => {
+      const j = dtCurrentJudgement.value;
+      return j ? dtSampleById(j.sampleId) : null;
+    });
+    const dtPriorJudgement = computed(() => {
+      const j = dtCurrentJudgement.value;
+      if (!j) return null;
+      if (j.replaces) return dtJudgements.value.find(x => x.id === j.replaces) || null;
+      return dtJudgements.value.find(x => x.sampleId === j.sampleId && x.id !== j.id && x.kept) || null;
+    });
+    function dtOpenJudgement(id) {
+      if (!id) return;
+      jump('dataTrustJudgement?id=' + encodeURIComponent(id));
+    }
+    function dtOpenMessage(j) {
+      if (!j) return;
+      if (!j.messageId) {
+        showToast('本条无平台报文 id，外部数据记 externalId=' + (j.externalId || '—') + '，流程相同', 'warn');
+        return;
+      }
+      const sample = dtSampleById(j.sampleId);
+      const device = deviceList.value.find(d => d.id === (sample && sample.deviceId) || d.id === j.deviceId);
+      if (!device) { showToast('未找到设备', 'warn'); return; }
+      jump('deviceDetail?id=' + encodeURIComponent(device.id) + '&tab=localData&packet=' + encodeURIComponent(j.messageId));
+    }
+    function dtOpenSample(j) {
+      if (!j) return;
+      const sample = dtSampleById(j.sampleId);
+      const deviceId = (sample && sample.deviceId) || j.deviceId;
+      const row = MONITOR_ROWS.find(r => r.id === deviceId);
+      if (row) {
+        openMonitorDetail(row);
+        monDetailTab.value = 'reports';
+        location.hash = 'monitorDetail?id=' + encodeURIComponent(deviceId) + '&tab=reports';
+        return;
+      }
+      const device = deviceList.value.find(d => d.id === deviceId);
+      if (device) openMonitorForDevice(device);
+      monDetailTab.value = 'reports';
+      showToast('已打开监控上报明细。测值读 sample 原 JSON，异常读 qualityJson', 'ok');
+    }
+    function dtGapStatusKey(g) {
+      if (g.status === 'filled') return 'filled';
+      if (g.status === 'recovered') return 'recovered';
+      if (g.type === 'offline') return 'offline';
+      return 'missing';
+    }
+    function dtGapStatusLabel(g) {
+      const k = dtGapStatusKey(g);
+      return { missing: '缺报中', filled: '已补回', offline: '离线中', recovered: '已恢复' }[k] || k;
+    }
+    function dtGapStatusTag(g) {
+      const k = dtGapStatusKey(g);
+      return { missing: 'tag-orange', filled: 'tag-green', offline: 'tag-red', recovered: 'tag-blue' }[k] || 'tag-gray';
+    }
+    function dtGapWhen(g) {
+      if (g.slotTime) return g.slotTime;
+      if (g.periodStart && g.periodEnd) return g.periodStart + ' ~ ' + g.periodEnd;
+      if (g.periodStart) return g.periodStart + ' 起';
+      return '—';
+    }
+    const dtFilteredGaps = computed(() => {
+      return dtGaps.value.filter(g => {
+        if (dtGDevice.value && g.deviceId !== dtGDevice.value) return false;
+        if (dtGStatus.value && dtGapStatusKey(g) !== dtGStatus.value) return false;
+        const when = g.slotTime || g.periodStart || '';
+        if (dtGBegin.value && when && when < dtGBegin.value) return false;
+        if (dtGEnd.value && when && when > (dtGEnd.value.length <= 10 ? dtGEnd.value + ' 23:59:59' : dtGEnd.value)) return false;
+        return true;
+      }).slice().sort((a, b) => String(dtGapWhen(b)).localeCompare(String(dtGapWhen(a))));
+    });
+    function dtStatCompleteness(row) {
+      if (!row || !row.received) return '—';
+      return (Math.round((row.expected / row.received) * 1000) / 10).toFixed(1) + '%';
+    }
+    function dtStatValidity(row) {
+      if (!row || !row.judgedMetrics) return '—';
+      const ok = row.judgedMetrics - row.abnormalMetrics;
+      return (Math.round((ok / row.judgedMetrics) * 1000) / 10).toFixed(1) + '%';
+    }
+    const dtFilteredStats = computed(() => {
+      return dtStats.value.filter(row => {
+        if (dtSCategory.value && row.categoryId !== dtSCategory.value) return false;
+        if (dtSProject.value && row.projectId !== dtSProject.value) return false;
+        if (dtSDevice.value && row.deviceId !== dtSDevice.value) return false;
+        return true;
+      });
+    });
+    const dtStatSummary = computed(() => {
+      const rows = dtFilteredStats.value.filter(r => r.deviceId);
+      const base = rows.length ? rows : dtFilteredStats.value;
+      return base.reduce((acc, r) => {
+        acc.expected += r.expected;
+        acc.received += r.received;
+        acc.judgedMetrics += r.judgedMetrics;
+        acc.abnormalMetrics += r.abnormalMetrics;
+        return acc;
+      }, { expected: 0, received: 0, judgedMetrics: 0, abnormalMetrics: 0 });
+    });
+    function dtLatestSample(deviceId) {
+      const rows = dtSamples.value.filter(s => s.deviceId === deviceId).slice().sort((a, b) => String(b.sampleTime).localeCompare(String(a.sampleTime)));
+      return rows[0] || null;
+    }
+    function dtMetricMarks(deviceId, identifier) {
+      const s = dtLatestSample(deviceId);
+      if (!s || !s.qualityJson || !s.qualityJson[identifier]) return [];
+      return s.qualityJson[identifier];
+    }
+    function onMetricCellClick(d, identifier, evt) {
+      const marks = dtMetricMarks(d.id, identifier);
+      if (!marks.length) return;
+      if (evt && evt.stopPropagation) evt.stopPropagation();
+      const s = dtLatestSample(d.id);
+      if (s && s.judgeId) dtOpenJudgement(s.judgeId);
+    }
+    function reportMarks(row, code) {
+      if (!row || !row.qualityJson || !row.qualityJson[code]) return [];
+      return row.qualityJson[code];
+    }
+    function openReportJudge(row, evt) {
+      if (!row || !row.judgeId) return;
+      if (evt && evt.stopPropagation) evt.stopPropagation();
+      dtOpenJudgement(row.judgeId);
+    }
+    function monCurveQualityMarks(ch) {
+      const row = currentMonitor.value;
+      if (!row || !ch || ch.mode === 'merge' || !ch.point || !ch.svg) return [];
+      const code = ch.point.code;
+      const svg = ch.svg;
+      const series = ch.series || [];
+      if (!series.length) return [];
+      const samples = dtSamples.value.filter(s => s.deviceId === row.id && s.qualityJson && Array.isArray(s.qualityJson[code]) && s.qualityJson[code].length);
+      return samples.map((s, i) => {
+        const idx = Math.max(0, Math.min(series.length - 1, Math.round(series.length * (0.62 + i * 0.12))));
+        const pt = series[idx];
+        const x = svg.padL + pt.t * (svg.w - svg.padL - svg.padR);
+        const ymin = ch.point.ymin != null ? ch.point.ymin : 0;
+        const ymax = ch.point.ymax != null ? ch.point.ymax : 10;
+        const y = svg.padT + (1 - (pt.v - ymin) / ((ymax - ymin) || 1)) * (svg.h - svg.padT - svg.padB);
+        return { x: x, y: y, judgeId: s.judgeId, sampleId: s.id, marks: s.qualityJson[code], code: code };
+      });
+    }
+    function parsePacketDatasets(parsedJson) {
+      if (!parsedJson) return [];
+      let obj = parsedJson;
+      if (typeof parsedJson === 'string') {
+        try { obj = JSON.parse(parsedJson); } catch (e) { return []; }
+      }
+      const data = obj && obj.data;
+      if (Array.isArray(data)) return [{ serial: '（历史数组）', rows: data }];
+      if (data && typeof data === 'object') {
+        return Object.keys(data).map(serial => ({
+          serial: serial,
+          rows: Array.isArray(data[serial]) ? data[serial] : [data[serial]],
+        }));
+      }
+      return [];
+    }
+    function dtSamplesOfMessage(messageId) {
+      return dtSamples.value.filter(s => s.messageId === messageId);
+    }
+    function dtQualitySummary(sample) {
+      const q = sample && sample.qualityJson;
+      if (!q || !Object.keys(q).length) return '无异常';
+      return Object.keys(q).map(k => k + ' ' + q[k].map(dtMarkName).join('/')).join('；');
+    }
+    function dtDatasetText(row) {
+      if (!row || typeof row !== 'object') return '—';
+      return Object.keys(row).map(k => k + '=' + (row[k] == null ? 'null' : row[k])).join('，');
+    }
+
     function resetOverlays() {
       showCategoryModal.value = false;
       showRuleModal.value = false;
@@ -4535,6 +5443,8 @@ createApp({
           const id = queryParams && queryParams.get('id');
           const d = (id && deviceList.value.find(x => x.id === id)) || deviceList.value[0];
           openDeviceDetail(d, tabFromQuery || 'profile');
+          const packet = queryParams && queryParams.get('packet');
+          if (packet) expandedPacketIds.value = [packet];
         },
         deviceLocalData: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'),
         devicePackets: () => openDeviceDetail(deviceList.value.find(d => d.id === 'D001') || deviceList.value[0], 'localData'), // 旧 hash → 本机数据
@@ -4562,9 +5472,47 @@ createApp({
         exportHelp: () => { goDevices(); openExportModal(); },
         deviceTransfer: () => { goUnassignedDevices(); openTransferModal(unassignedDevices.value[0] || null); },
         // monitor
-        monitor: () => goMonitorList(),
-        monitorList: () => goMonitorList(),
-        monitorDetail: () => openMonitorDetail(MONITOR_ROWS[0]),
+        monitor: () => {
+          goMonitorList();
+          const cid = queryParams && queryParams.get('categoryId');
+          if (cid) monCategoryFilter.value = cid;
+        },
+        monitorList: () => {
+          goMonitorList();
+          const cid = queryParams && queryParams.get('categoryId');
+          if (cid) monCategoryFilter.value = cid;
+        },
+        monitorDetail: () => {
+          const id = queryParams && queryParams.get('id');
+          const row = (id && MONITOR_ROWS.find(r => r.id === id)) || MONITOR_ROWS[0];
+          openMonitorDetail(row);
+          if (queryParams && queryParams.get('tab') === 'reports') monDetailTab.value = 'reports';
+        },
+        categoryStandard: () => {
+          module.value = 'dataTrust';
+          screen.value = 'categoryStandard';
+          const cid = (queryParams && queryParams.get('categoryId')) || 'C001';
+          dtCategoryId.value = cid;
+          const cat = CATEGORIES.find(c => c.id === cid);
+          if (cat) currentCategory.value = cat;
+          dtShowHistory.value = false;
+          dtViewStandardId.value = (queryParams && queryParams.get('versionId')) || '';
+          const tab = queryParams && queryParams.get('tab');
+          if (tab === 'tip' || tab === 'standard') dtStdTab.value = tab;
+        },
+        dataTrustJudgement: () => {
+          module.value = 'dataTrust';
+          screen.value = 'dataTrustJudgement';
+          dtJCurrentId.value = (queryParams && queryParams.get('id')) || '';
+        },
+        dataTrustGap: () => {
+          module.value = 'dataTrust';
+          screen.value = 'dataTrustGap';
+        },
+        dataTrustStats: () => {
+          module.value = 'dataTrust';
+          screen.value = 'dataTrustStats';
+        },
         monitorCurve: () => openMonitorCurve(MONITOR_ROWS[0], 'yewei'),
         monitorOnlineRate: () => goMonitorOnlineRate(),
         monitorCurveLong: () => openMonitorCurve(MONITOR_ROWS.find(r => r.id === 'D006') || MONITOR_ROWS[0], 'rain'),
@@ -4703,6 +5651,24 @@ createApp({
       goMonitorCompare, onCmpCategoryChange, removeCmpDevice, openCmpDrawer, closeCmpDrawer,
       toggleCmpDrawerPick, confirmCmpDrawer, toggleCmpProp, refreshCmp,
       toggleCmpListSelect, compareFromMonitorList, applyCmpDevices,
+      // data trust
+      DT_MARKS, DT_ASSERT_LABEL, DT_REL_LABEL,
+      dtCategoryId, dtStandardsOfCategory, dtViewStandard, dtEffectiveStandard, dtDraftStandard, dtViewReadonly,
+      dtShowHistory, dtStdTab, dtViewMappings, dtViewAssertionGroups, dtViewRelations, dtViewTimeliness, dtViewOffline, dtViewMarkRefs,
+      dtOverridesOfCategory, dtEffectivePreview, dtOverrideScopeType, dtOverrideScopeId, dtOverrideInterval, dtOverrideWindow, dtScopeOptions,
+      dtStatusLabel, dtStatusTag, dtAssertLabel, dtRelLabel, dtMarkName, dtDeviceName, dtProjectName, dtCategoryName,
+      dtCreateDraft, dtPublish, dtViewVersion, dtBackToEffective, dtGuardDraft, dtToggleMapping, dtToggleAssertion, dtToggleRelation, dtToggleMark,
+      dtSetRangeCite, dtOnIntervalInput, dtMarkWindowManual, dtSetOfflineMode, dtSaveOverrideForm, dtRestoreOverride,
+      openCategoryStandard,
+      dtJCategory, dtJProject, dtJDevice, dtJBegin, dtJEnd, dtJMetric, dtJOnlyAbnormal, dtJCurrentId,
+      dtMetricOptions, dtFilteredJudgements, dtCurrentJudgement, dtCurrentItems, dtCurrentSample, dtPriorJudgement,
+      dtOpenJudgement, dtJudgementReasonText, dtItemStatusLabel, dtItemStatusTag, dtOpenMessage, dtOpenSample,
+      dtScopeText, dtFormatValues,
+      dtGDevice, dtGBegin, dtGEnd, dtGStatus, dtFilteredGaps, dtGapStatusLabel, dtGapStatusTag, dtGapWhen,
+      dtSCategory, dtSProject, dtSDevice, dtFilteredStats, dtStatSummary, dtStatCompleteness, dtStatValidity,
+      dtDeviceIntervalView, dtDeviceIntervalInput, dtDeviceWindowInput, dtSaveDeviceOverride, dtRestoreDeviceOverride,
+      dtMetricMarks, onMetricCellClick, reportMarks, openReportJudge, monCurveQualityMarks,
+      parsePacketDatasets, dtSamplesOfMessage, dtQualitySummary, dtDatasetText,
     };
   },
   template: `
@@ -4721,6 +5687,11 @@ createApp({
         <div class="nav-item" :class="{active: module==='ota' && screen==='otaTasks'}" @click="jump('otaTasks')"><span class="dot"></span>升级任务</div>
         <div class="nav-item" :class="{active: module==='ota' && screen==='upgradeMonitor'}" @click="jump('upgradeMonitor')"><span class="dot"></span>升级监控</div>
         <div class="nav-item" :class="{active: module==='ota' && screen==='upgradeHistory'}" @click="jump('upgradeHistory')"><span class="dot"></span>历史升级记录</div>
+        <div class="nav-group-title" title="目录占位 /iot/data-trust，点目录本身不进入业务页">数据可信</div>
+        <div class="nav-item" :class="{active: module==='dataTrust' && screen==='categoryStandard'}" @click="jump('categoryStandard')"><span class="dot"></span>品类标准</div>
+        <div class="nav-item" :class="{active: module==='dataTrust' && screen==='dataTrustJudgement'}" @click="jump('dataTrustJudgement')"><span class="dot"></span>判断查询</div>
+        <div class="nav-item" :class="{active: module==='dataTrust' && screen==='dataTrustGap'}" @click="jump('dataTrustGap')"><span class="dot"></span>缺报与离线</div>
+        <div class="nav-item" :class="{active: module==='dataTrust' && screen==='dataTrustStats'}" @click="jump('dataTrustStats')"><span class="dot"></span>完整率/有效率</div>
         <div class="nav-group-title">在线监控</div>
         <div class="nav-item" :class="{active: module==='monitor' && (screen==='monitorList' || screen==='monitorDetail' || screen==='monitorCurve')}" @click="jump('monitor')"><span class="dot"></span>设备数据</div>
         <div class="nav-item" :class="{active: module==='monitor' && screen==='monitorOnlineRate'}" @click="goMonitorOnlineRate()"><span class="dot"></span>在线率统计</div>
@@ -5095,6 +6066,7 @@ createApp({
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" @click="openDevicesForCategory(currentCategory)">查看设备</button>
+              <button class="btn" @click="openCategoryStandard(currentCategory)">品类标准</button>
               <button class="btn" @click="startCategoryOtaTask()">发起任务</button>
               <button class="btn" @click="openCategoryOtaTasks()">查看任务</button>
               <button class="btn" @click="openEditCategory(currentCategory)">编辑品类</button>
@@ -5102,6 +6074,9 @@ createApp({
             </div>
           </div>
           <div class="banner-tip" style="margin-bottom:12px">AEP 侧已完成设备数据解析；本平台通过归属规则自动挂靠品类。无需维护解析脚本。未匹配设备进入「未分类」。</div>
+          <div class="banner-muted" style="margin-bottom:12px">品类标准独立维护，不进入下面的上报属性 / 测点字典 / 安装参数模板。标识符仍引用物模型。
+            <button class="btn-link btn" @click="openCategoryStandard(currentCategory)">打开本品类标准 →</button>
+          </div>
           <div class="ota-support-module" data-block="category-ota-module">
             <div class="info-section-title">OTA 升级</div>
             <div class="ota-support-row">
@@ -6098,6 +7073,33 @@ createApp({
             </div>
           </div>
 
+          <div class="info-section" data-block="device-interval-override">
+            <div class="info-section-title">上报间隔 <span class="sub-nav-hint">数据可信 · 只覆盖间隔，窗口可随间隔算 · 不改测值</span></div>
+            <div class="kv-grid" v-if="currentDevice.categoryId">
+              <div class="k">生效</div>
+              <div class="v">
+                <b>{{ dtDeviceIntervalView.intervalSec == null ? '—' : dtDeviceIntervalView.intervalSec + 's' }}</b>
+                <span class="tag" :class="dtDeviceIntervalView.source==='device' ? 'tag-orange' : 'tag-blue'" style="margin-left:8px">{{ dtDeviceIntervalView.label }}</span>
+                <span class="cell-sub">窗口 {{ dtDeviceIntervalView.windowSec == null ? '—' : dtDeviceIntervalView.windowSec + 's' }}</span>
+              </div>
+              <div class="k">品类已发布</div>
+              <div class="v">{{ dtDeviceIntervalView.categoryInterval == null ? '—' : dtDeviceIntervalView.categoryInterval + 's' }} <span class="sub-nav-hint">{{ currentDevice.categoryName }}</span></div>
+              <div class="k">项目覆盖</div>
+              <div class="v">{{ dtDeviceIntervalView.projectInterval == null ? '无，继承品类' : dtDeviceIntervalView.projectInterval + 's' }}</div>
+            </div>
+            <div v-else class="empty-hint">设备未关联品类，不能覆盖上报间隔。</div>
+            <div class="toolbar" style="margin-top:8px" v-if="currentDevice.categoryId">
+              <label class="dispatch-param-label">间隔(s)</label>
+              <input class="input" style="width:100px" type="number" min="1" v-model.number="dtDeviceIntervalInput" placeholder="秒" />
+              <label class="dispatch-param-label">窗口(s)</label>
+              <input class="input" style="width:100px" type="number" min="0" v-model.number="dtDeviceWindowInput" placeholder="默认为一半" />
+              <button class="btn btn-primary btn-sm" @click="dtSaveDeviceOverride">保存覆盖</button>
+              <button class="btn btn-sm" @click="dtRestoreDeviceOverride" :disabled="dtDeviceIntervalView.source!=='device'">恢复默认</button>
+              <button class="btn-link btn" @click="openCategoryStandard(CATEGORIES.find(c => c.id===currentDevice.categoryId))">品类标准</button>
+            </div>
+            <div class="table-note">生效顺序：设备覆盖 &gt; 项目覆盖 &gt; 品类已发布版本。恢复默认只去掉本设备覆盖。</div>
+          </div>
+
           <div class="info-section">
             <div class="info-section-title">双 IMSI</div>
             <div class="kv-grid">
@@ -6292,6 +7294,32 @@ createApp({
                     </tr>
                     <tr v-if="isPacketExpanded(pk.id)" class="packet-hex-row">
                       <td colspan="7">
+                        <div class="packet-detail-block">
+                          <div class="info-section-title">包内数据集 <span class="sub-nav-hint">parsedJson.data · 报文层不因判断或 sample 覆盖而改写</span></div>
+                          <div v-if="parsePacketDatasets(pk.parsedJson).length">
+                            <div v-for="(ds, di) in parsePacketDatasets(pk.parsedJson)" :key="pk.id + '-ds-' + di" class="packet-dataset">
+                              <div class="cell-sub">序列号 {{ ds.serial }}</div>
+                              <div v-for="(row, ri) in ds.rows" :key="pk.id + '-r-' + di + '-' + ri"><code>{{ dtDatasetText(row) }}</code></div>
+                            </div>
+                          </div>
+                          <div v-else class="cell-sub">本包 data 不是采样列表（信息包 / 指令 / 升级包等）</div>
+                          <div class="info-section-title" style="margin-top:10px">本包 sample 异常摘要 <span class="sub-nav-hint">读 sample.qualityJson / judgeId，测值仍以 sample 原 JSON 为准</span></div>
+                          <table class="data-table" v-if="dtSamplesOfMessage(pk.id).length">
+                            <thead><tr><th>sample</th><th>时间</th><th>测值 JSON</th><th>judgeId</th><th>异常摘要</th></tr></thead>
+                            <tbody>
+                              <tr v-for="s in dtSamplesOfMessage(pk.id)" :key="s.id">
+                                <td><code>{{ s.id }}</code></td>
+                                <td>{{ s.sampleTime }}</td>
+                                <td><code>{{ dtFormatValues(s.values) }}</code></td>
+                                <td><button class="btn-link btn" @click="dtOpenJudgement(s.judgeId)">{{ s.judgeId }}</button></td>
+                                <td>
+                                  <span class="tag" :class="dtQualitySummary(s)==='无异常' ? 'tag-green' : 'tag-red'">{{ dtQualitySummary(s) }}</span>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-else class="cell-sub">本包没有挂接 sample（或不是数据上报包）</div>
+                        </div>
                         <pre class="hex-preview">{{ pk.contentHex }}</pre>
                       </td>
                     </tr>
@@ -6708,9 +7736,10 @@ createApp({
                   </td>
                   <td class="mon-time-cell">{{ d.lastReportAt }}</td>
                   <template v-if="monHasCategoryFilter">
-                    <td v-for="col in monMetricColumns" :key="col.identifier" class="metric-cell">
+                    <td v-for="col in monMetricColumns" :key="col.identifier" class="metric-cell" :class="{'quality-bad': dtMetricMarks(d.id, col.identifier).length}" @click="onMetricCellClick(d, col.identifier, $event)">
                       <b class="metric-val">{{ latestMetricValue(d, col.identifier) == null ? '—' : latestMetricValue(d, col.identifier) }}</b>
                       <span class="metric-unit" v-if="col.unit && latestMetricValue(d, col.identifier) != null">{{ col.unit }}</span>
+                      <div v-if="dtMetricMarks(d.id, col.identifier).length" class="cell-sub">{{ dtMetricMarks(d.id, col.identifier).join('、') }}</div>
                     </td>
                   </template>
                   <td v-else class="latest-summary-cell">
@@ -6840,6 +7869,7 @@ createApp({
               <button class="btn" @click="openMonitorCurve(currentMonitor)">全屏</button>
             </div>
             <div v-if="monCycleFullQueryTip" class="banner-tip">采集周期 &gt; 15 分钟：历史全量查、不分段</div>
+            <div class="banner-muted" style="margin-bottom:10px">异常点（红点）按指标读 qualityJson，点击用 judgeId 下钻判断详情。测值仍读原 JSON。合并模式不标点。</div>
 
             <div class="curve-readout" v-if="monCurveCharts.length">
               <div class="curve-readout-hint">悬停或点击任一曲线，查看该采样时间点全部指标</div>
@@ -6881,6 +7911,11 @@ createApp({
                   </g>
                   <path v-for="(pp, pi) in (ch.svg.paths && ch.svg.paths.length ? ch.svg.paths : [{path: ch.svg.path, color: ch.svg.color}])" :key="'p'+ch.key+pi"
                     :d="pp.path" fill="none" :stroke="pp.color" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
+                  <g v-for="mk in monCurveQualityMarks(ch)" :key="'qm'+ch.key+mk.sampleId">
+                    <circle :cx="mk.x" :cy="mk.y" r="5.5" fill="#DC3545" stroke="#fff" stroke-width="1.5" style="cursor:pointer" @click.stop="dtOpenJudgement(mk.judgeId)">
+                      <title>{{ mk.code }} {{ mk.marks.join('、') }} · {{ mk.judgeId }}</title>
+                    </circle>
+                  </g>
                   <line v-if="monHoverT != null" :x1="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :x2="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :y1="ch.svg.padT" :y2="ch.svg.h - ch.svg.padB" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" />
                   <text :x="(ch.svg.padL + ch.svg.w - ch.svg.padR)/2" :y="ch.svg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">sampleTime →（{{ monCurveRange }} 天 · PG 时序示意）</text>
                 </svg>
@@ -6950,18 +7985,22 @@ createApp({
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="r in monReportSamples" :key="r.id">
-                      <td>{{ r.time }}</td>
-                      <td v-for="c in monReportColumns" :key="r.id + '-' + c.code">
+                    <tr v-for="r in monReportSamples" :key="r.id" :class="{'row-trust': r.fromTrust}">
+                      <td>
+                        {{ r.time }}
+                        <div v-if="r.judgeId" class="cell-sub"><button class="btn-link btn" @click.stop="openReportJudge(r, $event)">{{ r.judgeId }}</button></div>
+                      </td>
+                      <td v-for="c in monReportColumns" :key="r.id + '-' + c.code" :class="{'quality-bad': reportMarks(r, c.code).length}" @click.stop="reportMarks(r, c.code).length && openReportJudge(r, $event)">
                         <template v-if="isFiniteMetricValue(r.values[c.code])">{{ r.values[c.code] }}</template>
                         <span v-else class="muted">—</span>
+                        <div v-if="reportMarks(r, c.code).length" class="cell-sub">{{ reportMarks(r, c.code).join('、') }}</div>
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
               <div v-else class="empty-hint">{{ monReportEmptyHint }}</div>
-              <div class="table-note">筛参对接 <code>sampleTimeBegin</code> / <code>sampleTimeEnd</code>（含边界）；列表分页 <code>GET /iot/iotDeviceSample</code> 按 <code>sample_time DESC</code>（最新在上）。曲线 <code>/history</code> 仍升序，勿改。本表为 mock 示意过滤/排序，正式列以 sample 实有字段为准。</div>
+              <div class="table-note">筛参对接 <code>sampleTimeBegin</code> / <code>sampleTimeEnd</code>（含边界）；列表分页 <code>GET /iot/iotDeviceSample</code> 按 <code>sample_time DESC</code>（最新在上）。曲线 <code>/history</code> 仍升序，勿改。测值读 sample 原 JSON；异常高亮读 <code>qualityJson</code>（无异常的指标不出现）。带 judgeId 的行可下钻判断详情。缺报不出现在本表，也不伪造测值。</div>
             </div>
           </template>
         </div>
@@ -7031,6 +8070,11 @@ createApp({
                   </g>
                   <path v-for="(pp, pi) in (ch.svg.paths && ch.svg.paths.length ? ch.svg.paths : [{path: ch.svg.path, color: ch.svg.color}])" :key="'p'+ch.key+pi"
                     :d="pp.path" fill="none" :stroke="pp.color" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
+                  <g v-for="mk in monCurveQualityMarks(ch)" :key="'qm'+ch.key+mk.sampleId">
+                    <circle :cx="mk.x" :cy="mk.y" r="5.5" fill="#DC3545" stroke="#fff" stroke-width="1.5" style="cursor:pointer" @click.stop="dtOpenJudgement(mk.judgeId)">
+                      <title>{{ mk.code }} {{ mk.marks.join('、') }} · {{ mk.judgeId }}</title>
+                    </circle>
+                  </g>
                   <line v-if="monHoverT != null" :x1="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :x2="ch.svg.padL + monHoverT * (ch.svg.w - ch.svg.padL - ch.svg.padR)" :y1="ch.svg.padT" :y2="ch.svg.h - ch.svg.padB" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" />
                   <text :x="(ch.svg.padL + ch.svg.w - ch.svg.padR)/2" :y="ch.svg.h - 10" text-anchor="middle" font-size="11" fill="#8c8c8c">sampleTime →（{{ monCurveRange }} 天 · PG 时序示意）</text>
                 </svg>
@@ -7300,7 +8344,476 @@ createApp({
               </tbody>
             </table>
           </div>
-          <div class="table-note">应报 = 24h ÷ 采集周期；漏报 = 该报没报。一期为示意统计。</div>
+          <div class="table-note">应报 = 24h ÷ 采集周期；漏报 = 该报没报。一期为示意统计。完整率/有效率在「数据可信」，不在本页做门槛。</div>
+        </div>
+
+        <!-- ===== 数据可信：品类标准 ===== -->
+        <div v-else-if="module==='dataTrust' && screen==='categoryStandard'" class="page-card" data-screen="data-trust-standard">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">品类标准</h1>
+              <p class="page-desc">组件 <code>iot/iot-data-trust/IotDataTrustStandard</code> · 路由 <code>/iot/iot-data-trust-standard</code> · 本页 <code>#categoryStandard</code>。目录占位 <code>/iot/data-trust</code> 没有业务页。与品类详情入口打开的是同一份标准，不进上报属性 / 测点字典 / 安装参数模板。</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" @click="dtCreateDraft">新建版本</button>
+              <button class="btn btn-primary" @click="dtPublish" :disabled="dtViewReadonly">发布</button>
+              <button class="btn" @click="dtShowHistory=!dtShowHistory">查看历史版本</button>
+            </div>
+          </div>
+          <div class="tabs" style="margin-bottom:12px">
+            <div class="tab" :class="{active: dtStdTab==='standard'}" @click="dtStdTab='standard'">标准</div>
+            <div class="tab" :class="{active: dtStdTab==='tip'}" @click="dtStdTab='tip'">口径说明</div>
+          </div>
+
+          <template v-if="dtStdTab==='tip'">
+            <div class="info-section">
+              <div class="info-section-title">口径</div>
+              <ul class="dt-tip-list">
+                <li>数据可信是独立模块。品类标准单独维护，不混进物模型三个页签。</li>
+                <li>两个入口进同一份标准：品类详情「品类标准」、侧栏「数据可信 / 品类标准」。</li>
+                <li>字段标识符和名称复用上报属性 / 测点字典（yewei、wendu、yaqiang 等），不另起一套字段名。</li>
+              </ul>
+            </div>
+            <div class="info-section">
+              <div class="info-section-title">数据三层（互不覆盖）</div>
+              <ul class="dt-tip-list">
+                <li>原始报文：本机数据 <code>iot_protocol_data</code>。入包后的 parsedJson 不因判断或 sample 覆盖而改写。</li>
+                <li>拍平 sample：一条报文可对多条 sample。例：<code>PK015</code> → <code>S101</code>（全正常）与 <code>S102</code>（有异常）。</li>
+                <li>判断记录：以 sample 为准、逐条判，都引用同一报文 id。无平台 id 时记 <code>externalId</code>（<code>S105</code> / <code>EXT-LEVEL-20260930-01</code>），流程相同。本期不做接入页。</li>
+              </ul>
+            </div>
+            <div class="info-section">
+              <div class="info-section-title">判断时机与链式规则</div>
+              <ul class="dt-tip-list">
+                <li>sample 入库（含同窗口覆盖更新）之后才判断。入库不被判断拦住。</li>
+                <li>生效标准：设备覆盖 &gt; 项目覆盖 &gt; 品类当时已发布且在生效范围内的版本。例：D001 用设备间隔 120s；D002 无设备覆盖，用项目 PJ01 的 90s；D009 无项目无设备覆盖，用品类 60s。</li>
+                <li>先跑完全部单条断言。三个指标都有问题就三个都打标记，不因第一个失败整单返回。<code>J102</code>：yewei 超上限、wendu 空值、yaqiang 通过。</li>
+                <li>再跑关联。某指标单条已失败，则依赖它的关联记「未执行」；不依赖的继续。<code>J102</code> 跨字段 / 趋势 / 相邻依赖 yewei，未执行；同项目同品类只看 yaqiang，继续并通过。</li>
+                <li>写判断记录，再回写 sample。总结果按各指标「且」汇总。</li>
+              </ul>
+            </div>
+            <div class="info-section">
+              <div class="info-section-title">qualityJson / judgeId</div>
+              <ul class="dt-tip-list">
+                <li><code>sample.judgeId</code>：一条 sample 只挂一个最新判断 id。多个指标共用这一个 id。</li>
+                <li><code>sample.qualityJson</code> 与测值 JSON 同形。k = 指标标识，v = 标记码列表（可多项）。无异常的指标不出现；全部正常为 <code>{}</code>。测值 JSON 不改。</li>
+                <li>覆盖重判：新建判断，更新 judgeId 与 qualityJson，旧判断留在判断表。<code>S103</code> 先有 <code>J103a</code>（yewei=3.38 通过），同窗口覆盖成 11.5 后写 <code>J103b</code>，<code>J103a</code> 仍可点开。报文 <code>PK016</code> 仍是入包时的 3.38。</li>
+              </ul>
+            </div>
+            <div class="info-section">
+              <div class="info-section-title">缺报、离线、相邻对照</div>
+              <ul class="dt-tip-list">
+                <li>缺报不算在当前这条合格 sample 上，也不创造测值。<code>G1</code> / <code>G5</code> 只有应报时点。</li>
+                <li>补报落入窗口后改为已补回，并挂 <code>filledSampleId</code>。<code>G2</code> → <code>S106</code>（报文 <code>PK018</code>）。</li>
+                <li>连续缺报达到阈值记离线时段（<code>G3</code> 离线中）；恢复上报后 <code>recovered</code>（<code>G4</code>）。</li>
+                <li>相邻设备这一期手工指定设备对（D001–D002）。邻居缺数只记「对照对象缺失」，不把当前数据打成不合格，不写入 qualityJson。<code>J104</code> 总结果仍通过。</li>
+              </ul>
+            </div>
+            <div class="info-section">
+              <div class="info-section-title">版本与不做项</div>
+              <ul class="dt-tip-list">
+                <li>草稿 → 已发布（只读）→ 被新版本替代（历史只读）。改规则只能从当前版复制出新草稿再发布。积水仪地埋当前生效 v2，另有草稿 v3、历史 v1。</li>
+                <li>不做：校准改测值；重复与冲突（维持同窗口覆盖写入，覆盖后按上面重判）；变频率 / 按需上报（只做固定频率）；通用规则引擎；用判断拦截入库；手工改标记。重判只随 sample 覆盖或后台重跑。</li>
+                <li>完整率 = 应报次数 / 实收次数。有效率按有异常标记的指标统计。本期只做汇总，不做门槛拦截。</li>
+                <li>字段与接口见 <code>docs/api/iot-data-trust.md</code>。</li>
+              </ul>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="toolbar">
+              <select class="select" :value="dtCategoryId" @change="jump('categoryStandard?categoryId=' + $event.target.value)">
+                <option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }} · {{ c.id }}</option>
+              </select>
+              <span v-if="dtDraftStandard" class="tag tag-orange">有未发布草稿 v{{ dtDraftStandard.version }}</span>
+              <button v-if="dtViewStandard && dtViewStandard.status!=='published'" class="btn btn-sm" @click="dtBackToEffective">回到当前生效版</button>
+              <div class="spacer"></div>
+              <button v-if="dtDraftStandard && dtViewStandard && dtViewStandard.id!==dtDraftStandard.id" class="btn btn-sm" @click="dtViewVersion(dtDraftStandard)">打开草稿</button>
+            </div>
+            <div v-if="!dtViewStandard" class="empty-hint">本品类还没有品类标准。点「新建版本」会按上报属性生成草稿，量程能对上测点字典的会引用 min/max 与采集周期。</div>
+            <template v-else>
+              <div class="detail-meta" style="margin-bottom:10px">
+                <span>品类：<b>{{ dtCategoryName(dtViewStandard.categoryId) }}</b>（{{ dtViewStandard.categoryId }}）</span>
+                <span>版本：<b>v{{ dtViewStandard.version }}</b></span>
+                <span>状态：<span class="tag" :class="dtStatusTag(dtViewStandard.status)">{{ dtStatusLabel(dtViewStandard.status) }}</span></span>
+                <span>生效时间：<b>{{ dtViewStandard.effectiveAt || '—' }}</b></span>
+                <span v-if="dtViewStandard.copiedFrom">复制自 v{{ dtViewStandard.copiedFrom }}</span>
+                <span v-if="dtViewStandard.supersededAt">被替代于 {{ dtViewStandard.supersededAt }}</span>
+              </div>
+              <div v-if="dtViewReadonly" class="banner-tip">当前为{{ dtStatusLabel(dtViewStandard.status) }}，只读。改规则请「新建版本」，从当前版复制出草稿后再发布。判断只用当时已发布且在生效范围内的版本。</div>
+              <div v-else class="banner-muted">草稿可改开关和参数。发布后本版只读，上一份已发布版本变为历史。</div>
+
+              <div v-if="dtShowHistory" class="info-section">
+                <div class="info-section-title">历史版本</div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>版本</th><th>状态</th><th>生效时间</th><th>创建时间</th><th>操作</th></tr></thead>
+                    <tbody>
+                      <tr v-for="s in dtStandardsOfCategory" :key="s.id">
+                        <td>v{{ s.version }}</td>
+                        <td><span class="tag" :class="dtStatusTag(s.status)">{{ dtStatusLabel(s.status) }}</span></td>
+                        <td>{{ s.effectiveAt || '—' }}</td>
+                        <td>{{ s.createdAt }}</td>
+                        <td><button class="btn-link btn" @click="dtViewVersion(s)">查看</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="info-section">
+                <div class="info-section-title">对照表 <span class="sub-nav-hint">标识符 / 名称只读引用物模型 · 是否参与判断</span></div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>标识符</th><th>名称</th><th>类型 / 单位</th><th>解析字段 / JSON 键</th><th>参与判断</th></tr></thead>
+                    <tbody>
+                      <tr v-for="m in dtViewMappings" :key="m.id">
+                        <td><code>{{ m.identifier }}</code></td>
+                        <td>{{ m.name }}</td>
+                        <td>{{ m.dataType }} <span v-if="m.unit && m.unit!=='—'">{{ m.unit }}</span></td>
+                        <td><code>{{ m.sourceKey }}</code></td>
+                        <td>
+                          <button class="btn-link btn" @click="dtToggleMapping(m)">
+                            <span class="tag" :class="m.enabled ? 'tag-green' : 'tag-gray'">{{ m.enabled ? '参与' : '不参与' }}</span>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr v-if="!dtViewMappings.length"><td colspan="5"><div class="empty-hint">无对照</div></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="info-section">
+                <div class="info-section-title">单条断言 <span class="sub-nav-hint">按指标 · 开关 + 参数 · 量程 / 周期优先引用测点字典</span></div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>标识符</th><th>名称</th><th>必报</th><th>类型与单位</th><th>量程</th><th>枚举</th><th>空值</th></tr></thead>
+                    <tbody>
+                      <tr v-for="g in dtViewAssertionGroups" :key="g.identifier">
+                        <td><code>{{ g.identifier }}</code></td>
+                        <td>{{ g.name }}</td>
+                        <td>
+                          <button v-if="g.byType.required" class="btn-link btn" @click="dtToggleAssertion(g.byType.required)"><span class="tag" :class="g.byType.required.enabled?'tag-green':'tag-gray'">{{ g.byType.required.enabled?'开':'关' }}</span></button>
+                        </td>
+                        <td>
+                          <template v-if="g.byType.type">
+                            <button class="btn-link btn" @click="dtToggleAssertion(g.byType.type)"><span class="tag" :class="g.byType.type.enabled?'tag-green':'tag-gray'">{{ g.byType.type.enabled?'开':'关' }}</span></button>
+                            <div class="cell-sub">{{ g.byType.type.params.dataType || '—' }} {{ g.byType.type.params.unit || '' }} · 引用上报属性</div>
+                          </template>
+                        </td>
+                        <td>
+                          <template v-if="g.byType.range">
+                            <button class="btn-link btn" @click="dtToggleAssertion(g.byType.range)"><span class="tag" :class="g.byType.range.enabled?'tag-green':'tag-gray'">{{ g.byType.range.enabled?'开':'关' }}</span></button>
+                            <div class="dt-inline">
+                              <input class="input" style="width:72px" type="number" v-model.number="g.byType.range.params.min" :disabled="dtViewReadonly || g.byType.range.params.cite==='point'" />
+                              <span>~</span>
+                              <input class="input" style="width:72px" type="number" v-model.number="g.byType.range.params.max" :disabled="dtViewReadonly || g.byType.range.params.cite==='point'" />
+                              <span class="tag tag-gray" v-if="g.byType.range.params.cite==='point'">引用测点字典</span>
+                              <span class="tag tag-blue" v-else>标准补</span>
+                              <button v-if="!dtViewReadonly && g.byType.range.params.cite==='point'" class="btn-link btn" @click="dtSetRangeCite(g.byType.range,'standard')">改为标准补</button>
+                            </div>
+                          </template>
+                        </td>
+                        <td>
+                          <template v-if="g.byType.enum">
+                            <button class="btn-link btn" @click="dtToggleAssertion(g.byType.enum)"><span class="tag" :class="g.byType.enum.enabled?'tag-green':'tag-gray'">{{ g.byType.enum.enabled?'开':'关' }}</span></button>
+                            <input class="input" style="width:120px" v-model="g.byType.enum.params.values" :disabled="dtViewReadonly || !g.byType.enum.enabled" placeholder="逗号分隔" />
+                          </template>
+                        </td>
+                        <td>
+                          <button v-if="g.byType.null" class="btn-link btn" @click="dtToggleAssertion(g.byType.null)"><span class="tag" :class="g.byType.null.enabled?'tag-green':'tag-gray'">{{ g.byType.null.enabled?'开':'关' }}</span></button>
+                          <div class="cell-sub" v-if="g.byType.null">{{ g.byType.null.params.allowNull ? '允许空' : '不允许空' }}</div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="info-section">
+                <div class="info-section-title">关联规则 <span class="sub-nav-hint">相邻设备这一期手工指定设备对</span></div>
+                <div class="table-wrap" v-if="dtViewRelations.length">
+                  <table class="data-table">
+                    <thead><tr><th>类型</th><th>对象</th><th>字段</th><th>阈值</th><th>窗口(s)</th><th>启用</th></tr></thead>
+                    <tbody>
+                      <tr v-for="r in dtViewRelations" :key="r.id">
+                        <td>{{ dtRelLabel(r.type) }}</td>
+                        <td>{{ (r.targets && r.targets.length) ? r.targets.join('、') : '—' }}</td>
+                        <td><code>{{ (r.fields || []).join('、') }}</code></td>
+                        <td><input class="input" style="width:180px" v-model="r.threshold" :disabled="dtViewReadonly" /></td>
+                        <td><input class="input" style="width:80px" type="number" v-model.number="r.windowSec" :disabled="dtViewReadonly" /></td>
+                        <td><button class="btn-link btn" @click="dtToggleRelation(r)"><span class="tag" :class="r.enabled?'tag-green':'tag-gray'">{{ r.enabled?'开':'关' }}</span></button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-else class="empty-hint">本版没有关联规则</div>
+              </div>
+
+              <div class="info-section" v-if="dtViewTimeliness">
+                <div class="info-section-title">时效与完整 <span class="sub-nav-hint">仅固定频率 · 补报窗口默认间隔的一半，左右对称</span></div>
+                <div class="toolbar">
+                  <span class="tag tag-blue">固定频率</span>
+                  <label>间隔(s)</label>
+                  <input class="input" style="width:100px" type="number" min="1" v-model.number="dtViewTimeliness.intervalSec" :disabled="dtViewReadonly" @input="dtOnIntervalInput(dtViewTimeliness)" />
+                  <label>补报窗口(s)</label>
+                  <input class="input" style="width:100px" type="number" min="0" v-model.number="dtViewTimeliness.windowSec" :disabled="dtViewReadonly" @input="dtMarkWindowManual(dtViewTimeliness)" />
+                  <label>完整率</label>
+                  <button class="btn-link btn" @click="dtViewReadonly ? dtGuardDraft() : (dtViewTimeliness.completenessEnabled = !dtViewTimeliness.completenessEnabled)">
+                    <span class="tag" :class="dtViewTimeliness.completenessEnabled?'tag-green':'tag-gray'">{{ dtViewTimeliness.completenessEnabled?'启用':'关闭' }}</span>
+                  </button>
+                  <span class="cell-sub">{{ dtViewTimeliness.intervalCite }}{{ dtViewTimeliness.windowManual ? ' · 窗口已手改' : ' · 窗口随间隔' }}</span>
+                </div>
+              </div>
+
+              <div class="info-section" v-if="dtViewOffline">
+                <div class="info-section-title">离线</div>
+                <div class="toolbar">
+                  <label><input type="radio" :disabled="dtViewReadonly" :checked="dtViewOffline.thresholdCount != null" @change="dtSetOfflineMode(dtViewOffline,'count')" /> 连续缺报周期数</label>
+                  <input class="input" style="width:80px" type="number" min="1" v-model.number="dtViewOffline.thresholdCount" :disabled="dtViewReadonly || dtViewOffline.thresholdCount==null" />
+                  <label><input type="radio" :disabled="dtViewReadonly" :checked="dtViewOffline.thresholdCount == null" @change="dtSetOfflineMode(dtViewOffline,'duration')" /> 时长阈值(s)</label>
+                  <input class="input" style="width:100px" type="number" min="1" v-model.number="dtViewOffline.thresholdDurationSec" :disabled="dtViewReadonly || dtViewOffline.thresholdCount!=null" />
+                </div>
+                <div class="table-note">二选一。达到阈值后记离线时段，不在缺报行上伪造测值。</div>
+              </div>
+
+              <div class="info-section">
+                <div class="info-section-title">标记字典 <span class="sub-nav-hint">标记码与断言类型分开 · qualityJson 只写标记码</span></div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>标记码</th><th>名称</th><th>对应断言类型</th><th>本版引用</th></tr></thead>
+                    <tbody>
+                      <tr v-for="m in dtViewMarkRefs" :key="m.code">
+                        <td><code>{{ m.code }}</code></td>
+                        <td>{{ m.name }}</td>
+                        <td>{{ dtAssertLabel(m.assertionType) || dtRelLabel(m.assertionType) }}</td>
+                        <td>
+                          <button v-if="m.row" class="btn-link btn" @click="dtToggleMark(m.row)"><span class="tag" :class="m.enabled?'tag-green':'tag-gray'">{{ m.enabled?'引用':'不引用' }}</span></button>
+                          <span v-else>—</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="info-section">
+                <div class="info-section-title">生效覆盖 <span class="sub-nav-hint">项目 / 设备可覆盖间隔 · 窗口默认为一半 · 可恢复继承</span></div>
+                <div class="banner-muted">没有单独的项目详情页，项目覆盖写在这里。设备档案「上报间隔」改的是同一张覆盖表。</div>
+                <div class="toolbar">
+                  <select class="select" v-model="dtOverrideScopeType" @change="dtOverrideScopeId = dtScopeOptions[0] ? dtScopeOptions[0].id : ''">
+                    <option value="project">项目</option>
+                    <option value="device">设备</option>
+                  </select>
+                  <select class="select" v-model="dtOverrideScopeId">
+                    <option v-for="o in dtScopeOptions" :key="o.id" :value="o.id">{{ o.label }}</option>
+                  </select>
+                  <input class="input" style="width:100px" type="number" min="1" v-model.number="dtOverrideInterval" placeholder="间隔 s" />
+                  <input class="input" style="width:100px" type="number" min="0" v-model.number="dtOverrideWindow" placeholder="窗口 s" />
+                  <button class="btn btn-primary btn-sm" @click="dtSaveOverrideForm">保存覆盖</button>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>范围</th><th>对象</th><th>间隔(s)</th><th>窗口(s)</th><th>状态</th><th>操作</th></tr></thead>
+                    <tbody>
+                      <tr v-if="dtViewTimeliness && dtEffectiveStandard && dtViewStandard && dtViewStandard.id===dtEffectiveStandard.id">
+                        <td>品类</td><td>{{ dtCategoryName(dtCategoryId) }}</td>
+                        <td>{{ dtViewTimeliness.intervalSec }}</td><td>{{ dtViewTimeliness.windowSec }}</td>
+                        <td><span class="tag tag-blue">继承自品类</span></td><td>—</td>
+                      </tr>
+                      <tr v-for="o in dtOverridesOfCategory" :key="o.id">
+                        <td>{{ o.scopeType==='project' ? '项目' : '设备' }}</td>
+                        <td>{{ o.scopeType==='project' ? dtProjectName(o.scopeId) : dtDeviceName(o.scopeId) }}</td>
+                        <td>{{ o.intervalSec }}</td>
+                        <td>{{ o.windowSec }}</td>
+                        <td><span class="tag tag-orange">已覆盖</span></td>
+                        <td><button class="btn-link btn" @click="dtRestoreOverride(o)">恢复默认</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="table-note">下面是本品类设备的生效结果（设备 &gt; 项目 &gt; 已发布品类）。</div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>设备</th><th>项目</th><th>生效间隔</th><th>窗口</th><th>来源</th></tr></thead>
+                    <tbody>
+                      <tr v-for="row in dtEffectivePreview" :key="row.device.id">
+                        <td>{{ row.device.name }} <code>{{ row.device.id }}</code></td>
+                        <td>{{ row.device.projectName || '未定义项目' }}</td>
+                        <td>{{ row.eff.intervalSec == null ? '—' : row.eff.intervalSec + 's' }}</td>
+                        <td>{{ row.eff.windowSec == null ? '—' : row.eff.windowSec + 's' }}</td>
+                        <td><span class="tag" :class="row.eff.source==='device'?'tag-orange':'tag-blue'">{{ row.eff.label }}</span></td>
+                      </tr>
+                      <tr v-if="!dtEffectivePreview.length"><td colspan="5"><div class="empty-hint">本品类暂无设备</div></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+          </template>
+        </div>
+
+        <!-- ===== 数据可信：判断查询 ===== -->
+        <div v-else-if="module==='dataTrust' && screen==='dataTrustJudgement'" class="page-card" data-screen="data-trust-judgement">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">判断查询</h1>
+              <p class="page-desc">组件 <code>iot/iot-data-trust/IotDataTrustJudgement</code> · 路由 <code>/iot/iot-data-trust-judgement</code> · 本页 <code>#dataTrustJudgement</code>。不提供手工改标记。口径见品类标准「口径说明」。</p>
+            </div>
+          </div>
+          <div class="banner-muted">列表测值是该次判断当时的 JSON。异常原因来自判断明细上的标记，没有则不展示。外部数据无报文 id 时看 externalId（<code>J105</code>）。</div>
+          <div class="toolbar">
+            <select class="select" v-model="dtJCategory"><option value="">全部品类</option><option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+            <select class="select" v-model="dtJProject"><option value="">全部项目</option><option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option></select>
+            <select class="select" v-model="dtJDevice"><option value="">全部设备</option><option v-for="d in deviceList" :key="d.id" :value="d.id">{{ d.name }}</option></select>
+            <input class="input" type="date" v-model="dtJBegin" />
+            <input class="input" type="date" v-model="dtJEnd" />
+            <select class="select" v-model="dtJMetric"><option value="">全部指标</option><option v-for="m in dtMetricOptions" :key="m.identifier" :value="m.identifier">{{ m.name }} · {{ m.identifier }}</option></select>
+            <label class="dt-check"><input type="checkbox" v-model="dtJOnlyAbnormal" /> 仅看异常</label>
+            <button class="btn" @click="dtJCategory=''; dtJProject=''; dtJDevice=''; dtJBegin=''; dtJEnd=''; dtJMetric=''; dtJOnlyAbnormal=false">重置</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>时间</th><th>设备</th><th>各指标测值</th><th>异常原因</th><th>结果</th></tr></thead>
+              <tbody>
+                <tr v-for="j in dtFilteredJudgements" :key="j.id" class="row-clickable" :class="{'row-selected': dtJCurrentId===j.id}" @click="dtOpenJudgement(j.id)">
+                  <td>{{ j.judgedAt }}<div class="cell-sub"><code>{{ j.id }}</code></div></td>
+                  <td>{{ dtDeviceName(j.deviceId) }}<div class="cell-sub">{{ dtCategoryName(j.categoryId) }}</div></td>
+                  <td><code>{{ dtFormatValues(j.values) }}</code></td>
+                  <td>{{ dtJudgementReasonText(j) }}</td>
+                  <td><span class="tag" :class="j.overallPass?'tag-green':'tag-red'">{{ j.overallPass ? '通过' : '不通过' }}</span></td>
+                </tr>
+                <tr v-if="!dtFilteredJudgements.length"><td colspan="5"><div class="empty-hint">无匹配判断</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="dtCurrentJudgement" class="info-section" data-block="judgement-detail">
+            <div class="info-section-title">判断详情 · {{ dtCurrentJudgement.id }}</div>
+            <div class="kv-grid">
+              <div class="k">版本与范围</div>
+              <div class="v">品类标准 v{{ dtCurrentJudgement.standardVersion }} · {{ dtScopeText(dtCurrentJudgement) }}</div>
+              <div class="k">总结果</div>
+              <div class="v"><span class="tag" :class="dtCurrentJudgement.overallPass?'tag-green':'tag-red'">{{ dtCurrentJudgement.overallPass ? '通过（各指标且）' : '不通过（各指标且）' }}</span></div>
+              <div class="k">报文</div>
+              <div class="v">
+                <button v-if="dtCurrentJudgement.messageId" class="btn-link btn" @click="dtOpenMessage(dtCurrentJudgement)">{{ dtCurrentJudgement.messageId }}</button>
+                <span v-else>externalId <code>{{ dtCurrentJudgement.externalId || '—' }}</code></span>
+              </div>
+              <div class="k">sample</div>
+              <div class="v">
+                <button class="btn-link btn" @click="dtOpenSample(dtCurrentJudgement)">{{ dtCurrentJudgement.sampleId }}</button>
+                <span class="cell-sub" v-if="dtCurrentSample">当前测值 {{ dtFormatValues(dtCurrentSample.values) }} · judgeId {{ dtCurrentSample.judgeId }} · qualityJson {{ dtQualitySummary(dtCurrentSample) }}</span>
+              </div>
+            </div>
+            <div v-if="dtPriorJudgement" class="banner-tip">覆盖重判：本 sample 另有判断 <button class="btn-link btn" @click="dtOpenJudgement(dtPriorJudgement.id)">{{ dtPriorJudgement.id }}</button>（{{ dtPriorJudgement.judgedAt }}，测值 {{ dtFormatValues(dtPriorJudgement.values) }}），仍留在判断表。当前 sample.judgeId 指向最新一条。</div>
+            <div v-if="dtCurrentJudgement.id==='J104'" class="banner-muted">相邻对照缺对象只记「对照对象缺失」。本条 qualityJson 为空，总结果仍通过。</div>
+            <div v-if="dtCurrentJudgement.id==='J102'" class="banner-muted">先跑完 yewei / wendu / yaqiang 全部单条断言，再跑关联。依赖 yewei 的关联为未执行；只依赖 yaqiang 的同项目同品类继续执行。</div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>指标</th><th>种类</th><th>结论</th><th>标记</th><th>原因</th><th>status</th><th>关联对象</th></tr></thead>
+                <tbody>
+                  <tr v-for="it in dtCurrentItems" :key="it.id">
+                    <td><code>{{ it.identifier }}</code></td>
+                    <td>{{ it.kind==='relation' ? ('关联 · ' + dtRelLabel(it.relationType)) : dtAssertLabel(it.assertType) }}</td>
+                    <td>{{ it.pass ? '通过' : '不通过' }}</td>
+                    <td>{{ (it.marks && it.marks.length) ? it.marks.map(dtMarkName).join('、') : '—' }}</td>
+                    <td>{{ it.reason || '—' }}</td>
+                    <td><span class="tag" :class="dtItemStatusTag(it.status)">{{ dtItemStatusLabel(it.status) }}</span></td>
+                    <td>{{ (it.relatedRefs && it.relatedRefs.length) ? it.relatedRefs.join('、') : '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 数据可信：缺报与离线 ===== -->
+        <div v-else-if="module==='dataTrust' && screen==='dataTrustGap'" class="page-card" data-screen="data-trust-gap">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">缺报与离线</h1>
+              <p class="page-desc">组件 <code>iot/iot-data-trust/IotDataTrustGap</code> · 路由 <code>/iot/iot-data-trust-gap</code> · 本页 <code>#dataTrustGap</code>。不展示伪造测值。缺报不记在合格 sample 头上。</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <select class="select" v-model="dtGDevice"><option value="">全部设备</option><option v-for="d in deviceList" :key="d.id" :value="d.id">{{ d.name }}</option></select>
+            <input class="input" type="date" v-model="dtGBegin" />
+            <input class="input" type="date" v-model="dtGEnd" />
+            <select class="select" v-model="dtGStatus">
+              <option value="">全部状态</option>
+              <option value="missing">缺报中</option>
+              <option value="filled">已补回</option>
+              <option value="offline">离线中</option>
+              <option value="recovered">已恢复</option>
+            </select>
+            <button class="btn" @click="dtGDevice=''; dtGBegin=''; dtGEnd=''; dtGStatus=''">重置</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>设备</th><th>应报时点 / 时段</th><th>类型</th><th>状态</th><th>补回的 sample</th><th>达到离线阈值</th></tr></thead>
+              <tbody>
+                <tr v-for="g in dtFilteredGaps" :key="g.id">
+                  <td>{{ dtDeviceName(g.deviceId) }}</td>
+                  <td>{{ dtGapWhen(g) }}</td>
+                  <td>{{ g.type==='offline' ? '离线' : '缺报' }}</td>
+                  <td><span class="tag" :class="dtGapStatusTag(g)">{{ dtGapStatusLabel(g) }}</span></td>
+                  <td>
+                    <button v-if="g.filledSampleId" class="btn-link btn" @click="dtOpenSample({ sampleId: g.filledSampleId, deviceId: g.deviceId })">{{ g.filledSampleId }}</button>
+                    <span v-else>—</span>
+                  </td>
+                  <td>{{ g.offlineReached ? '是' : '否' }}</td>
+                </tr>
+                <tr v-if="!dtFilteredGaps.length"><td colspan="6"><div class="empty-hint">无缺报或离线记录</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-note">补报落入窗口后状态改为已补回，并挂 filledSampleId。连续缺报达到品类标准阈值后另记离线时段，恢复上报后为已恢复。</div>
+        </div>
+
+        <!-- ===== 数据可信：完整率/有效率 ===== -->
+        <div v-else-if="module==='dataTrust' && screen==='dataTrustStats'" class="page-card" data-screen="data-trust-stats">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">完整率 / 有效率</h1>
+              <p class="page-desc">组件 <code>iot/iot-data-trust/IotDataTrustStats</code> · 路由 <code>/iot/iot-data-trust-stats</code> · 本页 <code>#dataTrustStats</code>。先做按品类 / 项目 / 设备的汇总，不做门槛拦截。</p>
+            </div>
+          </div>
+          <div class="banner-muted">完整率 = 应报次数 / 实收次数。有效率 = 无异常标记的指标次数 / 参与判断的指标次数（异常来自 qualityJson）。本页只展示，不拦截入库，也不设门槛。</div>
+          <div class="toolbar">
+            <select class="select" v-model="dtSCategory"><option value="">全部品类</option><option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+            <select class="select" v-model="dtSProject"><option value="">全部项目</option><option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option></select>
+            <select class="select" v-model="dtSDevice"><option value="">全部设备</option><option v-for="d in deviceList" :key="d.id" :value="d.id">{{ d.name }}</option></select>
+            <button class="btn" @click="dtSCategory=''; dtSProject=''; dtSDevice=''">重置</button>
+          </div>
+          <div class="stat-row">
+            <div class="stat-chip"><div class="sc-label">应报次数</div><div class="sc-value">{{ dtStatSummary.expected }}</div></div>
+            <div class="stat-chip"><div class="sc-label">实收次数</div><div class="sc-value">{{ dtStatSummary.received }}</div></div>
+            <div class="stat-chip accent"><div class="sc-label">完整率</div><div class="sc-value" style="font-size:22px">{{ dtStatCompleteness(dtStatSummary) }}</div></div>
+            <div class="stat-chip"><div class="sc-label">判断指标</div><div class="sc-value">{{ dtStatSummary.judgedMetrics }}</div></div>
+            <div class="stat-chip danger"><div class="sc-label">有异常标记</div><div class="sc-value">{{ dtStatSummary.abnormalMetrics }}</div></div>
+            <div class="stat-chip ok"><div class="sc-label">有效率</div><div class="sc-value" style="font-size:22px">{{ dtStatValidity(dtStatSummary) }}</div></div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>品类</th><th>项目</th><th>设备</th><th>应报</th><th>实收</th><th>完整率</th><th>判断指标</th><th>异常指标</th><th>有效率</th></tr></thead>
+              <tbody>
+                <tr v-for="row in dtFilteredStats" :key="row.id">
+                  <td>{{ dtCategoryName(row.categoryId) }}</td>
+                  <td>{{ row.projectId ? dtProjectName(row.projectId) : '—' }}</td>
+                  <td>{{ row.deviceId ? dtDeviceName(row.deviceId) : '汇总' }}</td>
+                  <td>{{ row.expected }}</td>
+                  <td>{{ row.received }}</td>
+                  <td>{{ dtStatCompleteness(row) }}<div class="cell-sub">{{ row.expected }} / {{ row.received }}</div></td>
+                  <td>{{ row.judgedMetrics }}</td>
+                  <td>{{ row.abnormalMetrics }}</td>
+                  <td>{{ dtStatValidity(row) }}</td>
+                </tr>
+                <tr v-if="!dtFilteredStats.length"><td colspan="9"><div class="empty-hint">无汇总</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-note">汇总为示意计数，公式按锁定口径现算。筛选后的顶部卡片优先加总设备行，没有设备行时加总当前结果。</div>
         </div>
 
       </main>
