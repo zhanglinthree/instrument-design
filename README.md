@@ -1,1 +1,205 @@
-# instrument-design
+# 设备管控平台 · 驾驶舱 / 物模型 / 设备台账 / 在线监控 — HTML 高保真原型
+
+替代 Figma 限额，可本地直接打开。Vue 3 CDN + 自研 Ant Design 风格 CSS，1440 管理后台壳。
+
+**品类图标：** Iconify（`mdi:*` id 存 `category.icon`；空则 `DEFAULT_CODE_TO_ICONIFY[code]`）。规范见 [`docs/ICON_SPEC.md`](docs/ICON_SPEC.md)。
+
+## 打开方式
+
+**文件路径：**
+```
+file:///workspace/mfish-thing-model-html/index.html
+```
+
+**推荐本地静态服务（需联网加载 Vue CDN）：**
+```bash
+cd /workspace/mfish-thing-model-html
+python3 -m http.server 8877
+# 浏览器打开 http://127.0.0.1:8877/
+```
+
+## 模块切换
+
+侧栏：**设备管控**（工作台 / 设备台账 / 物模型）、一级分组 **OTA / 升级**（**升级任务** / **升级监控** / **历史升级记录**）与一级分组 **在线监控**（设备数据 / 在线率统计 / 设备对比）；同壳同配色，高亮当前模块。HTML 原型无真实登录与权限；正式产品首页由权限决定（用户有权的第一个菜单页），不固定落在工作台。
+
+## 产品口径（本期）
+
+### 物模型
+- 物模型定义**产品类型语义**（测点 / 事件 / 阈值 / 安装模板 / 固件 / **指令**）。
+- 上报属性（`kind=property`）含 **`showInMonitor`**（布尔，默认 true）：文案「监控展示」；关闭后监控详情最新值 / 曲线 / 上报明细（及列表测点列）同源过滤，不展示该测点。
+- **指令 Tab** = 配置该品类「能下什么」：**命令位（开关）** vs **内容载荷**；**不是**实时点发。字段对齐后端 `kind=service`：`bitIndex`（**1-based 命令位**）、`payloadOffset`（**1-based 内容起始字节**）、`hasParam`（0/1）、`paramMin`/`paramMax`（可空），并复用 `identifier`/`name`/`dataType`/`unit`/`required`/`access`。积水仪 `FAFA…ADAD`：字节17–24 开关（位 1–8、10–12，位 9 空缺）；内容如 reboot→字节25·`bool`·`F0/0F`，高度/对时等从各自 `payloadOffset` 起写。组包时选中指令自动置对应 bit。真正下发走 AEP CreateCommand（透传 hex，dataType=2），应答另解析入库。
+- **不再**在品类上直接绑定 AEP 产品/型号；无「绑定 AEP 产品」主流程。
+- **无解析脚本 UI**：AEP 侧已完成设备数据解析。
+- 品类配置 **归属规则**（通用规则默认匹配 + 特殊处理规则更高优先级）。匹配条件含 AEP 产品 ID、协议 ID/名称等自由文本。
+- AEP 解析后由规则自动挂靠品类；未匹配 → **待归属**。
+- **归属仍在品类侧**，与「项目 ↔ AEP 产品 1:1」相互独立。
+- **双向挂靠**：品类列表/详情展示 **设备数**（`deviceCount`），可点击或「查看设备」跳转台账 `#devices` 并按该品类筛选；设备列表「匹配」列展示 `categoryMatch`（如自动匹配）。
+
+### 设备台账
+- **本机数据（报文列表）**：设备档案 `#deviceDetail` Tab「本机数据」= `iot_protocol_data` 报文表（receiveTime / packageType / parsedJson / contentHex / status；按 deviceId 查；筛 packageType：message* / data* / upgrade65535 / command）。**不再**内嵌测点曲线；曲线仅在线监控。顶栏「曲线（在线监控）」→ `#monitorDetail`。
+- **设备信息包**（`GET /iot/iotDevice/{id}`，列表同样带字段）：档案基本信息展示 `hardwareVersion`、`softwareVersion`（整数，可空）和 `firmwareVersion`（OTA 固件版本，**不**用 softwareVersion 代替）。双 IMSI：`chinaTelecomImsi`、`chinaMobileImsi`。安装经纬度仍用 `lng` / `lat`（井盖信息包有效 GPS 会覆盖）。扩展区解析 `messageInfoJson`，按 `packageType`（`message1` / `message3` / `message32769`）展示出厂时间、温度、重启、IP、电池、姿态等未知键也原样列出。设备从未上报信息包时这些字段为 null，界面显示 —。置顶身份条不放这些字段。
+- **指令点发**：在设备档案 `#deviceDetail` Tab「指令下发」列出该品类 `kind=service` 指令（identifier / name / hasParam / bitIndex / params）；`dataType=object` 按 `commands[].params` 键拆多框（如 resendRange→start/end，sampleInterval/sendInterval→longMin/midMin/shortMin，switchThreshold→high/low）；单值高度类与 syncTime 用 `params.value`；bool 无 params。多选填参后 dryRun 预览 `contentHex`，或真正下发（mock toast）。底层 AEP CreateCommand 透传 hex，dataType=2。物模型指令 Tab 仍只做定义。
+
+- **批量下发（品类）**：物模型详情 Tab「批量下发」`#batchDispatch`，与「指令」定义 Tab 分离；仅 `batchable=true` 指令（默认 reboot / syncTime / sampleInterval / sendInterval / bootUpgrade；changeDeviceSn 等设备唯一载荷为 false）。设备档案「指令下发」仍为单设备点发。
+- **OTA 固件升级（三个独立侧栏页）**：① **升级任务** `#otaTasks`（组件 `iot/iot-device/IotOtaTask`，路由 `/iot/iot-ota-task`）全量任务；品类详情留「发起任务 / 查看任务」（可带 `categoryId`），固件基线行「批量升级」仍发起。单台与批量都走 `POST /iot/otaTask`（`deviceId` 或 `deviceIds`，加上 `categoryId`）：先创建升级任务，再挂设备升级记录。发起选品类用 `GET /iotCategory?upgradeSupported=1`。② **升级监控** `#upgradeMonitor`（组件 `iot/iot-device/IotDeviceUpgradeMonitor`，路由 `/iot/iot-device-upgrade-monitor`）。③ **历史升级记录** `#upgradeHistory`（组件 `iot/iot-device/IotDeviceUpgrade`，路由 `/iot/iot-device-upgrade`，`GET /iot/deviceUpgrade`）。设备档案保留「本机升级记录」切片，并链到历史页筛该设备。任务行「监控」→ `#upgradeMonitor?taskId=`。与指令 `bootUpgrade` 区分（固件包任务 vs 命令位）。固件基线含 `packageUrl`；OTA 选版本带出。
+- **品类是否支持升级**（对齐 BE `5209f1c`）：字段 `upgradeSupported`（1 支持 / 0 不支持，默认 0）。同一开关在品类列表和品类详情「OTA 升级」模块，保存 `PUT /iotCategory`。落库说明 `iot_category_add_upgrade_supported_v1.sql`（本原型不写 SQL）；执行后把智能井盖（`manhole_cover`）等需要升级的品类打开。未打开的品类不出现在发起升级的选择器；若仍创建，界面提示「品类未开启升级支持（upgradeSupported=0），不能创建升级任务」。
+- **品类固件登记**（与 `iot-category-firmware-create-tip.md` 一致）：只允许 POST 新建。PUT 拒绝文案：「暂不支持修改固件信息，请删除后重新上传登记」。POST 必填 `categoryId` + `packageUrl` + `upgradeVersion`。上传文件后 `packageName` = `file.name`；`packageUrl` 由 `POST /storage/file`（path=firmware，isPrivate=0，本地目录）回填；返回 `fileSize`（字节）写入 `packageSize`，列表与登记页按 KB/MB 展示，空为 —。`releaseDate` 无输入，不传时后端默认今天，界面只读展示。列表列：`packageName` / `upgradeVersion` / `packageUrl` / `packageSize` / `releaseDate`。落库注明 `iot_category_firmware_add_package_size_v1.sql`（本原型不写 SQL）。对齐 BE tip `4f0ae50c`。DELETE 确认框提示「若已被 OTA 任务或设备升级记录引用则无法删除」；失败时原样展示后端文案「升级包已被 OTA 任务/设备升级记录使用，不能删除」（含相同 `packageUrl`）。批量删除中任一条被引用则整批失败、一条都不删。
+- **OTA 任务（phase-2）**：任务状态 `0 进行中 / 1 已完成 / 2 已取消 / 3 失败`。仅进行中可取消；取消后未完成设备记失败，原因「任务已取消」（已成功不回滚）。超时：超过任务 `timeoutMinutes`（默认 **30**）分钟无应答，失败原因「升级超时（超过N分钟无应答）」。创建：`POST /iot/otaTask`，`categoryId` 必填且 `upgradeSupported=1`；单台 `deviceId`、批量 `deviceIds`（合计 ≤200）；`packageUrl` 或 `firmwareId`。先建任务再挂设备记录。被排除设备不进进度，原因以「排除: 」开头，展示在创建结果。设备进度仍走 `deviceUpgrade?taskId=`；设备状态枚举不变：`0 排队 / 1 升级中 / 2 成功 / 3 失败`。升级记录展示 `fromVersion`（升级前 softwareVersion，可空）。进度除百分比外展示 `sentPackage`、`remainPackage`，有则显示 `totalPackage`。成功仍由 `upgradeStatus` 决定：末包应答 remain=0 记成功。智能井盖兜底：末包后无最终应答时，实时信息包 `softwareVersion` **不等于本条升级记录的 `fromVersion`** 即记成功（版本可回退；只比该单 `fromVersion`，不比设备当前版本，也不比目标版本）；回写用信息包实际版本。`fromVersion` 为空则跳过信息包兜底，应答 remain=0 仍记成功。兜底比较：信息包 softwareVersion ≠ 本单 fromVersion（待后端新 tip）。
+
+- 本地 **项目与 AEP 产品 1:1 对齐**（SDK 产品列表同步）；同步为准，手动新建/编辑仅补录。
+- 设备建档 **主路径** = **OpenAPI 绑定** → 自动创建项目/设备；**仅当 projectId 为空时写入**，不覆盖人工已挂项目。
+- **未定义项目** = **例外池**（SDK 缺产品 / 临时设备等），**不是**主路径。
+- **设备转移 / 人工改挂** = **例外处理**（记录操作人 / 时间 / 自 / 至）；品类「改挂」同理为例外。
+- AEP 对账主 CTA **「同步自 AEP」**（拉取并生成差异）；行内接入/忽略为二次操作；支持 **周期对账**。对账**不依赖**品类绑定 AEP 产品。
+
+## 数据可信 / 品类标准
+
+独立模块。品类标准不进物模型「上报属性 / 测点字典 / 安装参数模板」。侧栏「数据可信」只是目录（占位路径 `/iot/data-trust`，点目录本身不进业务页）。品类详情与目录里的「品类标准」打开同一份标准。标识符复用上报属性 / 测点字典。
+
+字段与接口见 [`docs/api/iot-data-trust.md`](docs/api/iot-data-trust.md)。页面「口径说明」写清三层数据、判断时机、链式规则、`qualityJson` / `judgeId`、缺报与离线、不做项。
+
+| 屏幕 | 组件 | 建议路由 | Hash |
+|---|---|---|---|
+| 品类标准 | `iot/iot-data-trust/IotDataTrustStandard` | `/iot/iot-data-trust-standard` | `#categoryStandard` · `#categoryStandard?categoryId=C001` · `#categoryStandard?tab=tip` |
+| 判断查询 | `iot/iot-data-trust/IotDataTrustJudgement` | `/iot/iot-data-trust-judgement` | `#dataTrustJudgement` · `#dataTrustJudgement?id=J102` |
+| 缺报与离线 | `iot/iot-data-trust/IotDataTrustGap` | `/iot/iot-data-trust-gap` | `#dataTrustGap` |
+| 完整率/有效率 | `iot/iot-data-trust/IotDataTrustStats` | `/iot/iot-data-trust-stats` | `#dataTrustStats` |
+
+- 三层独立：原始报文、拍平 sample、判断记录。一条报文可对多条 sample；判断以 sample 为准，引用同一报文 id。sample 入库（含覆盖更新）后才判断，不拦截入库。
+- `sample.judgeId` 只挂最新一条判断，多指标共用。`qualityJson` 与测值 JSON 同形，只写有异常的指标（标记码列表）；全正常为 `{}`。测值 JSON 不改。覆盖重判新建判断并回写这两列，旧判断保留。
+- 生效标准：设备覆盖 &gt; 项目覆盖 &gt; 品类已发布版本。只做固定频率。完整率 = 应报次数 / 实收次数；有效率按有异常标记的指标统计。本期汇总展示，不做门槛。
+- 不做：校准改测值、重复与冲突（维持同窗口覆盖）、变频率/按需上报、通用规则引擎、用判断拦截入库、手工改标记。
+
+## 工作台
+
+| # | 屏幕 | Hash 直达 |
+|---|------|-----------|
+| 0 | 工作台（平台核心数据总览首页；空 hash / `#cockpit` / `#workbench` / `#home` 同义） | `#cockpit` |
+
+布局：统计卡片（设备总数 / 在线 / 离线异常 / 项目数 / 例外池 / 待处理对账）→ 最近 AEP 同步 + 快捷入口 → 例外待办 + 近期动态。非 GIS 大屏。
+
+## 物模型屏幕
+
+| # | 屏幕 | Hash 直达 |
+|---|------|-----------|
+| 1 | 品类列表 | `#list` |
+| 2 | 新建品类（模态） | `#createCategory` |
+| 3 | 编辑品类（模态） | `#editCategory` |
+| 4 | 物模型详情壳 + Tab | `#detail` |
+| 4a–4i | 上报属性 / 异常事件 / 测点 / 安装参数 / 固件 / **指令** / **批量下发** / **归属规则**。升级任务已升格为侧栏页；品类详情顶栏与固件基线留「发起任务 / 查看任务」 | `#props` `#events` `#points` `#install` `#firmware` `#commands` `#batchDispatch` `#rules` / `#categoryRules` |
+| 4h | 新建/编辑指令（模态：bitIndex 1-based / payloadOffset 1-based / hasParam / paramMin·paramMax / dataType·unit·required） | `#editCommand` |
+| 5–7 | 编辑测点 / 安装字段 / **登记固件**（仅 POST：`categoryId` + `packageUrl` + `upgradeVersion`；`packageName`=文件名；`packageSize`=上传 `fileSize`，KB/MB，空「—」；`releaseDate` 只读默认今天；无编辑；删除被引用则失败） | `#editPoint` `#editInstall` `#firmware` / `#editFirmware` |
+| 8 | 删除确认 | `#deleteConfirm` |
+
+## 设备台账屏幕
+
+| # | 屏幕 | Hash 直达 |
+|---|------|-----------|
+| 1 | 项目列表（AEP 产品同步；含例外池入口） | `#projects` |
+| 2 | 新建/编辑项目（模态） | `#createProject` `#editProject` |
+| 3 | 设备列表 | `#devices` |
+| 3b | **例外池 · 未定义项目** | `#unassignedDevices` |
+| 3c | **例外处理 · 人工改挂**（模态） | `#deviceTransfer` |
+| 4 | 设备档案详情（含改挂记录；Tab：档案 / **本机数据** / 指令下发 / **本机升级记录** / 发送记录…）。档案区分 **firmwareVersion**（OTA 固件版本）与 **softwareVersion**（信息包整数，可空）；基本信息含 hardwareVersion；双 IMSI：chinaTelecomImsi / chinaMobileImsi；安装经纬度仍用 lng/lat（井盖信息包有效 GPS 会覆盖）；信息包区解析 messageInfoJson，按 packageType（message1 / message3 / message32769）展示出厂时间、温度、重启、IP、电池、姿态等。未上报信息包时这些字段为 —。样例：`#deviceDetail`（D001·message1）、`#deviceDetail?id=D003`（message3）、`#deviceDetail?id=D013`（message32769）、`#deviceDetail?id=D010`（全空） | `#deviceDetail` |
+| 4a | 设备档案 · 本机数据（= 原报文列表；iot_protocol_data：receiveTime / packageType / parsedJson / contentHex / status；无内嵌曲线） | `#deviceLocalData`（旧 `#devicePackets` 同跳） |
+| 4b | 设备档案 · 指令下发（多选指令 / 填参 / dryRun contentHex / 真正下发 mock） | `#deviceDispatch` |
+| 4b2 | 设备档案 · **本机升级记录**（本机切片，仍可直达）。「固件升级」走 `POST /iot/otaTask`（`deviceId` + `categoryId`），先建任务再挂记录。OTA：time / taskId / **fromVersion** / fromVer→toVer / 设备状态 **0 排队 · 1 升级中 · 2 成功 · 3 失败** / 进度百分比 + **sentPackage** · **remainPackage**（有则 **totalPackage**）/ 操作人 / failReason；成功仍看 upgradeStatus，应答 remain=0；井盖兜底 softwareVersion ≠ 本单 fromVersion，空 fromVersion 跳过。品类 `upgradeSupported=0` 时提交被拒绝。页内链到历史升级记录并带 deviceId | `#deviceUpgradeLog` / `#deviceDetail?tab=upgradeLog` / `#deviceDetail?id=D013&tab=upgradeLog` |
+| 4c0 | 品类详情 · **批量下发**（选一条 batchable 指令 → 共享参数 → 多选设备筛项目/在线 → dryRun → 批量 mock） | `#batchDispatch` |
+| 4c1 | **升级任务**（侧栏，组件 `iot/iot-device/IotOtaTask`，路由 `/iot/iot-ota-task`）。全量列表 + 详情，可按 `categoryId` 筛历史任务。发起任务的品类选择器只含 `GET /iotCategory?upgradeSupported=1`。单台 `deviceId`、批量 `deviceIds` 都 `POST /iot/otaTask`，先建任务再挂设备记录。状态 **0 进行中 / 1 已完成 / 2 已取消 / 3 失败**；进行中可取消；详情含 timeoutMinutes（默认 30）、创建结果「排除: …」、设备进度 `deviceUpgrade?taskId=`。行内「监控」→ `#upgradeMonitor?taskId=`。样例：进行中 OT01、已完成 OT02（超时 30）、已取消 OT03（超时 45）、失败 OT04（超时 20） | `#otaTasks` · `#otaTasks?categoryId=C001` · `#otaTasks?id=OT01` `#otaTasks?id=OT02` `#otaTasks?id=OT03` `#otaTasks?id=OT04` |
+| 4c2 | **升级监控**（组件 `iot/iot-device/IotDeviceUpgradeMonitor`，路由 `/iot/iot-device-upgrade-monitor`）。约 4 秒轮询 `GET /iot/deviceUpgrade/monitor`（可选 `taskId`）。卡片 `summary.upgradingCount` / `queuedCount`，副文案 `transferringCount` + `awaitingConfirmCount`；`stageBreakdown`：`queued` / `transferring` / `awaitingConfirm`（库状态仍 0–3）。明细 `items`：`stageLabel`、sent/remain（有则 total）、行内 `estimatedCompleteAt`。全部完成时间 `eta.estimatedCompleteAt`，旁注 `eta.estimateBasis`（粗估）。`runningTasks` 点进 `?taskId=`。历史成功/失败仍走 `GET /iot/deviceUpgrade`。对齐 BE `fcc75bc9`。 | `#upgradeMonitor` · `#upgradeMonitor?taskId=OT01` |
+| 4c3 | **历史升级记录**（侧栏，组件 `iot/iot-device/IotDeviceUpgrade`，路由 `/iot/iot-device-upgrade`）。全量成功/失败，绑 `GET /iot/deviceUpgrade`。含进度包字段（sentPackage / remainPackage，有则 totalPackage）、设备状态、失败原因、井盖兜底说明（softwareVersion ≠ 本单 fromVersion）。可按 deviceId 筛。默认不列排队/升级中 | `#upgradeHistory` · `#upgradeHistory?deviceId=D013` · `#upgradeHistory?deviceId=D001` |
+| 5 | 编辑设备档案 | `#editDevice` |
+| 6 | AEP 对账（同步自 AEP / 清单差异） | `#aepReconcile` |
+| 7 | 导入说明弹窗 | `#importExport` |
+
+### 在线监控（设备数据 · 与台账区分）
+
+- **数据向列表**：侧栏「在线监控」进入；强调**看测点 / 设备数据**，不做档案管理。主筛 **项目 + 品类**；品类为空时提示「选择品类以展开测点列」。
+- **列聚焦运行态**：设备名/IMEI（项目·品类作次要 meta）、在线态 chip、最近上报、动态测点或「最新数据」摘要、告警；**不含**生命周期 / AEP / 匹配 / 型号（那些在设备台账）。
+- **测点列随品类动态变化**：选品类后，列头取该品类物模型 `kind=property` 且 `showInMonitor !== false` 的 `identifier` / `name` / `unit`，单元格取 `latest_json[identifier]`（与详情最新值/曲线/上报明细同源过滤）。
+- 行操作仅 **查看数据** / **曲线**（无改挂、编辑档案）。
+- 点击行 → **设备数据详情**：顶栏展示 device_id / AEP_ID / IMEI·deviceSn / 品类·项目 / AEP status；Tab「最新与曲线」+「上报明细」（逐条 mock 采样）；曲线看趋势、上报明细看逐条，报文 hex 仍在台账本机数据。台账「数据」按钮跳入同一详情。
+- **上报明细**：时间区间筛参 `sampleTimeBegin` / `sampleTimeEnd`（默认近 24h，相对最近上报）；列表按 `sample_time DESC`（最新在上）；对接分页 `GET /iot/iotDeviceSample`。曲线 `/history` 仍升序。一期不接成功/漏报/延迟状态列。
+- **设备对比**：侧栏「设备对比」或列表勾选后点「对比」；锁定同品类，属性多选自 `PROPERTIES`，叠加 mock 曲线（设备名图例），无新 BE API。
+
+## 在线监控屏幕
+
+| # | 屏幕 | Hash 直达 |
+|---|------|-----------|
+| 1 | 设备数据列表（数据向：项目+品类筛；测点列/最新摘要；查看数据·曲线；无档案列） | `#monitor` / `#monitorList` |
+| 2 | 设备数据详情（身份条 + 最新值卡片 + 内嵌曲线 + Tab「上报明细」；全屏曲线 / 本机数据入口） | `#monitorDetail` |
+| 3 | 历史曲线全屏（7 天 / 30 天；预警 orange / 报警 error / 故障 primary 参考线） | `#monitorCurve` |
+| 3b | 长周期曲线（采集周期 >15 分钟 →「历史全量查、不分段」） | `#monitorCurveLong` |
+| 4 | 在线率（该报没报：应报/实报/漏报统计卡片 + 简表） | `#monitorOnlineRate` |
+| 5 | 设备对比（同品类多设备叠加曲线 + KPI + 数值表；最多 8 台） | `#deviceCompare` / `#monitorCompare`；深链 `#deviceCompare?ids=D001,D002` |
+
+测点时序为 **PostgreSQL 时序示意**，非实时接入。各品类 mock 的 `latest_json` 与物模型 `kind=property` 标识符对齐。一期不做设施树、地图；**物模型可配置指令模板**；设备档案 Tab 顺序：**档案信息 → 本机数据（报文列表）→ 指令下发**（`#deviceDetail` / `#deviceLocalData` / `#deviceDispatch`；旧 `#devicePackets` 并入本机数据）。曲线仅在线监控。点发 dryRun 预览 contentHex + 真正下发 mock toast；AEP CreateCommand 透传 hex dataType=2。
+
+## 配色
+
+- 侧栏 `#DBE1F0` · 顶栏 `#F1E8EC` · 主区白
+- primary `#0D6EFD` · error `#DC3545` · orange `#E78212`
+
+## 文件结构
+
+```
+index.html   # 入口
+styles.css   # 样式（驾驶舱 + 物模型 + 台账 + 在线监控）
+app.js       # Vue SPA
+shots/       # 分屏截图（部分为改口径前截图，以页面为准）
+take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
+```
+
+## 截图
+
+工作台：
+- `cockpit-01-home.png` 工作台首页（原驾驶舱内容）
+
+物模型见 `shots/01`–`12`（历史截图可能仍含旧「绑定 AEP」文案，请以当前页面为准）。
+- `thing-commands-01.png` 物模型详情 · **指令** Tab
+- `thing-commands-02-edit.png` 新建/编辑指令模态
+
+设备台账：
+- `ledger-01-projects.png` 项目列表
+- `ledger-02-create-project.png` 新建项目
+- `ledger-03-devices.png` 设备列表
+- `ledger-04-device-detail.png` 设备档案（含 Tab「指令下发」）
+- `ledger-05-edit-device.png` 编辑设备档案
+- `ledger-06-aep-reconcile.png` AEP 对账
+- `ledger-07-import.png` 导入说明
+
+在线监控（设备数据）：
+- `monitor-01-list.png` 设备数据列表（latest_json 测点列）
+- `monitor-02-detail.png` 设备数据详情（最新值卡片 + 曲线）
+- `monitor-03-curve.png` 历史曲线全屏
+- `monitor-04-online-rate.png` 在线率
+- `monitor-05-curve-long-cycle.png` 长周期全量查提示
+
+## 台账字段对齐（后端 `6587b2d2`）
+
+- 设备台账列表/详情/筛选/关键词/导出：**`serialNum` → `imei`**，列展示 **IMEI**（本原型字段 `imei`）。
+- AEP `status`：`0` 待确认 / `1` 在线 / **`2` 离线** / `9` 忽略；在线监控「在线态」映射 `1→在线`、`2→离线`，其余/空→未知。
+- 采样、协议报文、指令下发里的协议设备号 `serialNum` / `deviceSn` **不变**（与台账 IMEI 分离）。
+
+## 品类挂靠规则 id · 探头子设备（后端 `5e930006`）
+
+- 台账新字段 **`categoryRuleId`**（库 `category_rule_id`）：记录挂靠所用规则 id；型号兜底形如 `fallback:0042`；解绑品类清空。列表「挂靠规则」列 + 详情可读。
+- 列表**默认隐藏** `aepDeviceId` 以 `probe:` 开头的探头子设备；选主机 `masterId` / 关键词 / 勾选「显示探头」可见。
+- `probe:{SN}` 仅为子设备合成键，**不要**当真 AEP 设备 id 展示编辑；真 AEP id 看父一体机。
+
+## parsedJson.data 约定（后端 `23b64da5`）
+
+- `parsedJson.data` 统一为 **序列号 → 采样列表**（与 data1 一致）。
+- 历史 data3 旧数据可能仍是纯数组；**新入库**才是 KV。原型 PK014 示意旧形态。
+
+## 子设备 / 探头入口
+
+- 一体机详情顶栏 **「子设备（探头）」** 与 Tab **「子设备」**：按 `masterId`=当前台账 id 拉探头。
+- 设备列表筛 **「父设备ID」** 亦可。
+- 探头设备自身不显示该入口。
+
+## 曲线分图约定（一期）
+
+- 一体机下多种探头**不要**画在同一张图（单位不同）。
+- 曲线按**子设备（单个探头）**各自一图；入口：一体机 → 子设备 → 该探头「曲线（在线监控）」。
+- 采样 history 挂子设备 `deviceId`；报文仍挂父一体机。
