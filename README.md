@@ -52,6 +52,24 @@ python3 -m http.server 8877
 - **设备转移 / 人工改挂** = **例外处理**（记录操作人 / 时间 / 自 / 至）；品类「改挂」同理为例外。
 - AEP 对账主 CTA **「同步自 AEP」**（拉取并生成差异）；行内接入/忽略为二次操作；支持 **周期对账**。对账**不依赖**品类绑定 AEP 产品。
 
+## 数据可信 / 品类标准
+
+独立模块。品类标准不进物模型「上报属性 / 测点字典 / 安装参数模板」。侧栏「数据可信」只是目录（占位路径 `/iot/data-trust`，点目录本身不进业务页）。品类详情与目录里的「品类标准」打开同一份标准。标识符复用上报属性 / 测点字典。
+
+字段与接口见 [`docs/api/iot-data-trust.md`](docs/api/iot-data-trust.md)。页面「口径说明」写清三层数据、判断时机、链式规则、`qualityJson` / `judgeId`、缺报与离线、不做项。
+
+| 屏幕 | 组件 | 建议路由 | Hash |
+|---|---|---|---|
+| 品类标准 | `iot/iot-data-trust/IotDataTrustStandard` | `/iot/iot-data-trust-standard` | `#categoryStandard` · `#categoryStandard?categoryId=C001` · `#categoryStandard?tab=tip` |
+| 判断查询 | `iot/iot-data-trust/IotDataTrustJudgement` | `/iot/iot-data-trust-judgement` | `#dataTrustJudgement` · `#dataTrustJudgement?id=J102` |
+| 缺报与离线 | `iot/iot-data-trust/IotDataTrustGap` | `/iot/iot-data-trust-gap` | `#dataTrustGap` |
+| 完整率/有效率 | `iot/iot-data-trust/IotDataTrustStats` | `/iot/iot-data-trust-stats` | `#dataTrustStats` |
+
+- 三层独立：原始报文、拍平 sample、判断记录。一条报文可对多条 sample；判断以 sample 为准，引用同一报文 id。sample 入库（含覆盖更新）后才判断，不拦截入库。
+- `sample.judgeId` 只挂最新一条判断，多指标共用。`qualityJson` 与测值 JSON 同形，只写有异常的指标（标记码列表）；全正常为 `{}`。测值 JSON 不改。覆盖重判新建判断并回写这两列，旧判断保留。
+- 生效标准：设备覆盖 &gt; 项目覆盖 &gt; 品类已发布版本。只做固定频率。完整率 = 应报次数 / 实收次数；有效率按有异常标记的指标统计。本期汇总展示，不做门槛。
+- 不做：校准改测值、重复与冲突（维持同窗口覆盖）、变频率/按需上报、通用规则引擎、用判断拦截入库、手工改标记。
+
 ## 工作台
 
 | # | 屏幕 | Hash 直达 |

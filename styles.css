@@ -37,6 +37,10 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   border-right: 1px solid #cfd6e6;
+  max-height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
 }
 
 .sidebar-logo {
@@ -2441,3 +2445,35 @@ iconify-icon.cat-icon {
   color: #333;
   font-weight: 600;
 }
+
+.quality-bad {
+  background: #fdebec;
+  color: var(--error);
+  box-shadow: inset 0 0 0 1px #f1aeb5;
+  cursor: pointer;
+}
+.row-trust td:first-child { font-weight: 600; }
+.dt-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.dt-tip-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #333;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.dt-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+}
+.packet-detail-block { margin-bottom: 8px; }
+.packet-dataset { margin: 4px 0 8px; }
+.packet-dataset code { font-size: 12px; }
