@@ -121,6 +121,7 @@ sample 仍是一条一行。测值 JSON 不拆成一行一个指标。
 |---|---|---|---|
 | 目录（无页） | — | `/iot/data-trust` | — |
 | 品类标准 | `iot/iot-data-trust/IotDataTrustStandard` | `/iot/iot-data-trust-standard` | `#categoryStandard` |
+| 数据异常 | `iot/iot-data-trust/IotDataTrustAnomaly` | `/iot/iot-data-trust-anomaly` | `#dataTrustAnomaly` |
 | 判断查询 | `iot/iot-data-trust/IotDataTrustJudgement` | `/iot/iot-data-trust-judgement` | `#dataTrustJudgement` |
 | 缺报与离线 | `iot/iot-data-trust/IotDataTrustGap` | `/iot/iot-data-trust-gap` | `#dataTrustGap` |
 | 完整率/有效率 | `iot/iot-data-trust/IotDataTrustStats` | `/iot/iot-data-trust-stats` | `#dataTrustStats` |
@@ -128,9 +129,21 @@ sample 仍是一条一行。测值 JSON 不拆成一行一个指标。
 | 离线工作台（治理，第三周） | `iot/iot-data-trust/IotDataTrustWorkbench` | `/iot/iot-data-trust-workbench` | `#dataTrustWorkbench` |
 | 修复记录（治理，第三周） | `iot/iot-data-trust/IotDataTrustRepairLog` | `/iot/iot-data-trust-repair-log` | `#dataTrustRepairLog` |
 
-一期四个路由不变。侧栏「数据可信」仍只是目录。修复策略、离线工作台、修复记录是后加的子页，不替换上面四页。
+品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页，不替换判断查询，也不把缺报并进来。侧栏「数据可信」仍只是目录（`/iot/data-trust` 没有业务页）。修复策略、离线工作台、修复记录仍是后加的治理入口，不替换上面的页面。
 
-深链示例：`#categoryStandard?categoryId=C001`，`#categoryStandard?tab=tip`，`#categoryStandard?tab=repair`，`#dataTrustJudgement?id=J102`，`#dataTrustJudgement?id=J108`，`#dataTrustWorkbench?deviceId=D001&metric=yewei`。
+侧栏顺序：品类标准、数据异常、判断查询、缺报与离线、完整率/有效率，其后是治理入口（修复策略页签、离线工作台、修复记录）。
+
+分工：
+
+| 页面 | 看什么 |
+|---|---|
+| 数据异常 | 当前异常。只读。一行 = 一条 sample × 一个 `qualityJson` 里有非空标记列表的指标。同一指标多个标记留在同一行。数据源是该 sample 最新 `qualityJson` + 最新 `judgeId`，不收被覆盖掉的旧判断 |
+| 判断查询 | 全部判断记录的审计。一行 = 一条判断（1 sample : 1 judgeId），含通过、不通过、未执行，以及覆盖重判后留下的历史。可筛「仅看异常」，但不改成异常清单 |
+| 监控列表 / 曲线 | 看一台设备随时间的测值。高亮仍读 `qualityJson`，`valueMode=repair\|original\|overlay`。不是异常台账 |
+| 缺报与离线 | 只放缺报和离线。不进数据异常 |
+| 修复记录 / 离线工作台 | 治理。数据异常只链出去，不在本页改修复值、不回退、不改标记 |
+
+深链示例：`#categoryStandard?categoryId=C001`，`#categoryStandard?tab=tip`，`#categoryStandard?tab=repair`，`#dataTrustAnomaly`，`#dataTrustAnomaly?deviceId=D001`，`#dataTrustAnomaly?identifier=yewei`，`#dataTrustAnomaly?mark=RANGE_HIGH`，`#dataTrustAnomaly?repairStatus=none`，`#dataTrustJudgement?id=J102`，`#dataTrustJudgement?id=J108`，`#dataTrustWorkbench?deviceId=D001&metric=yewei`。
 
 监控列表 / 曲线 / 上报明细：按指标键读。默认 `repairJson` 有该键用修复值，否则用原来的测值 JSON（`latest_json` 或 sample 测值）。可切换原始或叠加。异常高亮按指标读 `qualityJson`。点击用 `judgeId` 打开判断详情。查询参数 `valueMode=repair|original|overlay`。
 
@@ -349,9 +362,37 @@ sample 仍是一条一行。测值 JSON 不拆成一行一个指标。
 
 回退：本条改为 `reverted`。若 sample 上该指标没有更早的生效修复，就从 `repairJson` 删掉该键；有则回到上一条生效值。不改测值 JSON，不改 `qualityJson`，不改报文。
 
+## 6.2 当前数据异常（派生，无新表）
+
+不新增持久化表。列表从 sample 现态摊开：最新 `qualityJson` + 最新 `judgeId` + 测值 JSON + `repairJson`。被覆盖的旧判断不参与。`qualityJson` 为空、没有该指标、或标记列表为空的不返回。缺报 / 离线不在这张结果里。
+
+一行一个 `(sampleId, identifier)`。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| sampleId | string | |
+| judgeId | string | sample 上的最新判断 id |
+| messageId | string \| null | 来自 sample。无平台报文时为空 |
+| deviceId | string | |
+| projectId | string \| null | |
+| categoryId | string | |
+| identifier | string | 指标标识，复用物模型 |
+| identifierName | string | 上报属性 / 测点字典上的名称 |
+| marks | string[] | `qualityJson[identifier]`，同一指标的多项标记 |
+| originalValue | number \| string \| null | 该键在 sample 测值 JSON 里的原值。不读 `repairJson`。测值为空时为 null |
+| repairValue | number \| string \| null | `repairJson` 有该键时的修复值，否则 null |
+| sampleTime | datetime | 采样时间。默认排序键 |
+| judgedAt | datetime | 最新判断的时间，随行返回 |
+| standardVersion | int \| null | 该 judgeId 上的标准版本号 |
+| repaired | bool | `repairJson` 含该 identifier 键，且值非空，则为 true |
+
+默认排序：`sampleTime` 降序。同一采样时间保持 `qualityJson` 键的写入顺序。
+
+`repaired=true`（界面「已修复」）= `repairJson` 有同一个 identifier 键。`repaired=false`（「未修复」）= 没有该键。筛选默认不限，先返回全部当前异常。
+
 ## 7. 接口
 
-路径挂在现有 `/iot` 前缀下。分页沿用 `pageNum` / `pageSize`。
+路径挂在现有 `/iot` 前缀下。除 7.5 外，分页沿用 `pageNum` / `pageSize`。数据异常列表的分页参数是 `page` / `pageSize`。
 
 ### 7.1 标准
 
@@ -397,6 +438,31 @@ sample 查询沿用 `GET /iot/iotDeviceSample`，响应增加 `judgeId`、`quali
 
 实时修复由入库后的判断流程按标准里的修复策略触发，走同一张修复记录，`channel=realtime`。不单独做一套数据。
 
+### 7.5 当前数据异常
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/iot/iotDataTrustAnomaly` | 当前异常清单。见 6.2。只读，没有改标记、写修复、回退的方法 |
+
+查询参数：
+
+| 参数 | 说明 |
+|---|---|
+| deviceId | 可空 |
+| projectId | 可空 |
+| categoryId | 可空 |
+| identifier | 指标标识，可空 |
+| mark | 标记码，如 `RANGE_HIGH`、`JUMP_FIRST`。命中该指标 `marks` 中的一项即可，可空 |
+| repairStatus | `none` 未修复 / `repaired` 已修复。缺省或空 = 全部。原型默认全部 |
+| sampleTimeBegin | 采样时间起，含边界。别名 `from` |
+| sampleTimeEnd | 采样时间止，含边界。只传到日期时补 `23:59:59`。别名 `to` |
+| page | 从 1 起。本接口用 `page`，不用本节开头的 `pageNum` |
+| pageSize | 页大小 |
+
+时间筛的是 `sampleTime`。`judgedAt` 在每行里返回，方便对照判断查询，不另做一条时间轴。以上条件可同时使用。
+
+本接口不写 `repairJson`，不改测值 JSON，不改报文，不改 `qualityJson`。
+
 ## 8. 原型里能对上的例子
 
 | 现象 | 记录 |
@@ -418,3 +484,5 @@ sample 查询沿用 `GET /iot/iotDeviceSample`，响应增加 `judgeId`、`quali
 | 工作台曲线调整 | `R002` 挂 `S201`。测值 280，修复层 148 |
 | 缺报只填修复层 | `G5` 仍缺报中，`repairId=R003`，无 sample、无 filledSampleId |
 | 修复可回退 | `R004` 曾挂 `S103`，已回退。`S103.repairJson` 为空，测值仍 11.5 |
+| 数据异常当前行（最新 qualityJson） | `S102`/`J102` 拆成两行：`yewei` 标记 `RANGE_HIGH`，原始 11.2，`repairJson` 3.55，已修复；`wendu` 标记 `NULL_VALUE`，原始 null，无修复键，未修复。`S201`/`J201` `yaqiang` `RANGE_HIGH`，原始 280，修复 148，已修复。`S108`/`J108` `yewei` 为 `EXTREME_HIGH`、`JUMP_FIRST`、`TREND_JUMP`、`JUMP_CONFIRM`，原始 6.8，修复 4.2，已修复。`S109`/`J109` `yewei` 为 `EXTREME_HIGH`、`JUMP_FIRST`、`JUMP_CONT`、`TREND_JUMP`，无 `JUMP_CONFIRM`，原始 8.9，未修复。`S103` 只出最新 `J103b`：`yewei` `RANGE_HIGH`，原始 11.5，未修复 |
+| 数据异常不收 | `S101`/`J101`（`qualityJson` 空，通过）；历史判断 `J103a`（`S103` 的最新标记已不是那次通过）；缺报 / 离线 `G1`–`G5` |

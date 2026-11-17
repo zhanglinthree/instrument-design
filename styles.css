@@ -2474,6 +2474,10 @@ iconify-icon.cat-icon {
   font-size: 13px;
   color: #333;
 }
+table.data-table td.dt-wrap { white-space: normal; vertical-align: top; }
+.dt-mark-tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 240px; }
+.dt-anomaly-table .actions { max-width: 168px; }
+.dt-anomaly-table td { vertical-align: top; }
 .nav-item.nav-later { font-size: 13px; }
 .nav-phase {
   margin-left: auto;

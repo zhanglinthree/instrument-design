@@ -51,6 +51,8 @@ const shots = [
   { hash: 'dataTrustRepairLog', file: 'data-trust-11-repair-log.png', fullPage: true },
   { hash: 'dataTrustJudgement?id=J108', file: 'data-trust-12-extreme-jump.png', fullPage: true },
   { hash: 'monitorDetail?id=D004&valueMode=overlay', file: 'data-trust-13-monitor-overlay.png' },
+  { hash: 'dataTrustAnomaly', file: 'data-trust-14-anomaly.png', fullPage: true },
+  { hash: 'dataTrustAnomaly?repairStatus=none', file: 'data-trust-15-anomaly-unrepaired.png', fullPage: true },
 ];
 
 (async () => {

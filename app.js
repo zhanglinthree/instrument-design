@@ -2371,6 +2371,7 @@ createApp({
           const extra = dtStdTab.value === 'repair' ? ' · 修复策略' : (dtStdTab.value === 'tip' ? ' · 口径说明' : '');
           return { parent: '数据可信', current: '品类标准' + extra };
         }
+        if (screen.value === 'dataTrustAnomaly') return { parent: '数据可信', current: '数据异常' };
         if (screen.value === 'dataTrustJudgement') return { parent: '数据可信', current: '判断查询' };
         if (screen.value === 'dataTrustGap') return { parent: '数据可信', current: '缺报与离线' };
         if (screen.value === 'dataTrustStats') return { parent: '数据可信', current: '完整率/有效率' };
@@ -5026,6 +5027,14 @@ createApp({
     const dtJMetric = ref('');
     const dtJOnlyAbnormal = ref(false);
     const dtJCurrentId = ref('');
+    const dtACategory = ref('');
+    const dtAProject = ref('');
+    const dtADevice = ref('');
+    const dtABegin = ref('');
+    const dtAEnd = ref('');
+    const dtAIdentifier = ref('');
+    const dtAMark = ref('');
+    const dtARepairStatus = ref('');
     const dtGDevice = ref('');
     const dtGBegin = ref('');
     const dtGEnd = ref('');
@@ -5060,6 +5069,17 @@ createApp({
     function dtCategoryName(id) {
       const c = CATEGORIES.find(x => x.id === id);
       return c ? c.name : (id || '—');
+    }
+    function dtIdentifierName(categoryId, identifier) {
+      const prop = dtPropOf(categoryId, identifier);
+      if (prop && prop.name) return prop.name;
+      const point = dtPointOf(identifier);
+      if (point && point.name) return point.name;
+      return identifier || '—';
+    }
+    function dtAnomalyValueText(value, emptyText) {
+      if (value == null || value === '') return emptyText;
+      return String(value);
     }
     function dtSampleById(id) { return dtSamples.value.find(s => s.id === id) || null; }
     function dtFindOverride(scopeType, scopeId, categoryId) {
@@ -5447,6 +5467,106 @@ createApp({
       if (device) openMonitorForDevice(device);
       monDetailTab.value = 'reports';
       showToast('已打开监控上报明细。测值读 sample 原 JSON，异常读 qualityJson', 'ok');
+    }
+    /* 当前异常：只摊最新 qualityJson。一行 = 一条 sample × 一个有标记的指标。不读历史判断，不收缺报。 */
+    const dtAnomalyRows = computed(() => {
+      const rows = [];
+      dtSamples.value.forEach(sample => {
+        const quality = sample.qualityJson || {};
+        const judge = dtJudgements.value.find(j => j.id === sample.judgeId) || null;
+        Object.keys(quality).forEach(identifier => {
+          const marks = quality[identifier];
+          if (!Array.isArray(marks) || !marks.length) return;
+          const repaired = dtHasRepairKey(sample.repairJson, identifier);
+          const hasOriginal = !!(sample.values && Object.prototype.hasOwnProperty.call(sample.values, identifier));
+          rows.push({
+            sampleId: sample.id,
+            judgeId: sample.judgeId || '',
+            messageId: sample.messageId || null,
+            externalId: sample.externalId || null,
+            deviceId: sample.deviceId,
+            projectId: sample.projectId || null,
+            categoryId: sample.categoryId,
+            identifier: identifier,
+            identifierName: dtIdentifierName(sample.categoryId, identifier),
+            marks: marks.slice(),
+            originalValue: hasOriginal ? sample.values[identifier] : null,
+            repairValue: repaired ? sample.repairJson[identifier] : null,
+            sampleTime: sample.sampleTime || '',
+            judgedAt: judge ? (judge.judgedAt || '') : '',
+            standardVersion: judge ? judge.standardVersion : null,
+            repaired: repaired,
+          });
+        });
+      });
+      rows.sort((a, b) => String(b.sampleTime).localeCompare(String(a.sampleTime)));
+      return rows;
+    });
+    const dtAMetricOptions = computed(() => {
+      const cid = dtACategory.value;
+      const props = cid ? getCategoryProperties(cid) : PROPERTIES;
+      const seen = {};
+      const list = [];
+      props.forEach(p => {
+        if (!p || seen[p.identifier]) return;
+        seen[p.identifier] = true;
+        list.push({ identifier: p.identifier, name: p.name });
+      });
+      dtAnomalyRows.value.forEach(row => {
+        if (cid && row.categoryId !== cid) return;
+        if (seen[row.identifier]) return;
+        seen[row.identifier] = true;
+        list.push({ identifier: row.identifier, name: row.identifierName });
+      });
+      return list;
+    });
+    const dtFilteredAnomalies = computed(() => {
+      const end = dtAEnd.value ? (dtAEnd.value.length <= 10 ? dtAEnd.value + ' 23:59:59' : dtAEnd.value) : '';
+      return dtAnomalyRows.value.filter(row => {
+        if (dtACategory.value && row.categoryId !== dtACategory.value) return false;
+        if (dtAProject.value && row.projectId !== dtAProject.value) return false;
+        if (dtADevice.value && row.deviceId !== dtADevice.value) return false;
+        if (dtAIdentifier.value && row.identifier !== dtAIdentifier.value) return false;
+        if (dtAMark.value && row.marks.indexOf(dtAMark.value) < 0) return false;
+        if (dtARepairStatus.value === 'none' && row.repaired) return false;
+        if (dtARepairStatus.value === 'repaired' && !row.repaired) return false;
+        if (dtABegin.value && String(row.sampleTime) < dtABegin.value) return false;
+        if (end && String(row.sampleTime) > end) return false;
+        return true;
+      });
+    });
+    const dtAnomalyCounts = computed(() => {
+      const rows = dtFilteredAnomalies.value;
+      let repaired = 0;
+      rows.forEach(row => { if (row.repaired) repaired += 1; });
+      return { total: rows.length, repaired: repaired, none: rows.length - repaired };
+    });
+    function dtResetAnomalyFilters() {
+      dtACategory.value = '';
+      dtAProject.value = '';
+      dtADevice.value = '';
+      dtABegin.value = '';
+      dtAEnd.value = '';
+      dtAIdentifier.value = '';
+      dtAMark.value = '';
+      dtARepairStatus.value = '';
+    }
+    function dtAnomalyOpenMessage(row) {
+      if (!row) return;
+      dtOpenMessage({
+        messageId: row.messageId,
+        externalId: row.externalId,
+        sampleId: row.sampleId,
+        deviceId: row.deviceId,
+      });
+    }
+    function dtAnomalyOpenCurve(row) {
+      if (!row) return;
+      jump('monitorCurve?id=' + encodeURIComponent(row.deviceId) + '&metric=' + encodeURIComponent(row.identifier));
+    }
+    function dtAnomalyOpenWorkbench(row) {
+      if (!row) return;
+      jump('dataTrustWorkbench?deviceId=' + encodeURIComponent(row.deviceId) + '&metric=' + encodeURIComponent(row.identifier));
     }
     function dtGapStatusKey(g) {
       if (g.status === 'filled') return 'filled';
@@ -5923,6 +6043,21 @@ createApp({
           module.value = 'dataTrust';
           screen.value = 'dataTrustRepairLog';
         },
+        dataTrustAnomaly: () => {
+          module.value = 'dataTrust';
+          screen.value = 'dataTrustAnomaly';
+          dtACategory.value = (queryParams && queryParams.get('categoryId')) || '';
+          dtAProject.value = (queryParams && queryParams.get('projectId')) || '';
+          dtADevice.value = (queryParams && queryParams.get('deviceId')) || '';
+          dtAIdentifier.value = (queryParams && queryParams.get('identifier')) || '';
+          dtAMark.value = (queryParams && queryParams.get('mark')) || '';
+          const repairStatus = queryParams && queryParams.get('repairStatus');
+          dtARepairStatus.value = (repairStatus === 'none' || repairStatus === 'repaired') ? repairStatus : '';
+          const begin = queryParams && (queryParams.get('sampleTimeBegin') || queryParams.get('from') || '');
+          const end = queryParams && (queryParams.get('sampleTimeEnd') || queryParams.get('to') || '');
+          dtABegin.value = begin || '';
+          dtAEnd.value = end || '';
+        },
         dataTrustJudgement: () => {
           module.value = 'dataTrust';
           screen.value = 'dataTrustJudgement';
@@ -6092,6 +6227,9 @@ createApp({
       dtSetRangeCite, dtOnIntervalInput, dtMarkWindowManual, dtSetOfflineMode, dtSaveOverrideForm, dtRestoreOverride,
       openCategoryStandard,
       dtJCategory, dtJProject, dtJDevice, dtJBegin, dtJEnd, dtJMetric, dtJOnlyAbnormal, dtJCurrentId,
+      dtACategory, dtAProject, dtADevice, dtABegin, dtAEnd, dtAIdentifier, dtAMark, dtARepairStatus,
+      dtAMetricOptions, dtAnomalyRows, dtFilteredAnomalies, dtAnomalyCounts, dtResetAnomalyFilters,
+      dtAnomalyValueText, dtAnomalyOpenMessage, dtAnomalyOpenCurve, dtAnomalyOpenWorkbench,
       dtMetricOptions, dtFilteredJudgements, dtCurrentJudgement, dtCurrentItems, dtCurrentSample, dtPriorJudgement,
       dtOpenJudgement, dtJudgementReasonText, dtItemStatusLabel, dtItemStatusTag, dtOpenMessage, dtOpenSample,
       dtScopeText, dtFormatValues,
@@ -6123,6 +6261,7 @@ createApp({
         <div class="nav-item" :class="{active: module==='ota' && screen==='upgradeHistory'}" @click="jump('upgradeHistory')"><span class="dot"></span>历史升级记录</div>
         <div class="nav-group-title" title="目录占位 /iot/data-trust，点目录本身不进入业务页">数据可信</div>
         <div class="nav-item" :class="{active: module==='dataTrust' && screen==='categoryStandard' && dtStdTab!=='repair'}" @click="jump('categoryStandard')"><span class="dot"></span>品类标准</div>
+        <div class="nav-item" :class="{active: module==='dataTrust' && screen==='dataTrustAnomaly'}" @click="jump('dataTrustAnomaly')"><span class="dot"></span>数据异常</div>
         <div class="nav-item" :class="{active: module==='dataTrust' && screen==='dataTrustJudgement'}" @click="jump('dataTrustJudgement')"><span class="dot"></span>判断查询</div>
         <div class="nav-item" :class="{active: module==='dataTrust' && screen==='dataTrustGap'}" @click="jump('dataTrustGap')"><span class="dot"></span>缺报与离线</div>
         <div class="nav-item" :class="{active: module==='dataTrust' && screen==='dataTrustStats'}" @click="jump('dataTrustStats')"><span class="dot"></span>完整率/有效率</div>
@@ -8876,6 +9015,7 @@ createApp({
                 <li><code>sample.judgeId</code>：单独一列。一条 sample 只挂一个最新判断 id。多个指标共用这一个 id。</li>
                 <li><code>sample.qualityJson</code>：k = 指标标识，v = 原因码列表（可多项）。无异常的指标不出现；全部正常为 <code>{}</code>。测值 JSON 不改。</li>
                 <li><code>sample.repairJson</code>：与测值 JSON 同形的 k-v。只写修过的指标。修复值只进这一列，不回写原始报文，也不覆盖 sample 测值 JSON。<code>S102</code> 的 yewei 测值仍是 11.2，repairJson 为 3.55；<code>S201</code> 的 yaqiang 仍是 280，修复层 148。</li>
+                <li>当前异常另有查看页「数据异常」（<code>#dataTrustAnomaly</code>）：按最新 <code>qualityJson</code> 把每个有标记的指标摊成一行，同一指标的多个标记留在同一行。不收通过的 sample、空 qualityJson，也不收缺报。判断查询仍保留全部判断，含覆盖重判留下的旧记录。</li>
                 <li>覆盖重判：新建判断，更新 judgeId 与 qualityJson，旧判断留在判断表。<code>S103</code> 先有 <code>J103a</code>（yewei=3.38 通过），同窗口覆盖成 11.5 后写 <code>J103b</code>，<code>J103a</code> 仍可点开。报文 <code>PK016</code> 仍是入包时的 3.38。回退过的修复 <code>R004</code> 不留在 repairJson。</li>
                 <li>链：报文 id → sample id → judgeId。修复记录也挂同一 sample id。没有 sample 的缺报填入只挂缺报 id，不另造一套数据。</li>
               </ul>
@@ -9204,6 +9344,81 @@ createApp({
           </template>
         </div>
 
+        <!-- ===== 数据可信：数据异常（当前清单，只读） ===== -->
+        <div v-else-if="module==='dataTrust' && screen==='dataTrustAnomaly'" class="page-card" data-screen="data-trust-anomaly">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">数据异常</h1>
+              <p class="page-desc">组件 <code>iot/iot-data-trust/IotDataTrustAnomaly</code> · 路由 <code>/iot/iot-data-trust-anomaly</code> · 本页 <code>#dataTrustAnomaly</code>。只查看当前异常，不下修、不改标记。</p>
+            </div>
+          </div>
+          <div class="banner-muted">一行是一条 sample 的一个指标：只取该 sample 最新 <code>qualityJson</code> 和最新 <code>judgeId</code>。同一指标上的多个标记放在同一行。原始测值来自 sample 测值 JSON，不读 <code>repairJson</code>。已修复表示 <code>repairJson</code> 里有同一个指标键。通过的 sample、空 qualityJson、缺报和离线不进本表。默认「全部修复状态」，先看完整的当前异常。</div>
+          <div class="stat-row">
+            <div class="stat-chip accent"><div class="sc-label">当前异常</div><div class="sc-value">{{ dtAnomalyCounts.total }}</div></div>
+            <div class="stat-chip ok"><div class="sc-label">已修复</div><div class="sc-value">{{ dtAnomalyCounts.repaired }}</div></div>
+            <div class="stat-chip warn"><div class="sc-label">未修复</div><div class="sc-value">{{ dtAnomalyCounts.none }}</div></div>
+          </div>
+          <div class="toolbar">
+            <input class="input" type="date" v-model="dtABegin" title="采样时间起" />
+            <input class="input" type="date" v-model="dtAEnd" title="采样时间止" />
+            <select class="select" v-model="dtAProject"><option value="">全部项目</option><option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option></select>
+            <select class="select" v-model="dtACategory"><option value="">全部品类</option><option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+            <select class="select" v-model="dtADevice"><option value="">全部设备</option><option v-for="d in deviceList" :key="d.id" :value="d.id">{{ d.name }}</option></select>
+            <select class="select" v-model="dtAIdentifier"><option value="">全部指标</option><option v-for="m in dtAMetricOptions" :key="m.identifier" :value="m.identifier">{{ m.name }} · {{ m.identifier }}</option></select>
+            <select class="select" v-model="dtAMark"><option value="">全部标记</option><option v-for="m in DT_MARKS" :key="m.code" :value="m.code">{{ m.name }} · {{ m.code }}</option></select>
+            <select class="select" v-model="dtARepairStatus">
+              <option value="">全部修复状态</option>
+              <option value="none">未修复</option>
+              <option value="repaired">已修复</option>
+            </select>
+            <button class="btn" @click="dtResetAnomalyFilters">重置</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table dt-anomaly-table">
+              <thead>
+                <tr>
+                  <th>采样时间</th>
+                  <th>设备 / 项目 / 品类</th>
+                  <th>指标</th>
+                  <th>异常原因</th>
+                  <th>原始测值</th>
+                  <th>修复值</th>
+                  <th>修复状态</th>
+                  <th>标准版本</th>
+                  <th>judgeId</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in dtFilteredAnomalies" :key="row.sampleId + '-' + row.identifier">
+                  <td>{{ row.sampleTime }}<div class="cell-sub">判断 {{ row.judgedAt || '—' }}</div><div class="cell-sub"><code>{{ row.sampleId }}</code></div></td>
+                  <td>{{ dtDeviceName(row.deviceId) }}<div class="cell-sub">{{ row.projectId ? dtProjectName(row.projectId) : '—' }}</div><div class="cell-sub">{{ dtCategoryName(row.categoryId) }}</div></td>
+                  <td>{{ row.identifierName }}<div class="cell-sub"><code>{{ row.identifier }}</code></div></td>
+                  <td class="dt-wrap">
+                    <div class="dt-mark-tags">
+                      <span v-for="code in row.marks" :key="code" class="tag tag-red">{{ dtMarkName(code) }}</span>
+                    </div>
+                  </td>
+                  <td><code>{{ dtAnomalyValueText(row.originalValue, 'null') }}</code></td>
+                  <td><code>{{ row.repaired ? dtAnomalyValueText(row.repairValue, '—') : '—' }}</code></td>
+                  <td><span class="tag" :class="row.repaired ? 'tag-green' : 'tag-orange'">{{ row.repaired ? '已修复' : '未修复' }}</span></td>
+                  <td>{{ row.standardVersion == null ? '—' : ('v' + row.standardVersion) }}</td>
+                  <td><button v-if="row.judgeId" class="btn-link btn" @click="dtOpenJudgement(row.judgeId)">{{ row.judgeId }}</button><span v-else>—</span></td>
+                  <td class="actions dt-wrap">
+                    <button class="btn-link btn" @click="dtOpenJudgement(row.judgeId)">查看判断</button>
+                    <button class="btn-link btn" @click="dtAnomalyOpenMessage(row)">看报文</button>
+                    <button class="btn-link btn" @click="dtAnomalyOpenCurve(row)">看监控曲线</button>
+                    <button class="btn-link btn" @click="dtAnomalyOpenWorkbench(row)">去离线工作台</button>
+                  </td>
+                </tr>
+                <tr v-if="!dtFilteredAnomalies.length"><td colspan="10"><div class="empty-hint">当前没有符合筛选的数据异常</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination"><span>共 {{ dtFilteredAnomalies.length }} 条 · 按采样时间倒序</span><button class="page-btn active">1</button></div>
+          <div class="table-note">接口 <code>GET /iot/iotDataTrustAnomaly</code>。查询 <code>deviceId</code> / <code>projectId</code> / <code>categoryId</code> / <code>identifier</code> / <code>mark</code> / <code>repairStatus=none|repaired</code> / <code>sampleTimeBegin</code>（别名 <code>from</code>）/ <code>sampleTimeEnd</code>（别名 <code>to</code>）/ <code>page</code> / <code>pageSize</code>。行从 sample 现态派生，不另建表。历史判断（如 <code>J103a</code>）和缺报 <code>G1</code>–<code>G5</code> 不在这里。<button class="btn-link btn" @click="jump('dataTrustJudgement')">判断查询</button>保留全部判断；<button class="btn-link btn" @click="jump('dataTrustGap')">缺报与离线</button>仍单独成页。修复去<button class="btn-link btn" @click="jump('dataTrustWorkbench')">离线工作台</button>或<button class="btn-link btn" @click="jump('dataTrustRepairLog')">修复记录</button>，本页不写回。</div>
+        </div>
+
         <!-- ===== 数据可信：判断查询 ===== -->
         <div v-else-if="module==='dataTrust' && screen==='dataTrustJudgement'" class="page-card" data-screen="data-trust-judgement">
           <div class="page-header">
@@ -9213,6 +9428,7 @@ createApp({
             </div>
           </div>
           <div class="banner-muted">列表测值是该次判断当时的 JSON。异常原因来自判断明细上的标记，没有则不展示。外部数据无报文 id 时看 externalId（<code>J105</code>）。</div>
+          <div class="banner-muted">当前仍挂在 sample 上的异常在 <button class="btn-link btn" @click="jump('dataTrustAnomaly')">数据异常</button>。本页仍审计全部判断：通过、不通过、未执行，以及覆盖重判留下的旧记录（如 <code>J103a</code>）都在。不把本页改成异常清单。</div>
           <div class="toolbar">
             <select class="select" v-model="dtJCategory"><option value="">全部品类</option><option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option></select>
             <select class="select" v-model="dtJProject"><option value="">全部项目</option><option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option></select>
