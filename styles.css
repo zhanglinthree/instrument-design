@@ -2474,6 +2474,25 @@ iconify-icon.cat-icon {
   font-size: 13px;
   color: #333;
 }
+.nav-item.nav-later { font-size: 13px; }
+.nav-phase {
+  margin-left: auto;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(13, 110, 253, .12);
+  color: #0D6EFD;
+  font-weight: 500;
+}
+.wb-svg {
+  width: 100%;
+  height: 220px;
+  border: 1px solid #eef2f8;
+  border-radius: 8px;
+  margin: 4px 0 8px;
+  background: #fff;
+}
 .packet-detail-block { margin-bottom: 8px; }
 .packet-dataset { margin: 4px 0 8px; }
 .packet-dataset code { font-size: 12px; }
