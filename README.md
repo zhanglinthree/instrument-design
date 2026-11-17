@@ -56,19 +56,27 @@ python3 -m http.server 8877
 
 独立模块。品类标准不进物模型「上报属性 / 测点字典 / 安装参数模板」。侧栏「数据可信」只是目录（占位路径 `/iot/data-trust`，点目录本身不进业务页）。品类详情与目录里的「品类标准」打开同一份标准。标识符复用上报属性 / 测点字典。
 
-字段与接口见 [`docs/api/iot-data-trust.md`](docs/api/iot-data-trust.md)。页面「口径说明」写清三层数据、判断时机、链式规则、`qualityJson` / `judgeId`、缺报与离线、不做项。
+字段与接口见 [`docs/api/iot-data-trust.md`](docs/api/iot-data-trust.md)。页面「口径说明」写清三层数据、判断时机、链式规则、`qualityJson` / `judgeId` / `repairJson`、缺报与离线、修复层、不做项。
 
 | 屏幕 | 组件 | 建议路由 | Hash |
 |---|---|---|---|
-| 品类标准 | `iot/iot-data-trust/IotDataTrustStandard` | `/iot/iot-data-trust-standard` | `#categoryStandard` · `#categoryStandard?categoryId=C001` · `#categoryStandard?tab=tip` |
-| 判断查询 | `iot/iot-data-trust/IotDataTrustJudgement` | `/iot/iot-data-trust-judgement` | `#dataTrustJudgement` · `#dataTrustJudgement?id=J102` |
+| 品类标准 | `iot/iot-data-trust/IotDataTrustStandard` | `/iot/iot-data-trust-standard` | `#categoryStandard` · `#categoryStandard?categoryId=C001` · `#categoryStandard?tab=tip` · `#categoryStandard?tab=repair` |
+| 判断查询 | `iot/iot-data-trust/IotDataTrustJudgement` | `/iot/iot-data-trust-judgement` | `#dataTrustJudgement` · `#dataTrustJudgement?id=J102` · `#dataTrustJudgement?id=J108` |
 | 缺报与离线 | `iot/iot-data-trust/IotDataTrustGap` | `/iot/iot-data-trust-gap` | `#dataTrustGap` |
 | 完整率/有效率 | `iot/iot-data-trust/IotDataTrustStats` | `/iot/iot-data-trust-stats` | `#dataTrustStats` |
+| 离线工作台（治理，第三周） | `iot/iot-data-trust/IotDataTrustWorkbench` | `/iot/iot-data-trust-workbench` | `#dataTrustWorkbench` · `#dataTrustWorkbench?deviceId=D001&metric=yewei` |
+| 修复记录（治理，第三周） | `iot/iot-data-trust/IotDataTrustRepairLog` | `/iot/iot-data-trust-repair-log` | `#dataTrustRepairLog` |
 
-- 三层独立：原始报文、拍平 sample、判断记录。一条报文可对多条 sample；判断以 sample 为准，引用同一报文 id。sample 入库（含覆盖更新）后才判断，不拦截入库。
-- `sample.judgeId` 只挂最新一条判断，多指标共用。`qualityJson` 与测值 JSON 同形，只写有异常的指标（标记码列表）；全正常为 `{}`。测值 JSON 不改。覆盖重判新建判断并回写这两列，旧判断保留。
-- 生效标准：设备覆盖 &gt; 项目覆盖 &gt; 品类已发布版本。只做固定频率。完整率 = 应报次数 / 实收次数；有效率按有异常标记的指标统计。本期汇总展示，不做门槛。
-- 不做：校准改测值、重复与冲突（维持同窗口覆盖）、变频率/按需上报、通用规则引擎、用判断拦截入库、手工改标记。
+修复策略不是新标准页，是品类标准上的「修复策略」页签。一期四个路由不变。侧栏「数据可信」仍只是目录；治理三项标在目录下面，不替换上面四页。
+
+- 三层独立：原始报文、拍平 sample、判断记录。一条报文可对多条 sample；判断以 sample 为准，引用同一报文 id。sample 入库（含覆盖更新）后才判断，不拦截入库。sample 仍是一条一行，测值 JSON 不拆开。
+- `sample.judgeId` 单独一列，只挂最新一条判断，多指标共用。`qualityJson` 只写有异常的指标（k = 指标，v = 原因码列表）；无异常的指标不出现；全正常为 `{}`。测值 JSON 不改。覆盖重判新建判断并回写这两列，旧判断保留。
+- `sample.repairJson` 与测值 JSON 同形，只写修过的指标。修复值只进这一列。不回写原始报文，不覆盖测值 JSON。链是报文 id → sample id → judgeId，修复挂同一 sample id。
+- 单条断言：必报、类型与单位、量程（优先测点字典 min/max）、极值（统计极端，不是字典量程）、枚举、空值、跳变初次标记（自身历史）、连续跳变。先全部跑完再跑关联。
+- 关联：同包跨字段（读原始报文数据集）、T-1 / 同时段趋势、同项目同品类、关联设备同时段（一期手工设备对；缺对象只记对照对象缺失，不判负）、跳变二次标记（T-1 或关联设备确认初次跳变；基础单条已失败则跳过，仅跳变失败时仍确认）。总结果按各指标「且」汇总。
+- 生效标准：设备覆盖 &gt; 项目覆盖 &gt; 品类已发布版本。只做固定频率。完整率 = 应报次数 / 实收次数；有效率按有异常标记的指标统计。本期汇总展示，不做门槛。缺报留在缺报表，不写进不存在的 sample。
+- 治理（第三周实现，本 tip 先锁）：实时修复只有函数 / 相邻点 / T-1，按品类或指标配置，每条有依据、可回退。离线工作台覆盖修复层（曲线调整、表格调整、从关联数据填缺报）。监控列表和曲线按同一指标键，默认修复层，可切换原始或叠加；异常仍用 qualityJson / judgeId。
+- 不做：校准改原始测值、重复与冲突（维持同窗口覆盖）、变频率/按需上报、通用规则引擎、用判断拦截入库、手工改标记、工单、完整率/有效率门槛。
 
 ## 工作台
 
@@ -167,6 +175,16 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - `ledger-05-edit-device.png` 编辑设备档案
 - `ledger-06-aep-reconcile.png` AEP 对账
 - `ledger-07-import.png` 导入说明
+
+数据可信：
+- `data-trust-01-standard.png` 品类标准（含极值、跳变初次、连续跳变）
+- `data-trust-02-tip.png` 口径说明
+- `data-trust-03-judgement.png` 判断查询 `J102`（基础失败则关联跳过）
+- `data-trust-09-repair-strategy.png` 修复策略页签
+- `data-trust-10-workbench.png` 离线工作台
+- `data-trust-11-repair-log.png` 修复记录
+- `data-trust-12-extreme-jump.png` 判断 `J108`（极值 / 跳变二次标记）
+- `data-trust-13-monitor-overlay.png` 监控曲线叠加原始与修复层
 
 在线监控（设备数据）：
 - `monitor-01-list.png` 设备数据列表（latest_json 测点列）

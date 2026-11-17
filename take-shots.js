@@ -5,6 +5,7 @@ const fs = require('fs');
 const OUT = path.join(__dirname, 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 
+const only = process.argv.slice(2);
 const shots = [
   // cockpit / workbench
   { hash: 'cockpit', file: 'cockpit-01-home.png' },
@@ -37,11 +38,19 @@ const shots = [
   { hash: 'monitorCurve', file: 'monitor-03-curve.png' },
   { hash: 'monitorOnlineRate', file: 'monitor-04-online-rate.png' },
   { hash: 'monitorCurveLong', file: 'monitor-05-curve-long-cycle.png' },
-  { hash: 'categoryStandard?categoryId=C001', file: 'data-trust-01-standard.png' },
-  { hash: 'categoryStandard?categoryId=C001&tab=tip', file: 'data-trust-02-tip.png' },
-  { hash: 'dataTrustJudgement?id=J102', file: 'data-trust-03-judgement.png' },
+  { hash: 'categoryStandard?categoryId=C001', file: 'data-trust-01-standard.png', fullPage: true },
+  { hash: 'categoryStandard?categoryId=C001&tab=tip', file: 'data-trust-02-tip.png', fullPage: true },
+  { hash: 'dataTrustJudgement?id=J102', file: 'data-trust-03-judgement.png', fullPage: true },
   { hash: 'dataTrustGap', file: 'data-trust-04-gap.png' },
   { hash: 'dataTrustStats', file: 'data-trust-05-stats.png' },
+  { hash: 'deviceDetail?id=D001&tab=localData&packet=PK015', file: 'data-trust-06-packet.png', fullPage: true },
+  { hash: 'monitorDetail?id=D001&tab=reports&valueMode=overlay', file: 'data-trust-07-monitor-report.png', fullPage: true },
+  { hash: 'monitor?categoryId=C003&valueMode=overlay', file: 'data-trust-08-monitor-list.png' },
+  { hash: 'categoryStandard?categoryId=C001&tab=repair', file: 'data-trust-09-repair-strategy.png', fullPage: true },
+  { hash: 'dataTrustWorkbench?deviceId=D001&metric=yewei', file: 'data-trust-10-workbench.png', fullPage: true },
+  { hash: 'dataTrustRepairLog', file: 'data-trust-11-repair-log.png', fullPage: true },
+  { hash: 'dataTrustJudgement?id=J108', file: 'data-trust-12-extreme-jump.png', fullPage: true },
+  { hash: 'monitorDetail?id=D004&valueMode=overlay', file: 'data-trust-13-monitor-overlay.png' },
 ];
 
 (async () => {
@@ -51,7 +60,10 @@ const shots = [
     args: ['--no-sandbox', '--disable-gpu', '--window-size=1440,900'],
     defaultViewport: { width: 1440, height: 900 },
   });
-  for (const s of shots) {
+  const list = only.length
+    ? shots.filter(s => only.some(k => s.file.includes(k) || s.hash.includes(k)))
+    : shots;
+  for (const s of list) {
     const page = await browser.newPage();
     page.on('pageerror', e => console.error('PAGEERROR', s.hash, e.message));
     const url = `http://127.0.0.1:8877/index.html#${s.hash}`;
@@ -59,7 +71,7 @@ const shots = [
     await page.waitForSelector('.shell', { timeout: 15000 });
     await new Promise(r => setTimeout(r, 900));
     const out = path.join(OUT, s.file);
-    await page.screenshot({ path: out, fullPage: false });
+    await page.screenshot({ path: out, fullPage: !!s.fullPage });
     console.log('saved', out);
     await page.close();
   }
