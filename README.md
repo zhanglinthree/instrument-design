@@ -61,13 +61,16 @@ python3 -m http.server 8877
 | 屏幕 | 组件 | 建议路由 | Hash |
 |---|---|---|---|
 | 品类标准 | `iot/iot-data-trust/IotDataTrustStandard` | `/iot/iot-data-trust-standard` | `#categoryStandard` · `#categoryStandard?categoryId=C001` · `#categoryStandard?tab=tip` · `#categoryStandard?tab=repair` |
+| 数据异常 | `iot/iot-data-trust/IotDataTrustAnomaly` | `/iot/iot-data-trust-anomaly` | `#dataTrustAnomaly` · `#dataTrustAnomaly?deviceId=D001` · `#dataTrustAnomaly?identifier=yewei` · `#dataTrustAnomaly?mark=RANGE_HIGH` · `#dataTrustAnomaly?repairStatus=none` |
 | 判断查询 | `iot/iot-data-trust/IotDataTrustJudgement` | `/iot/iot-data-trust-judgement` | `#dataTrustJudgement` · `#dataTrustJudgement?id=J102` · `#dataTrustJudgement?id=J108` |
 | 缺报与离线 | `iot/iot-data-trust/IotDataTrustGap` | `/iot/iot-data-trust-gap` | `#dataTrustGap` |
 | 完整率/有效率 | `iot/iot-data-trust/IotDataTrustStats` | `/iot/iot-data-trust-stats` | `#dataTrustStats` |
 | 离线工作台（治理，第三周） | `iot/iot-data-trust/IotDataTrustWorkbench` | `/iot/iot-data-trust-workbench` | `#dataTrustWorkbench` · `#dataTrustWorkbench?deviceId=D001&metric=yewei` |
 | 修复记录（治理，第三周） | `iot/iot-data-trust/IotDataTrustRepairLog` | `/iot/iot-data-trust-repair-log` | `#dataTrustRepairLog` |
 
-修复策略不是新标准页，是品类标准上的「修复策略」页签。一期四个路由不变。侧栏「数据可信」仍只是目录；治理三项标在目录下面，不替换上面四页。
+修复策略不是新标准页，是品类标准上的「修复策略」页签。品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页：只列当前 sample 上仍有标记的指标，不替换判断查询，也不收缺报。侧栏「数据可信」仍只是目录。侧栏顺序：品类标准、数据异常、判断查询、缺报与离线、完整率/有效率，然后是治理入口（修复策略页签、离线工作台、修复记录）。默认筛选为全部修复状态。
+
+- 数据异常只读。一行 = sample × 指标。`S102` 的 `yewei`（`RANGE_HIGH`，原始 11.2，修复 3.55，已修复）和 `wendu`（`NULL_VALUE`，未修复）分两行。`S201` 压强 280 / 修复 148 已修复。`S108` 液位 6.8 / 修复 4.2 已修复。`S109` 液位 8.9 未修复，有 `JUMP_CONT`、没有 `JUMP_CONFIRM`。`S103` 只出最新 `J103b`。`S101`、`J103a`、缺报 `G1`–`G5` 不出现。
 
 - 三层独立：原始报文、拍平 sample、判断记录。一条报文可对多条 sample；判断以 sample 为准，引用同一报文 id。sample 入库（含覆盖更新）后才判断，不拦截入库。sample 仍是一条一行，测值 JSON 不拆开。
 - `sample.judgeId` 单独一列，只挂最新一条判断，多指标共用。`qualityJson` 只写有异常的指标（k = 指标，v = 原因码列表）；无异常的指标不出现；全正常为 `{}`。测值 JSON 不改。覆盖重判新建判断并回写这两列，旧判断保留。
@@ -185,6 +188,8 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - `data-trust-11-repair-log.png` 修复记录
 - `data-trust-12-extreme-jump.png` 判断 `J108`（极值 / 跳变二次标记）
 - `data-trust-13-monitor-overlay.png` 监控曲线叠加原始与修复层
+- `data-trust-14-anomaly.png` 数据异常（当前清单，默认全部修复状态）
+- `data-trust-15-anomaly-unrepaired.png` 数据异常 · 仅未修复
 
 在线监控（设备数据）：
 - `monitor-01-list.png` 设备数据列表（latest_json 测点列）
