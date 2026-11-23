@@ -67,8 +67,11 @@ python3 -m http.server 8877
 | 完整率/有效率 | `iot/iot-data-trust/IotDataTrustStats` | `/iot/iot-data-trust-stats` | `#dataTrustStats` |
 | 离线工作台（治理，第三周） | `iot/iot-data-trust/IotDataTrustWorkbench` | `/iot/iot-data-trust-workbench` | `#dataTrustWorkbench` · `#dataTrustWorkbench?deviceId=D001&metric=yewei` |
 | 修复记录（治理，第三周） | `iot/iot-data-trust/IotDataTrustRepairLog` | `/iot/iot-data-trust-repair-log` | `#dataTrustRepairLog` |
+| 试运行（不进侧栏；列表与结果同一组件） | `iot/iot-data-trust/IotDataTrustTrial` | `/iot/iot-data-trust-trial` | `#dataTrustTrial` · `#dataTrustTrial?id=TR20261110001` · `#dataTrustTrial?id=TR20261111008` · `#dataTrustTrial?id=TR20261109003` |
 
-修复策略不是新标准页，是品类标准上的「修复策略」页签。品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页：只列当前 sample 上仍有标记的指标，不替换判断查询，也不收缺报。侧栏「数据可信」仍只是目录。侧栏顺序：品类标准、数据异常、判断查询、缺报与离线、完整率/有效率，然后是治理入口（修复策略页签、离线工作台、修复记录）。默认筛选为全部修复状态。
+修复策略不是新标准页，是品类标准上的「修复策略」页签。品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页：只列当前 sample 上仍有标记的指标，不替换判断查询，也不收缺报。侧栏「数据可信」仍只是目录。侧栏顺序：品类标准、数据异常、判断查询、缺报与离线、完整率/有效率，然后是治理入口（修复策略页签、离线工作台、修复记录）。没有「试运行」。默认筛选为全部修复状态。
+
+试运行从品类标准草稿的「试运行」进入（须先保存草稿），或打开 `#dataTrustTrial`。用启动时冻结的快照预跑历史样本，上一条按这份草稿重放，不写正式 `qualityJson`，也不自动发布。跳变初次按相对初始值的百分比；第二次仍对照跳变前的初始值，校准后撤销 `JUMP_FIRST`，不写 `JUMP_CONT`。
 
 - 数据异常只读。一行 = sample × 指标。`S102` 的 `yewei`（`RANGE_HIGH`，原始 11.2，修复 3.55，已修复）和 `wendu`（`NULL_VALUE`，未修复）分两行。`S201` 压强 280 / 修复 148 已修复。`S108` 液位 6.8 / 修复 4.2 已修复。`S109` 液位 8.9 未修复，有 `JUMP_CONT`、没有 `JUMP_CONFIRM`。`S103` 只出最新 `J103b`。`S101`、`J103a`、缺报 `G1`–`G5` 不出现。
 
@@ -190,6 +193,10 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - `data-trust-13-monitor-overlay.png` 监控曲线叠加原始与修复层
 - `data-trust-14-anomaly.png` 数据异常（当前清单，默认全部修复状态）
 - `data-trust-15-anomaly-unrepaired.png` 数据异常 · 仅未修复
+- `data-trust-16-trial-list.png` 试运行记录（不进侧栏）
+- `data-trust-17-trial-result.png` 试运行 `TR20261110001`（草稿快照、跳变校准、探头用自己的 sample）
+- `data-trust-18-trial-running.png` 试运行进行中
+- `data-trust-19-trial-empty.png` 时段内没有实收样本
 
 在线监控（设备数据）：
 - `monitor-01-list.png` 设备数据列表（latest_json 测点列）

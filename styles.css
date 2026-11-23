@@ -2475,7 +2475,19 @@ iconify-icon.cat-icon {
   color: #333;
 }
 table.data-table td.dt-wrap { white-space: normal; vertical-align: top; }
-.dt-mark-tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 240px; }
+.dt-mark-tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 280px; }
+.dt-trial-note { color: #667085; font-size: 12px; line-height: 1.5; margin-top: 4px; white-space: normal; }
+.dt-device-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fafbfc;
+}
 .dt-anomaly-table .actions { max-width: 168px; }
 .dt-anomaly-table td { vertical-align: top; }
 .nav-item.nav-later { font-size: 13px; }
