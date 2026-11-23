@@ -55,8 +55,10 @@ const shots = [
   { hash: 'dataTrustAnomaly?repairStatus=none', file: 'data-trust-15-anomaly-unrepaired.png', fullPage: true },
   { hash: 'dataTrustTrial', file: 'data-trust-16-trial-list.png', fullPage: true },
   { hash: 'dataTrustTrial?id=TR20261110001', file: 'data-trust-17-trial-result.png', fullPage: true },
-  { hash: 'dataTrustTrial?id=TR20261111008', file: 'data-trust-18-trial-running.png', fullPage: true },
+  { hash: 'dataTrustTrial?id=TR20261108004', file: 'data-trust-18-trial-failed.png', fullPage: true },
   { hash: 'dataTrustTrial?id=TR20261109003', file: 'data-trust-19-trial-empty.png', fullPage: true },
+  { hash: 'categoryStandard?categoryId=C001&versionId=STD-C001-3&recommend=1', file: 'data-trust-20-suggest.png', fullPage: true },
+  { hash: 'dataTrustJudgeRun', file: 'data-trust-21-formal-run.png', fullPage: true },
 ];
 
 (async () => {
