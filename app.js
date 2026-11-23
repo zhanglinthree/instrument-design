@@ -1214,6 +1214,15 @@ const DT_CHILDREN = dtMergeBags([
 DT_CHILDREN.relations.forEach(rel => {
   if (rel.standardId === 'STD-C001-1' && rel.type === 'peer') rel.enabled = false;
 });
+/* 草稿 v3 锁定跳变算法 1：相对上一条已接受值的百分比。连续跳变不单独打标。已发布版本仍保留旧示意，试运行遇到没有 percent 的快照时不按绝对差值打跳变。 */
+DT_CHILDREN.assertions.forEach(a => {
+  if (a.standardId !== 'STD-C001-3') return;
+  if (a.type === 'jumpFirst') {
+    const percent = a.identifier === 'yewei' ? 30 : (a.identifier === 'yaqiang' ? 20 : 15);
+    a.params = { percent: percent, count: 2, baseline: 'prevAccepted' };
+  }
+  if (a.type === 'jumpCont') a.enabled = false;
+});
 /* 管网压力表的测点字典周期是积水仪 yaqiang 的 60s，对不上本品类 reportCycle 900s，间隔在标准里改用上报属性周期。量程仍引用测点字典 min/max。 */
 DT_CHILDREN.timeliness.forEach(t => {
   if (t.standardId === 'STD-C003-1') {
@@ -1457,6 +1466,268 @@ const DT_REPAIRS_SEED = [
     operator: 'system', status: 'effective', createdAt: '2026-09-30 16:10:05', revertedAt: null,
   },
 ];
+
+/* 试运行窗口前的上下文样本。只给「上一条」起算，不进正式判断、不进 qualityJson。
+ * 时间落进用户选择的区间时，才会被当成实收样本。 */
+const DT_TRIAL_CONTEXT_SAMPLES = [
+  { id: 'SC-D001-1', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', sampleTime: '2026-09-29 15:00:00', values: { yewei: 3.00, wendu: 24.2, yaqiang: 100.4 } },
+  { id: 'SC-D001-2', deviceId: 'D001', categoryId: 'C001', projectId: 'PJ01', sampleTime: '2026-09-29 18:00:00', values: { yewei: 3.15, wendu: 24.8, yaqiang: 100.5 } },
+  { id: 'SC-D002-1', deviceId: 'D002', categoryId: 'C001', projectId: 'PJ01', sampleTime: '2026-09-29 15:10:00', values: { yewei: 3.28, wendu: 27.0, yaqiang: 100.2 } },
+  { id: 'SC-D002-2', deviceId: 'D002', categoryId: 'C001', projectId: 'PJ01', sampleTime: '2026-09-29 18:10:00', values: { yewei: 3.40, wendu: 27.4, yaqiang: 100.6 } },
+];
+const DT_TRIAL_STATUS_LABEL = {
+  queued: '排队中', running: '运行中', done: '已完成', failed: '失败', cancelled: '已取消',
+};
+const DT_TRIAL_STATUS_TAG = {
+  queued: 'tag-gray', running: 'tag-blue', done: 'tag-green', failed: 'tag-red', cancelled: 'tag-orange',
+};
+const DT_TRIAL_BREAKDOWN = [
+  { key: 'RANGE', name: '量程 RANGE' },
+  { key: 'EXTREME', name: '极值 EXTREME' },
+  { key: 'NULL_VALUE', name: '空值 NULL_VALUE' },
+  { key: 'TYPE_UNIT', name: '类型 / 单位' },
+  { key: 'ENUM', name: '枚举 ENUM' },
+  { key: 'REQUIRED_MISS', name: '缺必报 REQUIRED_MISS' },
+  { key: 'JUMP_FIRST', name: '跳变初次 JUMP_FIRST' },
+  { key: 'ASSOCIATION_SKIP', name: '关联未执行' },
+];
+
+function dtTrialParseDay(s) {
+  const d = String(s || '').slice(0, 10);
+  const p = d.split('-');
+  if (p.length < 3) return NaN;
+  return Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+}
+function dtTrialFormatDay(utc) {
+  const d = new Date(utc);
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return d.getUTCFullYear() + '-' + m + '-' + day;
+}
+function dtTrialShiftDay(day, delta) {
+  return dtTrialFormatDay(dtTrialParseDay(day) + delta * 86400000);
+}
+function dtTrialBound(day, end) {
+  const d = String(day || '').slice(0, 10);
+  if (!d || d.length < 10) return '';
+  return d + (end ? ' 23:59:59' : ' 00:00:00');
+}
+function dtTrialDaySpan(from, to) {
+  return Math.round((dtTrialParseDay(to) - dtTrialParseDay(from)) / 86400000);
+}
+function dtTrialParticipating(snapshot) {
+  const maps = (snapshot.mappings || []).filter(m => m.enabled);
+  return maps.map(m => m.identifier);
+}
+function dtTrialAssert(snapshot, identifier, type) {
+  return (snapshot.assertions || []).find(a => a.identifier === identifier && a.type === type && a.enabled) || null;
+}
+function dtTrialPctExceed(current, base, percent) {
+  const b = Number(base);
+  const c = Number(current);
+  if (!Number.isFinite(b) || !Number.isFinite(c) || b === 0) return { exceed: false, undefinedBase: b === 0 };
+  const pct = Math.abs(c - b) / Math.abs(b) * 100;
+  return { exceed: pct > Number(percent), pct: Math.round(pct * 10) / 10, undefinedBase: false };
+}
+function dtTrialBasicFail(marks) {
+  return marks.some(m => m === 'REQUIRED_MISS' || m === 'TYPE_MISMATCH' || m === 'UNIT_MISMATCH' || m === 'RANGE_HIGH' || m === 'RANGE_LOW' || m === 'ENUM_INVALID' || m === 'NULL_VALUE');
+}
+/* 用快照在历史样本上重放。不读正式 qualityJson，不改入参样本。 */
+function dtExecuteTrial(snapshot, samples, scope) {
+  const fields = dtTrialParticipating(snapshot);
+  const fromTime = scope.fromTime;
+  const toTime = scope.toTime;
+  const categoryId = snapshot.categoryId;
+  const deviceSet = (scope.deviceIds && scope.deviceIds.length) ? scope.deviceIds : null;
+  const pool = (samples || []).filter(s => {
+    if (!s || s.categoryId !== categoryId) return false;
+    if (scope.projectId && s.projectId !== scope.projectId) return false;
+    if (deviceSet && deviceSet.indexOf(s.deviceId) < 0) return false;
+    return true;
+  }).slice().sort((a, b) => String(a.sampleTime).localeCompare(String(b.sampleTime)) || String(a.id).localeCompare(String(b.id)));
+  const windowSamples = pool.filter(s => s.sampleTime >= fromTime && s.sampleTime <= toTime);
+  const lookbackDay = dtTrialShiftDay(fromTime.slice(0, 10), -1) + ' 00:00:00';
+  const deviceIds = [];
+  windowSamples.forEach(s => { if (deviceIds.indexOf(s.deviceId) < 0) deviceIds.push(s.deviceId); });
+  const context = [];
+  deviceIds.forEach(deviceId => {
+    const prev = pool.filter(s => s.deviceId === deviceId && s.sampleTime < fromTime);
+    const inDay = prev.filter(s => s.sampleTime >= lookbackDay);
+    const pick = inDay.length >= 2 ? inDay : prev.slice(-2);
+    pick.forEach(s => {
+      if (!context.some(c => c.id === s.id)) context.push(s);
+    });
+  });
+  context.sort((a, b) => String(a.sampleTime).localeCompare(String(b.sampleTime)) || String(a.id).localeCompare(String(b.id)));
+  const state = {};
+  function chain(deviceId, field) {
+    const k = deviceId + '|' + field;
+    if (!state[k]) state[k] = { prev: null, jumpCount: 0 };
+    return state[k];
+  }
+  function dropPendingJump(deviceId, field, items) {
+    items.forEach(it => {
+      if (it.deviceId !== deviceId || it.identifier !== field || !it._pendingJump) return;
+      it.marks = it.marks.filter(m => m !== 'JUMP_FIRST');
+      it.qualityJson = it.marks.length ? { [field]: it.marks.slice() } : {};
+      it._pendingJump = false;
+      it.note = (it.note ? it.note + ' ' : '') + '后续点对照同一初始值再次超比例，校准后已撤销本点的 JUMP_FIRST。';
+    });
+  }
+  const items = [];
+  let associationSkips = 0;
+  const relations = (snapshot.relations || []).filter(r => r.enabled);
+  function walk(sample, inWindow) {
+    const basicByField = {};
+    fields.forEach(field => {
+      const values = sample.values || {};
+      const hasKey = Object.prototype.hasOwnProperty.call(values, field);
+      const value = hasKey ? values[field] : undefined;
+      const marks = [];
+      const notes = [];
+      const req = dtTrialAssert(snapshot, field, 'required');
+      if (req && !hasKey) marks.push('REQUIRED_MISS');
+      const typeA = dtTrialAssert(snapshot, field, 'type');
+      if (typeA && hasKey && value != null && value !== '') {
+        const dt = typeA.params && typeA.params.dataType;
+        if ((dt === 'float' || dt === 'int') && !Number.isFinite(Number(value))) marks.push('TYPE_MISMATCH');
+      }
+      const rangeA = dtTrialAssert(snapshot, field, 'range');
+      if (rangeA && value != null && value !== '' && Number.isFinite(Number(value))) {
+        if (rangeA.params.max != null && rangeA.params.max !== '' && Number(value) > Number(rangeA.params.max)) marks.push('RANGE_HIGH');
+        if (rangeA.params.min != null && rangeA.params.min !== '' && Number(value) < Number(rangeA.params.min)) marks.push('RANGE_LOW');
+      }
+      const ext = dtTrialAssert(snapshot, field, 'extreme');
+      if (ext && value != null && value !== '' && Number.isFinite(Number(value))) {
+        if (ext.params.high != null && ext.params.high !== '' && Number(value) > Number(ext.params.high)) marks.push('EXTREME_HIGH');
+        if (ext.params.low != null && ext.params.low !== '' && Number(value) < Number(ext.params.low)) marks.push('EXTREME_LOW');
+      }
+      const enumA = dtTrialAssert(snapshot, field, 'enum');
+      if (enumA && enumA.params && enumA.params.values && value != null && value !== '') {
+        const allowed = String(enumA.params.values).split(/[,，]/).map(x => x.trim()).filter(Boolean);
+        if (allowed.length && allowed.indexOf(String(value)) < 0) marks.push('ENUM_INVALID');
+      }
+      const nullA = dtTrialAssert(snapshot, field, 'null');
+      if (nullA && hasKey && (value == null || value === '') && !(nullA.params && nullA.params.allowNull)) marks.push('NULL_VALUE');
+      const basicFail = dtTrialBasicFail(marks);
+      basicByField[field] = basicFail;
+      const jump = dtTrialAssert(snapshot, field, 'jumpFirst');
+      const st = chain(sample.deviceId, field);
+      let pendingJump = false;
+      if (jump && value != null && value !== '' && Number.isFinite(Number(value))) {
+        const percent = jump.params && jump.params.percent != null ? Number(jump.params.percent) : null;
+        const countNeed = jump.params && jump.params.count != null ? Number(jump.params.count) : 2;
+        if (percent == null) {
+          notes.push('快照没有 percent。本期只跑算法 1，不按绝对差值打 JUMP_FIRST。');
+        } else if (st.prev == null) {
+          st.prev = Number(value);
+          st.jumpCount = 0;
+          notes.push('没有更早的已接受测值，本点记为初始上一条，不打跳变。');
+        } else {
+          const base = st.prev;
+          const hit = dtTrialPctExceed(value, base, percent);
+          if (hit.undefinedBase) {
+            notes.push('初始值为 0，百分比没有定义，本点不打跳变。');
+            if (!basicFail) st.prev = Number(value);
+          } else if (!st.jumpCount) {
+            if (hit.exceed) {
+              marks.push('JUMP_FIRST');
+              notes.push('相对上一条已接受值 ' + base + ' 变化 ' + hit.pct + '%，超过 ' + percent + '%，记 JUMP_FIRST。初始值保持 ' + base + '。');
+              if (!basicFail) {
+                st.jumpCount = 1;
+                pendingJump = true;
+              } else {
+                notes.push('本点基础断言未过，不进入校准计数，上一条仍是 ' + base + '。');
+              }
+            } else if (!basicFail) {
+              st.prev = Number(value);
+            }
+          } else if (hit.exceed) {
+            const nextCount = st.jumpCount + 1;
+            if (nextCount >= countNeed) {
+              dropPendingJump(sample.deviceId, field, items);
+              st.prev = Number(value);
+              st.jumpCount = 0;
+              notes.push('第二次仍对照跳变前初始值 ' + base + '（不是刚跳过的点），变化 ' + hit.pct + '%，超过 ' + percent + '%。校准：撤销 JUMP_FIRST，本值 ' + value + ' 成为新的上一条。不写 JUMP_CONT。');
+            } else {
+              marks.push('JUMP_FIRST');
+              st.jumpCount = nextCount;
+              pendingJump = true;
+              notes.push('仍对照跳变前初始值 ' + base + '，变化 ' + hit.pct + '%，继续记 JUMP_FIRST。初始值不动。');
+            }
+          } else {
+            st.jumpCount = 0;
+            notes.push('相对跳变前初始值 ' + base + ' 未再超过 ' + percent + '%。先前的 JUMP_FIRST 保留。');
+            if (!basicFail) st.prev = Number(value);
+          }
+        }
+      } else if (basicFail) {
+        notes.push('基础断言未过，本点不写入上一条。');
+      }
+      if (!inWindow) return;
+      const skipped = [];
+      relations.forEach(rel => {
+        const relFields = rel.fields || [];
+        if (relFields.indexOf(field) < 0) return;
+        const culprit = relFields.filter(f => basicByField[f]);
+        if (!culprit.length) return;
+        if (culprit[0] !== field) return;
+        skipped.push(rel.type);
+      });
+      associationSkips += skipped.length;
+      const item = {
+        id: '',
+        sampleId: sample.id,
+        deviceId: sample.deviceId,
+        projectId: sample.projectId || null,
+        sampleTime: sample.sampleTime,
+        identifier: field,
+        value: hasKey ? (value == null ? null : value) : null,
+        marks: marks.slice(),
+        qualityJson: marks.length ? { [field]: marks.slice() } : {},
+        skipJson: skipped.length ? {
+          status: 'skip',
+          relations: skipped.slice(),
+          reason: '依赖 ' + field + ' 的基础单条已失败，关联未执行',
+        } : null,
+        note: notes.join(''),
+        _pendingJump: pendingJump,
+      };
+      items.push(item);
+    });
+  }
+  context.forEach(s => walk(s, false));
+  windowSamples.forEach(s => walk(s, true));
+  items.forEach(it => { delete it._pendingJump; });
+  const judged = items.length;
+  const abnormal = items.filter(it => it.marks.length).length;
+  const valid = judged - abnormal;
+  const markBreakdown = {
+    RANGE: 0, EXTREME: 0, NULL_VALUE: 0, TYPE_UNIT: 0, ENUM: 0, REQUIRED_MISS: 0, JUMP_FIRST: 0,
+    ASSOCIATION_SKIP: associationSkips,
+  };
+  items.forEach(it => {
+    it.marks.forEach(m => {
+      if (m === 'RANGE_HIGH' || m === 'RANGE_LOW') markBreakdown.RANGE += 1;
+      else if (m === 'EXTREME_HIGH' || m === 'EXTREME_LOW') markBreakdown.EXTREME += 1;
+      else if (m === 'NULL_VALUE') markBreakdown.NULL_VALUE += 1;
+      else if (m === 'TYPE_MISMATCH' || m === 'UNIT_MISMATCH') markBreakdown.TYPE_UNIT += 1;
+      else if (m === 'ENUM_INVALID') markBreakdown.ENUM += 1;
+      else if (m === 'REQUIRED_MISS') markBreakdown.REQUIRED_MISS += 1;
+      else if (m === 'JUMP_FIRST') markBreakdown.JUMP_FIRST += 1;
+    });
+  });
+  return {
+    items: items,
+    receivedCount: windowSamples.length,
+    contextCount: context.length,
+    judgedMetrics: judged,
+    abnormalMetrics: abnormal,
+    validMetrics: valid,
+    validityRate: judged ? valid / judged : null,
+    markBreakdown: markBreakdown,
+  };
+}
 
 createApp({
   setup() {
@@ -2375,6 +2646,7 @@ createApp({
         if (screen.value === 'dataTrustJudgement') return { parent: '数据可信', current: '判断查询' };
         if (screen.value === 'dataTrustGap') return { parent: '数据可信', current: '缺报与离线' };
         if (screen.value === 'dataTrustStats') return { parent: '数据可信', current: '完整率/有效率' };
+        if (screen.value === 'dataTrustTrial') return { parent: '数据可信', current: dtTrialId.value ? ('试运行 · ' + dtTrialId.value) : '试运行记录' };
         if (screen.value === 'dataTrustWorkbench') return { parent: '数据可信', current: '离线工作台' };
         if (screen.value === 'dataTrustRepairLog') return { parent: '数据可信', current: '修复记录' };
         return { parent: '数据可信', current: '目录' };
@@ -2394,6 +2666,7 @@ createApp({
       if (module.value === 'ledger') return '一期原型 · 设备台账';
       if (module.value === 'monitor') return '一期原型 · 在线监控';
       if (module.value === 'ota') return '一期原型 · OTA / 升级';
+      if (module.value === 'dataTrust' && screen.value === 'dataTrustTrial') return '一期原型 · 试运行（不进侧栏）';
       if (module.value === 'dataTrust' && (screen.value === 'dataTrustWorkbench' || screen.value === 'dataTrustRepairLog')) return '治理原型 · 第三周实现，本页先锁口径';
       if (module.value === 'dataTrust') return '一期原型 · 数据可信';
       return '一期原型 · 物模型';
@@ -5042,6 +5315,28 @@ createApp({
     const dtSCategory = ref('');
     const dtSProject = ref('');
     const dtSDevice = ref('');
+    const dtTrials = ref([]);
+    const dtTrialId = ref('');
+    const dtTrialFilterCategory = ref('');
+    const dtTrialFilterStatus = ref('');
+    const dtTrialFilterOperator = ref('');
+    const dtTrialFilterBegin = ref('');
+    const dtTrialFilterEnd = ref('');
+    const dtTrialItemDevice = ref('');
+    const dtTrialItemField = ref('');
+    const dtTrialItemMark = ref('');
+    const dtTrialItemPage = ref(1);
+    const dtTrialFocusSampleId = ref('');
+    const dtTrialComposeOpen = ref(false);
+    const dtTrialForm = reactive({ standardId: '', from: '', to: '', projectId: '', deviceIds: [] });
+    const dtSavedPayloads = ref({});
+    const dtSavedAtMap = ref({});
+    const dtSavedSig = ref({});
+    const dtLiveSig = ref({});
+    const dtTrialPollAt = ref('');
+    const dtTrialPageSize = 16;
+    let dtTrialPollTimer = null;
+    let dtTrialSeq = 8;
     const dtDeviceIntervalInput = ref('');
     const dtDeviceWindowInput = ref('');
 
@@ -5201,7 +5496,19 @@ createApp({
       dtViewStandardId.value = id;
       dtShowHistory.value = false;
       dtStdTab.value = 'standard';
-      showToast('已复制出草稿 v' + nextVer + (src ? ('（来自 v' + src.version + '）') : '（来自物模型）'), 'ok');
+      dtNormalizeDraftJump(id);
+      dtRememberSaved(id, dtNow());
+      showToast('已复制出草稿 v' + nextVer + (src ? ('（来自 v' + src.version + '）') : '（来自物模型）') + '。跳变初次按相对初始值的百分比，保存后再试运行', 'ok');
+    }
+    function dtNormalizeDraftJump(standardId) {
+      dtAssertions.value.forEach(a => {
+        if (a.standardId !== standardId) return;
+        if (a.type === 'jumpFirst' && (a.params == null || a.params.percent == null)) {
+          const percent = a.identifier === 'yewei' ? 30 : (a.identifier === 'yaqiang' ? 20 : 15);
+          a.params = { percent: percent, count: 2, baseline: 'prevAccepted' };
+        }
+        if (a.type === 'jumpCont') a.enabled = false;
+      });
     }
     function dtCloneChildren(fromId, toId) {
       function copy(list) {
@@ -5380,6 +5687,416 @@ createApp({
     function openCategoryStandard(cat) {
       const id = (cat && cat.id) || (currentCategory.value && currentCategory.value.id) || 'C001';
       jump('categoryStandard?categoryId=' + encodeURIComponent(id));
+    }
+    function dtCaptureLive(standardId) {
+      function pick(list) {
+        return list.value.filter(r => r.standardId === standardId).map(r => dtDeep(r));
+      }
+      return {
+        mappings: pick(dtMappings),
+        assertions: pick(dtAssertions),
+        relations: pick(dtRelations),
+        timeliness: pick(dtTimeliness),
+        offline: pick(dtOffline),
+      };
+    }
+    function dtRememberSaved(standardId, at) {
+      const payload = dtCaptureLive(standardId);
+      const sig = JSON.stringify(payload);
+      dtSavedPayloads.value = Object.assign({}, dtSavedPayloads.value, { [standardId]: payload });
+      dtSavedSig.value = Object.assign({}, dtSavedSig.value, { [standardId]: sig });
+      dtLiveSig.value = Object.assign({}, dtLiveSig.value, { [standardId]: sig });
+      dtSavedAtMap.value = Object.assign({}, dtSavedAtMap.value, { [standardId]: at || dtNow() });
+    }
+    const dtDraftDirty = computed(() => {
+      const s = dtViewStandard.value;
+      if (!s || s.status !== 'draft') return false;
+      if (!dtSavedAtMap.value[s.id]) return true;
+      return dtSavedSig.value[s.id] !== dtLiveSig.value[s.id];
+    });
+    const dtDraftSavedAtText = computed(() => {
+      const s = dtViewStandard.value;
+      if (!s) return '';
+      return dtSavedAtMap.value[s.id] || '';
+    });
+    const dtJumpUsesPercent = computed(() => {
+      return dtRowsOf(dtAssertions).some(a => a.type === 'jumpFirst' && a.params && a.params.percent != null);
+    });
+    watch([dtMappings, dtAssertions, dtRelations, dtTimeliness, dtOffline], () => {
+      const s = dtViewStandard.value;
+      if (!s || s.status !== 'draft') return;
+      dtLiveSig.value = Object.assign({}, dtLiveSig.value, { [s.id]: JSON.stringify(dtCaptureLive(s.id)) });
+    }, { deep: true });
+    function dtSaveDraft() {
+      const s = dtViewStandard.value;
+      if (!s || s.status !== 'draft') {
+        showToast('只有草稿需要保存。试运行不会直接跑已发布版本上的未保存修改', 'warn');
+        return;
+      }
+      dtRememberSaved(s.id, '2026-11-12 10:30:00');
+      showToast('草稿已保存。试运行只用这一份，不会带上之后又改但没保存的内容', 'ok');
+    }
+    function dtTrialVersionText(t) {
+      const snap = t && t.standardSnapshot;
+      if (!snap) return '—';
+      if (snap.status === 'draft') return '草稿 v' + snap.version + ' · 快照 ' + (snap.snappedAt || '—');
+      if (snap.status === 'published') return '已发布 v' + snap.version;
+      return 'v' + snap.version;
+    }
+    function dtTrialRangeText(t) {
+      if (!t) return '—';
+      const proj = t.projectId ? dtProjectName(t.projectId) : '全部项目';
+      const n = (t.deviceIds && t.deviceIds.length) ? (t.deviceIds.length + ' 台') : '全部设备';
+      const from = String(t.fromTime || '').slice(0, 16);
+      const to = String(t.toTime || '').slice(0, 16);
+      return from + ' ~ ' + to + ' · ' + proj + ' · ' + n;
+    }
+    function dtTrialStatusLabel(status) { return DT_TRIAL_STATUS_LABEL[status] || status || '—'; }
+    function dtTrialStatusTag(status) { return DT_TRIAL_STATUS_TAG[status] || 'tag-gray'; }
+    function dtTrialRateText(t) {
+      if (!t || t.status !== 'done' || t.validityRate == null) return '';
+      return (Math.round(t.validityRate * 1000) / 10) + '%';
+    }
+    function dtTrialSnapshotFrom(std, payload, snappedAt) {
+      return {
+        standardId: std.id,
+        categoryId: std.categoryId,
+        version: std.version,
+        status: std.status,
+        snappedAt: snappedAt,
+        mappings: dtDeep(payload.mappings || []),
+        assertions: dtDeep(payload.assertions || []),
+        relations: dtDeep(payload.relations || []),
+        timeliness: dtDeep(payload.timeliness || []),
+        offline: dtDeep(payload.offline || []),
+      };
+    }
+    function dtApplyTrialResult(rec, result) {
+      rec.receivedCount = result.receivedCount;
+      rec.contextCount = result.contextCount;
+      rec.judgedMetrics = result.judgedMetrics;
+      rec.abnormalMetrics = result.abnormalMetrics;
+      rec.validMetrics = result.validMetrics;
+      rec.validityRate = result.validityRate;
+      rec.markBreakdown = dtDeep(result.markBreakdown);
+      rec.items = result.items.map((it, i) => Object.assign({}, it, {
+        id: rec.id + '-I' + String(i + 1).padStart(3, '0'),
+        trialId: rec.id,
+        identifierName: dtIdentifierName(rec.categoryId, it.identifier),
+      }));
+    }
+    function dtTrialSamplePool() {
+      return dtSamples.value.map(s => dtDeep(s)).concat(DT_TRIAL_CONTEXT_SAMPLES.map(s => dtDeep(s)));
+    }
+    function dtTrialBusy(standardId) {
+      return dtTrials.value.find(t => t.standardId === standardId && (t.status === 'queued' || t.status === 'running')) || null;
+    }
+    function dtSeedTrials() {
+      dtStandards.value.filter(s => s.status === 'draft').forEach(s => {
+        if (!dtSavedAtMap.value[s.id]) dtRememberSaved(s.id, '2026-11-10 09:20:00');
+      });
+      const draft = dtStandards.value.find(s => s.id === 'STD-C001-3');
+      const published = dtStandards.value.find(s => s.id === 'STD-C001-2');
+      const water = dtStandards.value.find(s => s.id === 'STD-C002-1');
+      const samples = dtTrialSamplePool();
+      const draftSnap = dtTrialSnapshotFrom(draft, dtSavedPayloads.value[draft.id], '2026-11-10 09:20:00');
+      const rich = dtExecuteTrial(draftSnap, samples, {
+        fromTime: '2026-09-30 00:00:00', toTime: '2026-09-30 23:59:59', projectId: 'PJ01', deviceIds: ['D001', 'D002'],
+      });
+      const empty = dtExecuteTrial(draftSnap, samples, {
+        fromTime: '2026-11-06 00:00:00', toTime: '2026-11-12 23:59:59', projectId: '', deviceIds: [],
+      });
+      const pubSnap = dtTrialSnapshotFrom(published, dtCaptureLive(published.id), '2026-11-11 14:05:00');
+      const runningResult = dtExecuteTrial(pubSnap, samples, {
+        fromTime: '2026-09-24 00:00:00', toTime: '2026-09-30 23:59:59', projectId: 'PJ01', deviceIds: ['D001'],
+      });
+      function blank(partial) {
+        return Object.assign({
+          projectId: '', deviceIds: [], receivedCount: 0, contextCount: 0,
+          judgedMetrics: 0, abnormalMetrics: 0, validMetrics: 0, validityRate: null,
+          markBreakdown: null, errorMessage: '', emptyReason: '', progress: null,
+          items: [], finishedAt: null, operator: '运维-周',
+          contextNote: '窗口前的上下文只用于取得起始上一条，不计入实收，也不出现在明细。',
+        }, partial);
+      }
+      const done = blank({
+        id: 'TR20261110001', standardId: draft.id, categoryId: 'C001', standardSnapshot: dtDeep(draftSnap),
+        fromTime: '2026-09-30 00:00:00', toTime: '2026-09-30 23:59:59', projectId: 'PJ01', deviceIds: ['D001', 'D002'],
+        status: 'done', operator: '运维-周', createdAt: '2026-11-10 09:22:00', finishedAt: '2026-11-10 09:22:18',
+      });
+      dtApplyTrialResult(done, rich);
+      const none = blank({
+        id: 'TR20261109003', standardId: draft.id, categoryId: 'C001', standardSnapshot: dtDeep(draftSnap),
+        fromTime: '2026-11-06 00:00:00', toTime: '2026-11-12 23:59:59', projectId: '', deviceIds: [],
+        status: 'done', operator: '张三', createdAt: '2026-11-09 16:00:00', finishedAt: '2026-11-09 16:00:02',
+        emptyReason: '该时段没有收到样本',
+      });
+      dtApplyTrialResult(none, empty);
+      const failed = blank({
+        id: 'TR20261108004', standardId: draft.id, categoryId: 'C001', standardSnapshot: dtDeep(draftSnap),
+        fromTime: '2026-09-01 00:00:00', toTime: '2026-09-30 23:59:59', projectId: 'PJ01', deviceIds: [],
+        status: 'failed', operator: '运维-周', createdAt: '2026-11-08 11:12:00', finishedAt: '2026-11-08 11:12:40',
+        errorMessage: '读取历史样本超时，试运行没有写完。正式判断、qualityJson、缺报和修复都没有被改写。',
+      });
+      const cancelled = blank({
+        id: 'TR20261107005', standardId: draft.id, categoryId: 'C001', standardSnapshot: dtDeep(draftSnap),
+        fromTime: '2026-09-30 00:00:00', toTime: '2026-09-30 23:59:59', projectId: 'PJ01', deviceIds: ['D001'],
+        status: 'cancelled', operator: '张三', createdAt: '2026-11-07 15:40:00', finishedAt: '2026-11-07 15:41:10',
+        progress: { processed: 1, total: 6 },
+      });
+      cancelled.items = done.items.filter(it => it.sampleId === 'S106').map(it => Object.assign({}, it, {
+        trialId: cancelled.id,
+        id: String(it.id).replace(done.id, cancelled.id),
+      }));
+      const running = blank({
+        id: 'TR20261111008', standardId: published.id, categoryId: 'C001', standardSnapshot: dtDeep(pubSnap),
+        fromTime: '2026-09-24 00:00:00', toTime: '2026-09-30 23:59:59', projectId: 'PJ01', deviceIds: ['D001'],
+        status: 'running', operator: '运维-周', createdAt: '2026-11-11 14:06:00',
+        progress: { processed: 3, total: Math.max(runningResult.receivedCount, 1) },
+      });
+      running._pendingResult = runningResult;
+      const queued = blank({
+        id: 'TR20261106006', standardId: water.id, categoryId: 'C002',
+        standardSnapshot: dtTrialSnapshotFrom(water, dtCaptureLive(water.id), '2026-11-06 08:00:00'),
+        fromTime: '2026-11-01 00:00:00', toTime: '2026-11-06 23:59:59', projectId: 'PJ02', deviceIds: ['D003'],
+        status: 'queued', operator: '张三', createdAt: '2026-11-06 08:12:00',
+        progress: { processed: 0, total: 0 },
+      });
+      dtTrials.value = [running, done, none, failed, cancelled, queued];
+    }
+    dtSeedTrials();
+    const dtFilteredTrials = computed(() => {
+      return dtTrials.value.filter(t => {
+        if (dtTrialFilterCategory.value && t.categoryId !== dtTrialFilterCategory.value) return false;
+        if (dtTrialFilterStatus.value && t.status !== dtTrialFilterStatus.value) return false;
+        if (dtTrialFilterOperator.value && t.operator !== dtTrialFilterOperator.value) return false;
+        if (dtTrialFilterBegin.value && String(t.createdAt) < dtTrialFilterBegin.value) return false;
+        if (dtTrialFilterEnd.value && String(t.createdAt) > dtTrialFilterEnd.value + ' 23:59:59') return false;
+        return true;
+      }).slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    });
+    const dtTrialOperators = computed(() => {
+      const set = {};
+      dtTrials.value.forEach(t => { if (t.operator) set[t.operator] = true; });
+      return Object.keys(set);
+    });
+    const dtCurrentTrial = computed(() => dtTrials.value.find(t => t.id === dtTrialId.value) || null);
+    const dtTrialSnapshotStale = computed(() => {
+      const t = dtCurrentTrial.value;
+      if (!t || !t.standardSnapshot || t.standardSnapshot.status !== 'draft') return false;
+      const saved = dtSavedPayloads.value[t.standardId];
+      if (!saved) return false;
+      return JSON.stringify(saved.mappings) !== JSON.stringify(t.standardSnapshot.mappings)
+        || JSON.stringify(saved.assertions) !== JSON.stringify(t.standardSnapshot.assertions)
+        || JSON.stringify(saved.relations) !== JSON.stringify(t.standardSnapshot.relations);
+    });
+    const dtTrialFilteredItems = computed(() => {
+      const t = dtCurrentTrial.value;
+      const rows = (t && t.items) ? t.items : [];
+      return rows.filter(it => {
+        if (dtTrialItemDevice.value && it.deviceId !== dtTrialItemDevice.value) return false;
+        if (dtTrialItemField.value && it.identifier !== dtTrialItemField.value) return false;
+        if (!dtTrialMarkHit(it, dtTrialItemMark.value)) return false;
+        return true;
+      });
+    });
+    const dtTrialItemPageCount = computed(() => Math.max(1, Math.ceil(dtTrialFilteredItems.value.length / dtTrialPageSize)));
+    const dtTrialPagedItems = computed(() => {
+      const page = Math.min(dtTrialItemPage.value, dtTrialItemPageCount.value);
+      const start = (page - 1) * dtTrialPageSize;
+      return dtTrialFilteredItems.value.slice(start, start + dtTrialPageSize);
+    });
+    const dtTrialFocusItems = computed(() => {
+      const t = dtCurrentTrial.value;
+      if (!t || !dtTrialFocusSampleId.value) return [];
+      return (t.items || []).filter(it => it.sampleId === dtTrialFocusSampleId.value);
+    });
+    const dtTrialDeviceOptions = computed(() => {
+      const std = dtStandards.value.find(s => s.id === dtTrialForm.standardId);
+      if (!std) return [];
+      return deviceList.value.filter(d => {
+        if (d.categoryId !== std.categoryId) return false;
+        if (dtTrialForm.projectId && d.projectId !== dtTrialForm.projectId) return false;
+        return true;
+      });
+    });
+    const dtTrialComposeStandard = computed(() => dtStandards.value.find(s => s.id === dtTrialForm.standardId) || null);
+    function dtTrialMarkHit(it, mark) {
+      if (!mark) return true;
+      if (mark === 'SKIP') return !!(it.skipJson && it.skipJson.relations && it.skipJson.relations.length);
+      if (mark === 'RANGE') return it.marks.some(m => m.indexOf('RANGE_') === 0);
+      if (mark === 'EXTREME') return it.marks.some(m => m.indexOf('EXTREME_') === 0);
+      if (mark === 'TYPE_UNIT') return it.marks.indexOf('TYPE_MISMATCH') >= 0 || it.marks.indexOf('UNIT_MISMATCH') >= 0;
+      return it.marks.indexOf(mark) >= 0;
+    }
+    function dtTrialDeviceOptionsText(d) {
+      const probe = d && (d.masterId || isProbeAepId(d.aepDeviceId));
+      return (probe ? '探头 · ' : '') + d.name + ' · ' + d.id;
+    }
+    function dtTrialItemDeviceChoices(t) {
+      const ids = [];
+      if (!t) return ids;
+      (t.deviceIds || []).forEach(id => { if (id && ids.indexOf(id) < 0) ids.push(id); });
+      (t.items || []).forEach(it => { if (it.deviceId && ids.indexOf(it.deviceId) < 0) ids.push(it.deviceId); });
+      return ids;
+    }
+    function dtTrialHasProbe(t) {
+      if (!t) return false;
+      const ids = (t.deviceIds && t.deviceIds.length) ? t.deviceIds : [];
+      return ids.some(id => {
+        const d = deviceList.value.find(x => x.id === id);
+        return d && (d.masterId || isProbeAepId(d.aepDeviceId));
+      });
+    }
+    function dtTrialJumpSummary(t) {
+      const snap = t && t.standardSnapshot;
+      if (!snap) return '';
+      const rows = (snap.assertions || []).filter(a => a.type === 'jumpFirst' && a.enabled && a.params && a.params.percent != null);
+      if (!rows.length) return '这份快照没有 percent。本期只跑算法 1，不按绝对差值打 JUMP_FIRST，也不写 JUMP_CONT。';
+      return rows.map(a => a.identifier + ' >' + a.params.percent + '% · 校准 ' + (a.params.count || 2) + ' 次').join('；');
+    }
+    function dtOpenTrialCompose() {
+      const std = dtViewStandard.value;
+      if (!std) { showToast('本品类还没有可试运行的标准', 'warn'); return; }
+      if (std.status === 'superseded') { showToast('被替代的历史版本不再试运行。请打开草稿或当前已发布版本', 'warn'); return; }
+      if (std.status === 'draft') {
+        if (!dtSavedAtMap.value[std.id]) { showToast('请先保存草稿。试运行不使用页面上还没保存的修改', 'warn'); return; }
+        if (dtDraftDirty.value) { showToast('页面上有未保存的修改。请先保存草稿，试运行不会带上这些修改', 'warn'); return; }
+      }
+      const busy = dtTrialBusy(std.id);
+      if (busy) { showToast('这份标准已有进行中的试运行 ' + busy.id + '。同一份同时只能有一个，请等它结束或取消', 'warn'); return; }
+      dtTrialForm.standardId = std.id;
+      dtTrialForm.from = dtTrialShiftDay('2026-11-12', -6);
+      dtTrialForm.to = '2026-11-12';
+      dtTrialForm.projectId = '';
+      dtTrialForm.deviceIds = [];
+      dtTrialComposeOpen.value = true;
+    }
+    function dtToggleTrialDevice(id) {
+      const arr = dtTrialForm.deviceIds.slice();
+      const i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1);
+      else arr.push(id);
+      dtTrialForm.deviceIds = arr;
+    }
+    function dtTrialProjectChanged() {
+      const allow = {};
+      dtTrialDeviceOptions.value.forEach(d => { allow[d.id] = true; });
+      dtTrialForm.deviceIds = dtTrialForm.deviceIds.filter(id => allow[id]);
+    }
+    function dtSubmitTrial() {
+      const std = dtStandards.value.find(s => s.id === dtTrialForm.standardId);
+      if (!std) return;
+      if (std.status === 'draft' && dtDraftDirty.value && dtViewStandard.value && dtViewStandard.value.id === std.id) {
+        showToast('草稿有未保存修改，本次不创建试运行', 'warn');
+        return;
+      }
+      if (!dtTrialForm.from || !dtTrialForm.to) { showToast('请选择采样时间范围', 'warn'); return; }
+      if (dtTrialForm.to < dtTrialForm.from) { showToast('结束日期不能早于开始日期', 'warn'); return; }
+      if (dtTrialDaySpan(dtTrialForm.from, dtTrialForm.to) > 30) { showToast('时间范围最多 30 天', 'warn'); return; }
+      const busy = dtTrialBusy(std.id);
+      if (busy) { showToast('已有进行中的试运行 ' + busy.id, 'warn'); return; }
+      const saved = std.status === 'draft' ? dtSavedPayloads.value[std.id] : dtCaptureLive(std.id);
+      if (!saved) { showToast('请先保存草稿', 'warn'); return; }
+      const snappedAt = std.status === 'draft' ? dtSavedAtMap.value[std.id] : '2026-11-12 10:30:00';
+      const snapshot = dtTrialSnapshotFrom(std, saved, snappedAt);
+      const scope = {
+        fromTime: dtTrialBound(dtTrialForm.from, false),
+        toTime: dtTrialBound(dtTrialForm.to, true),
+        projectId: dtTrialForm.projectId || '',
+        deviceIds: dtTrialForm.deviceIds.slice(),
+      };
+      const result = dtExecuteTrial(snapshot, dtTrialSamplePool(), scope);
+      dtTrialSeq += 1;
+      const id = 'TR20261112' + String(dtTrialSeq).padStart(3, '0');
+      const rec = {
+        id: id, standardId: std.id, categoryId: std.categoryId, standardSnapshot: snapshot,
+        fromTime: scope.fromTime, toTime: scope.toTime, projectId: scope.projectId, deviceIds: scope.deviceIds,
+        status: 'queued', operator: '张三', createdAt: '2026-11-12 10:31:00', finishedAt: null,
+        projectIdNote: '', receivedCount: 0, contextCount: 0, judgedMetrics: 0, abnormalMetrics: 0,
+        validMetrics: 0, validityRate: null, markBreakdown: null, errorMessage: '', emptyReason: '',
+        progress: { processed: 0, total: result.receivedCount }, items: [],
+        contextNote: '窗口前的上下文只用于取得起始上一条，不计入实收，也不出现在明细。',
+      };
+      if (!result.receivedCount) {
+        dtApplyTrialResult(rec, result);
+        rec.status = 'done';
+        rec.emptyReason = '该时段没有收到样本';
+        rec.finishedAt = '2026-11-12 10:31:02';
+        rec.progress = { processed: 0, total: 0 };
+      } else {
+        rec._pendingResult = result;
+        rec.status = 'queued';
+      }
+      dtTrials.value.unshift(rec);
+      dtTrialComposeOpen.value = false;
+      showToast(rec.status === 'done' ? '已创建试运行。该时段没有收到样本，记为已完成，没有编造测值' : '已创建试运行并进入排队。不会自动发布', 'ok');
+      jump('dataTrustTrial?id=' + encodeURIComponent(id));
+    }
+    function dtStopTrialPoll() {
+      if (dtTrialPollTimer) { clearInterval(dtTrialPollTimer); dtTrialPollTimer = null; }
+    }
+    function dtFinishTrial(rec) {
+      if (rec._pendingResult) {
+        dtApplyTrialResult(rec, rec._pendingResult);
+        rec._pendingResult = null;
+      }
+      rec.status = 'done';
+      rec.finishedAt = dtTrialPollAt.value || '2026-11-12 10:32:00';
+      if (rec.progress) rec.progress = { processed: rec.progress.total, total: rec.progress.total };
+      if (!rec.receivedCount) rec.emptyReason = '该时段没有收到样本';
+      showToast('试运行已完成。结果只留在本记录里，没有发布标准', 'ok');
+    }
+    function dtMaterializePartial(rec) {
+      const pending = rec._pendingResult;
+      if (!pending || !pending.items) return;
+      const n = rec.progress ? rec.progress.processed : 0;
+      const sampleIds = [];
+      pending.items.forEach(it => { if (sampleIds.indexOf(it.sampleId) < 0) sampleIds.push(it.sampleId); });
+      const keep = {};
+      sampleIds.slice(0, n).forEach(id => { keep[id] = true; });
+      rec.items = pending.items.filter(it => keep[it.sampleId]).map((it, i) => Object.assign({}, it, {
+        id: rec.id + '-I' + String(i + 1).padStart(3, '0'),
+        trialId: rec.id,
+        identifierName: dtIdentifierName(rec.categoryId, it.identifier),
+      }));
+    }
+    function dtTrialPollTick() {
+      const rec = dtTrials.value.find(t => t.id === dtTrialId.value);
+      const stamp = '2026-11-12 10:3' + String(Math.min(9, (rec && rec.progress ? rec.progress.processed : 0))) + ':00';
+      dtTrialPollAt.value = stamp;
+      if (!rec || (rec.status !== 'queued' && rec.status !== 'running')) { dtStopTrialPoll(); return; }
+      if (rec.status === 'queued') {
+        rec.status = 'running';
+        if (!rec.progress) rec.progress = { processed: 0, total: 1 };
+        return;
+      }
+      const total = rec.progress && rec.progress.total ? rec.progress.total : 1;
+      const step = Math.max(1, Math.ceil(total / 5));
+      rec.progress.processed = Math.min(total, (rec.progress.processed || 0) + step);
+      if (rec.progress.processed >= total) dtFinishTrial(rec);
+      if (rec.status !== 'queued' && rec.status !== 'running') dtStopTrialPoll();
+    }
+    function dtStartTrialPoll() {
+      dtStopTrialPoll();
+      dtTrialPollAt.value = '2026-11-12 10:30:00';
+      dtTrialPollTimer = setInterval(dtTrialPollTick, 2000);
+    }
+    function dtCancelTrial(rec) {
+      const row = rec || dtCurrentTrial.value;
+      if (!row || (row.status !== 'queued' && row.status !== 'running')) return;
+      if (row._pendingResult && row.progress && row.progress.processed > 0) dtMaterializePartial(row);
+      row.status = 'cancelled';
+      row.finishedAt = dtTrialPollAt.value || '2026-11-12 10:31:00';
+      dtStopTrialPoll();
+      showToast('已取消。记录保留，已经写出的明细不删，也不会发布', 'ok');
+    }
+    function dtOpenTrialItem(sampleId) { dtTrialFocusSampleId.value = sampleId || ''; }
+    function dtResetTrialItemFilters() {
+      dtTrialItemDevice.value = '';
+      dtTrialItemField.value = '';
+      dtTrialItemMark.value = '';
+      dtTrialItemPage.value = 1;
     }
     const dtMetricOptions = computed(() => {
       const cid = dtJCategory.value;
@@ -5909,6 +6626,8 @@ createApp({
       showCategoryOtaModal.value = false;
       showCancelOtaConfirm.value = false;
       cmpDrawerOpen.value = false;
+      dtTrialComposeOpen.value = false;
+      dtTrialFocusSampleId.value = '';
     }
 
     function jump(hash) {
@@ -5931,6 +6650,7 @@ createApp({
         } catch (e) { tabFromQuery = null; queryParams = null; }
       }
       if (key !== 'upgradeMonitor') stopUpgradeMonitorPoll();
+      if (key !== 'dataTrustTrial') dtStopTrialPoll();
       const map = {
         cockpit: () => goCockpit(),
         workbench: () => goCockpit(),
@@ -6070,6 +6790,21 @@ createApp({
         dataTrustStats: () => {
           module.value = 'dataTrust';
           screen.value = 'dataTrustStats';
+        },
+        dataTrustTrial: () => {
+          module.value = 'dataTrust';
+          screen.value = 'dataTrustTrial';
+          dtTrialId.value = (queryParams && queryParams.get('id')) || '';
+          const cid = queryParams && queryParams.get('categoryId');
+          if (!dtTrialId.value && cid) dtTrialFilterCategory.value = cid;
+          dtTrialItemPage.value = 1;
+          dtTrialItemDevice.value = '';
+          dtTrialItemField.value = '';
+          dtTrialItemMark.value = '';
+          dtTrialFocusSampleId.value = '';
+          const row = dtTrials.value.find(t => t.id === dtTrialId.value);
+          if (row && (row.status === 'queued' || row.status === 'running')) dtStartTrialPoll();
+          else dtStopTrialPoll();
         },
         monitorCurve: () => {
           const id = queryParams && queryParams.get('id');
@@ -6221,7 +6956,7 @@ createApp({
       dtCategoryId, dtStandardsOfCategory, dtViewStandard, dtEffectiveStandard, dtDraftStandard, dtViewReadonly,
       dtShowHistory, dtStdTab, dtViewMappings, dtViewAssertionGroups, dtViewRelations, dtViewRepairStrategies, dtViewTimeliness, dtViewOffline, dtViewMarkRefs,
       dtOverridesOfCategory, dtEffectivePreview, dtOverrideScopeType, dtOverrideScopeId, dtOverrideInterval, dtOverrideWindow, dtScopeOptions,
-      dtStatusLabel, dtStatusTag, dtAssertLabel, dtRelLabel, dtMarkName, dtDeviceName, dtProjectName, dtCategoryName,
+      dtStatusLabel, dtStatusTag, dtAssertLabel, dtRelLabel, dtMarkName, dtDeviceName, dtProjectName, dtCategoryName, dtIdentifierName,
       dtCreateDraft, dtPublish, dtViewVersion, dtBackToEffective, dtGuardDraft, dtToggleMapping, dtToggleAssertion, dtToggleRelation, dtToggleMark, dtToggleRepairStrategy,
       dtRepairModeLabel, dtRepairStrategyLabel,
       dtSetRangeCite, dtOnIntervalInput, dtMarkWindowManual, dtSetOfflineMode, dtSaveOverrideForm, dtRestoreOverride,
@@ -6241,6 +6976,16 @@ createApp({
       dtRepairs, dtFilteredRepairs, dtRepairDeviceFilter, dtRepairStatusFilter, dtRevertRepair, dtRepairChain, dtRepairOfSample,
       dtWbDeviceId, dtWbMetric, dtWbMetrics, dtWbPoints, dtWbGaps, dtWbSvg, dtWbSelectedId, dtWbDraft, dtSetWbDevice, dtSelectWbPoint,
       dtApplyWorkbenchRepair, dtCurveAdjustFromNeighbors, dtFillGapFromNeighbor,
+      dtDraftDirty, dtDraftSavedAtText, dtJumpUsesPercent, dtSaveDraft, dtOpenTrialCompose,
+      dtTrials, dtTrialId, dtFilteredTrials, dtTrialOperators, dtCurrentTrial, dtTrialSnapshotStale,
+      dtTrialFilterCategory, dtTrialFilterStatus, dtTrialFilterOperator, dtTrialFilterBegin, dtTrialFilterEnd,
+      dtTrialItemDevice, dtTrialItemField, dtTrialItemMark, dtTrialItemPage, dtTrialPageSize, dtTrialItemPageCount,
+      dtTrialPagedItems, dtTrialFilteredItems, dtTrialFocusSampleId, dtTrialFocusItems,
+      dtTrialComposeOpen, dtTrialForm, dtTrialDeviceOptions, dtTrialComposeStandard, dtTrialPollAt, dtSavedAtMap,
+      DT_TRIAL_BREAKDOWN,
+      dtTrialVersionText, dtTrialRangeText, dtTrialStatusLabel, dtTrialStatusTag, dtTrialRateText,
+      dtTrialDeviceOptionsText, dtTrialItemDeviceChoices, dtTrialHasProbe, dtTrialJumpSummary,
+      dtToggleTrialDevice, dtTrialProjectChanged, dtSubmitTrial, dtCancelTrial, dtOpenTrialItem, dtResetTrialItemFilters,
     };
   },
   template: `
@@ -9038,6 +9783,7 @@ createApp({
                 <li>不做：校准改原始测值；重复与冲突（维持同窗口覆盖写入，覆盖后按上面重判）；变频率 / 按需上报（只做固定频率）；通用规则引擎（修复不是脚本引擎）；用判断拦截入库；手工改 quality 标记；工单。重判只随 sample 覆盖或后台重跑。</li>
                 <li>完整率 = 应报次数 / 实收次数。有效率按有异常标记的指标统计。本期只做汇总，不做门槛拦截。修复不改这两个数的口径。</li>
                 <li>监控列表和曲线仍用原来的页面，按同一指标键读数：默认有 repairJson 用修复层，否则用原始测值；可切换原始或叠加。异常仍用 qualityJson 高亮，用 judgeId 下钻。</li>
+                <li>草稿保存后可以「试运行」（<code>#dataTrustTrial</code>，不进侧栏）。用保存时的快照在历史样本上预跑，上一条按这份草稿重放，不写正式 qualityJson，也不自动发布。跳变初次按相对初始值的百分比；第二次仍对照跳变前的初始值，校准后撤销 JUMP_FIRST，不另打连续跳变。</li>
                 <li>字段与接口见 <code>docs/api/iot-data-trust.md</code>。</li>
               </ul>
             </div>
@@ -9107,8 +9853,20 @@ createApp({
                 <span v-if="dtViewStandard.copiedFrom">复制自 v{{ dtViewStandard.copiedFrom }}</span>
                 <span v-if="dtViewStandard.supersededAt">被替代于 {{ dtViewStandard.supersededAt }}</span>
               </div>
-              <div v-if="dtViewReadonly" class="banner-tip">当前为{{ dtStatusLabel(dtViewStandard.status) }}，只读。改规则请「新建版本」，从当前版复制出草稿后再发布。判断只用当时已发布且在生效范围内的版本。</div>
-              <div v-else class="banner-muted">草稿可改开关和参数。发布后本版只读，上一份已发布版本变为历史。</div>
+              <div v-if="dtViewReadonly" class="banner-tip">当前为{{ dtStatusLabel(dtViewStandard.status) }}，只读。改规则请「新建版本」，从当前版复制出草稿后再发布。判断只用当时已发布且在生效范围内的版本。
+                <button v-if="dtViewStandard.status==='published'" class="btn-link btn" @click="dtOpenTrialCompose">按本版对照试运行</button>
+                <button class="btn-link btn" @click="jump('dataTrustTrial')">试运行记录</button>
+              </div>
+              <div v-else class="banner-muted">
+                建议先试运行，再决定是否发布。试运行不会自动发布，也不改正式判断。请先保存草稿；页面上还没保存的修改不会进入试运行。
+                <div class="dt-inline" style="margin-top:8px">
+                  <button class="btn btn-sm" @click="dtSaveDraft">保存草稿</button>
+                  <button class="btn btn-primary btn-sm" @click="dtOpenTrialCompose">试运行</button>
+                  <button class="btn btn-sm" @click="jump('dataTrustTrial?categoryId=' + dtCategoryId)">试运行记录</button>
+                  <span v-if="dtDraftDirty" class="tag tag-orange">有未保存修改</span>
+                  <span v-else class="tag tag-green">已保存 {{ dtDraftSavedAtText }}</span>
+                </div>
+              </div>
 
               <div v-if="dtShowHistory" class="info-section">
                 <div class="info-section-title">历史版本</div>
@@ -9152,10 +9910,10 @@ createApp({
               </div>
 
               <div class="info-section">
-                <div class="info-section-title">单条断言 <span class="sub-nav-hint">必报 / 类型与单位 / 量程 / 极值 / 枚举 / 空值 / 跳变初次 / 连续跳变 · 量程优先测点字典，极值单独配</span></div>
+                <div class="info-section-title">单条断言 <span class="sub-nav-hint" v-if="dtJumpUsesPercent">必报 / 类型与单位 / 量程 / 极值 / 枚举 / 空值 / 跳变初次（相对初始值的百分比，校准不另打标记）· 量程优先测点字典，极值单独配</span><span class="sub-nav-hint" v-else>必报 / 类型与单位 / 量程 / 极值 / 枚举 / 空值 / 跳变初次 / 连续跳变 · 量程优先测点字典，极值单独配</span></div>
                 <div class="table-wrap">
                   <table class="data-table">
-                    <thead><tr><th>标识符</th><th>名称</th><th>必报</th><th>类型与单位</th><th>量程</th><th>极值</th><th>枚举</th><th>空值</th><th>跳变初次</th><th>连续跳变</th></tr></thead>
+                    <thead><tr><th>标识符</th><th>名称</th><th>必报</th><th>类型与单位</th><th>量程</th><th>极值</th><th>枚举</th><th>空值</th><th>跳变初次</th><th>{{ dtJumpUsesPercent ? '校准说明' : '连续跳变' }}</th></tr></thead>
                     <tbody>
                       <tr v-for="g in dtViewAssertionGroups" :key="g.identifier">
                         <td><code>{{ g.identifier }}</code></td>
@@ -9206,11 +9964,21 @@ createApp({
                         <td>
                           <template v-if="g.byType.jumpFirst">
                             <button class="btn-link btn" @click="dtToggleAssertion(g.byType.jumpFirst)"><span class="tag" :class="g.byType.jumpFirst.enabled?'tag-green':'tag-gray'">{{ g.byType.jumpFirst.enabled?'开':'关' }}</span></button>
-                            <div class="cell-sub">自身历史 · 差值 &gt; {{ g.byType.jumpFirst.params.delta }}</div>
+                            <div class="dt-inline" v-if="g.byType.jumpFirst.params.percent != null">
+                              <span class="cell-sub">相对初始值 &gt;</span>
+                              <input class="input" style="width:64px" type="number" min="0" v-model.number="g.byType.jumpFirst.params.percent" :disabled="dtViewReadonly" />
+                              <span class="cell-sub">% · 校准</span>
+                              <input class="input" style="width:56px" type="number" min="2" v-model.number="g.byType.jumpFirst.params.count" :disabled="dtViewReadonly" />
+                              <span class="cell-sub">次</span>
+                            </div>
+                            <div class="cell-sub" v-else>自身历史 · 差值 &gt; {{ g.byType.jumpFirst.params.delta }}</div>
                           </template>
                         </td>
                         <td>
-                          <template v-if="g.byType.jumpCont">
+                          <template v-if="g.byType.jumpFirst && g.byType.jumpFirst.params.percent != null">
+                            <div class="cell-sub">不另打标记。第二次仍对照跳变前的初始值，超过比例就撤销 JUMP_FIRST。不写 JUMP_CONT。</div>
+                          </template>
+                          <template v-else-if="g.byType.jumpCont">
                             <button class="btn-link btn" @click="dtToggleAssertion(g.byType.jumpCont)"><span class="tag" :class="g.byType.jumpCont.enabled?'tag-green':'tag-gray'">{{ g.byType.jumpCont.enabled?'开':'关' }}</span></button>
                             <div class="cell-sub">连续 {{ g.byType.jumpCont.params.count }} 次 · 差值 &gt; {{ g.byType.jumpCont.params.delta }}</div>
                           </template>
@@ -9341,6 +10109,197 @@ createApp({
                 </div>
               </div>
             </template>
+          </template>
+        </div>
+
+        <!-- ===== 数据可信：试运行（不进侧栏） ===== -->
+        <div v-else-if="module==='dataTrust' && screen==='dataTrustTrial'" class="page-card" data-screen="data-trust-trial">
+          <template v-if="dtTrialId && !dtCurrentTrial">
+            <div class="page-header">
+              <div>
+                <h1 class="page-title">试运行</h1>
+                <p class="page-desc">没有记录 <code>{{ dtTrialId }}</code>。</p>
+              </div>
+              <button class="btn" @click="jump('dataTrustTrial')">返回记录</button>
+            </div>
+          </template>
+          <template v-else-if="!dtCurrentTrial">
+            <div class="page-header">
+              <div>
+                <h1 class="page-title">试运行记录</h1>
+                <p class="page-desc">组件 <code>iot/iot-data-trust/IotDataTrustTrial</code> · 路由 <code>/iot/iot-data-trust-trial</code> · 本页 <code>#dataTrustTrial</code>。侧栏不挂这一页。从品类标准草稿的「试运行」进入，或直接打开本地址。读权限 <code>iot:device:query</code>，发起和取消 <code>iot:device:update</code>。</p>
+              </div>
+              <button class="btn" @click="jump('categoryStandard?categoryId=' + (dtTrialFilterCategory || 'C001'))">返回品类标准</button>
+            </div>
+            <div class="banner-muted">试运行把已保存的规则快照放到历史实收样本上预跑，只写试运行自己的记录。不改原始报文和测值，不写 sample.judgeId / qualityJson，不写正式判断，不写 repairJson，不写缺报，也不自动发布。</div>
+            <div class="toolbar">
+              <select class="select" v-model="dtTrialFilterCategory"><option value="">全部品类</option><option v-for="c in CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option></select>
+              <select class="select" v-model="dtTrialFilterStatus">
+                <option value="">全部状态</option>
+                <option value="queued">排队中</option>
+                <option value="running">运行中</option>
+                <option value="done">已完成</option>
+                <option value="failed">失败</option>
+                <option value="cancelled">已取消</option>
+              </select>
+              <select class="select" v-model="dtTrialFilterOperator"><option value="">全部操作人</option><option v-for="name in dtTrialOperators" :key="name" :value="name">{{ name }}</option></select>
+              <input class="input" type="date" v-model="dtTrialFilterBegin" title="创建时间起" />
+              <input class="input" type="date" v-model="dtTrialFilterEnd" title="创建时间止" />
+              <button class="btn" @click="dtTrialFilterCategory=''; dtTrialFilterStatus=''; dtTrialFilterOperator=''; dtTrialFilterBegin=''; dtTrialFilterEnd=''">重置</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>trialId</th>
+                    <th>创建时间</th>
+                    <th>品类</th>
+                    <th>标准版本</th>
+                    <th>数据范围</th>
+                    <th>状态</th>
+                    <th>实收样本</th>
+                    <th>异常指标</th>
+                    <th>试运行有效率</th>
+                    <th>操作人</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="t in dtFilteredTrials" :key="t.id">
+                    <td><code>{{ t.id }}</code></td>
+                    <td>{{ t.createdAt }}</td>
+                    <td>{{ dtCategoryName(t.categoryId) }}<div class="cell-sub"><code>{{ t.categoryId }}</code></div></td>
+                    <td>{{ dtTrialVersionText(t) }}</td>
+                    <td class="dt-wrap">{{ dtTrialRangeText(t) }}</td>
+                    <td>
+                      <span class="tag" :class="dtTrialStatusTag(t.status)">{{ dtTrialStatusLabel(t.status) }}</span>
+                      <div class="cell-sub" v-if="t.status==='running' && t.progress">{{ t.progress.processed }}/{{ t.progress.total }}</div>
+                      <div class="cell-sub dt-trial-note" v-if="t.status==='failed'">{{ t.errorMessage }}</div>
+                    </td>
+                    <td>{{ t.status==='done' ? t.receivedCount : '—' }}</td>
+                    <td>{{ t.status==='done' ? t.abnormalMetrics : '—' }}</td>
+                    <td>{{ dtTrialRateText(t) || (t.status==='done' ? '—' : '') }}</td>
+                    <td>{{ t.operator }}</td>
+                    <td class="actions dt-wrap">
+                      <button class="btn-link btn" @click="jump('dataTrustTrial?id=' + t.id)">查看结果</button>
+                      <button v-if="t.status==='queued' || t.status==='running'" class="btn-link btn" @click="dtCancelTrial(t)">取消</button>
+                    </td>
+                  </tr>
+                  <tr v-if="!dtFilteredTrials.length"><td colspan="11"><div class="empty-hint">没有试运行记录</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-note">列表按创建时间倒序。同一份标准同时只能有一个排队中或运行中的试运行。已完成的历史记录保留，下一次运行另建一条，不覆盖。接口 <code>GET /iot/iotDataTrustTrial</code>。</div>
+          </template>
+          <template v-else>
+            <div class="page-header">
+              <div>
+                <h1 class="page-title">试运行 {{ dtCurrentTrial.id }}</h1>
+                <p class="page-desc">组件 <code>iot/iot-data-trust/IotDataTrustTrial</code> · 路由 <code>/iot/iot-data-trust-trial?id={{ dtCurrentTrial.id }}</code> · 本页 <code>#dataTrustTrial?id={{ dtCurrentTrial.id }}</code>。结果只属于这一条记录。</p>
+              </div>
+              <button class="btn" @click="jump('dataTrustTrial')">返回记录</button>
+            </div>
+            <div class="detail-meta" style="margin-bottom:10px">
+              <span>状态：<span class="tag" :class="dtTrialStatusTag(dtCurrentTrial.status)">{{ dtTrialStatusLabel(dtCurrentTrial.status) }}</span></span>
+              <span>范围：<b>{{ dtTrialRangeText(dtCurrentTrial) }}</b></span>
+              <span>快照：<b>{{ dtTrialVersionText(dtCurrentTrial) }}</b></span>
+              <span>操作人：<b>{{ dtCurrentTrial.operator }}</b></span>
+              <span v-if="dtCurrentTrial.finishedAt">结束：<b>{{ dtCurrentTrial.finishedAt }}</b></span>
+            </div>
+            <div v-if="dtCurrentTrial.status==='queued' || dtCurrentTrial.status==='running'" class="banner-muted">
+              <div class="dt-inline">
+                <span>{{ dtCurrentTrial.status==='queued' ? '排队中' : '运行中' }}</span>
+                <span class="ota-progress" v-if="dtCurrentTrial.progress && dtCurrentTrial.progress.total">
+                  <span class="ota-progress-bar"><i :style="{ width: Math.round((dtCurrentTrial.progress.processed / dtCurrentTrial.progress.total) * 100) + '%' }"></i></span>
+                  <span>{{ dtCurrentTrial.progress.processed }}/{{ dtCurrentTrial.progress.total }}</span>
+                </span>
+                <span class="cell-sub">最近刷新 {{ dtTrialPollAt || '—' }} · 本页轮询状态，完成后才出汇总</span>
+                <button class="btn btn-sm" @click="dtCancelTrial(dtCurrentTrial)">取消</button>
+              </div>
+            </div>
+            <div v-if="dtCurrentTrial.status==='failed'" class="banner-tip">{{ dtCurrentTrial.errorMessage }}</div>
+            <div v-if="dtCurrentTrial.status==='cancelled'" class="banner-muted">已取消。记录保留。已经写出的明细还在，不计算试运行有效率，也不发布。</div>
+            <div v-if="dtCurrentTrial.emptyReason && dtCurrentTrial.status==='done'" class="banner-muted">{{ dtCurrentTrial.emptyReason }}。没有编造测值。窗口内没有参与判断的指标时，试运行有效率留空。</div>
+            <div v-if="dtTrialSnapshotStale" class="banner-tip">当前草稿已经和这条记录的快照不一样。本页数字仍是启动时冻结的那一版，不会跟着后来的修改变。</div>
+            <div class="banner-muted" v-if="dtCurrentTrial.status==='done'">{{ dtCurrentTrial.contextNote }} 上下文 {{ dtCurrentTrial.contextCount }} 条。子探头用探头自己的 sample，不解析父设备报文。<span v-if="dtTrialHasProbe(dtCurrentTrial)"> 本次范围含探头设备。</span> 跳变：{{ dtTrialJumpSummary(dtCurrentTrial) }}</div>
+            <template v-if="dtCurrentTrial.status==='done'">
+              <div class="info-section">
+                <div class="info-section-title">汇总 <span class="sub-nav-hint">只属于本记录 · 不写入完整率/有效率页</span></div>
+                <div class="stat-row">
+                  <div class="stat-chip"><div class="sc-label">实收样本</div><div class="sc-value">{{ dtCurrentTrial.receivedCount }}</div></div>
+                  <div class="stat-chip accent"><div class="sc-label">参与判断指标</div><div class="sc-value">{{ dtCurrentTrial.judgedMetrics }}</div></div>
+                  <div class="stat-chip warn"><div class="sc-label">异常指标</div><div class="sc-value">{{ dtCurrentTrial.abnormalMetrics }}</div></div>
+                  <div class="stat-chip ok"><div class="sc-label">有效指标</div><div class="sc-value">{{ dtCurrentTrial.validMetrics }}</div></div>
+                  <div class="stat-chip accent"><div class="sc-label">试运行有效率</div><div class="sc-value">{{ dtTrialRateText(dtCurrentTrial) || '—' }}</div></div>
+                </div>
+                <div class="table-note">有效率 = 无异常标记的指标次数 / 参与判断的指标次数。与正式口径相同，但只记在这条试运行上。</div>
+              </div>
+              <div class="info-section">
+                <div class="info-section-title">标记分布</div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>类型</th><th>次数</th></tr></thead>
+                    <tbody>
+                      <tr v-for="b in DT_TRIAL_BREAKDOWN" :key="b.key">
+                        <td>{{ b.name }}</td>
+                        <td>{{ dtCurrentTrial.markBreakdown ? dtCurrentTrial.markBreakdown[b.key] : 0 }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="table-note">一个指标可以同时有多项标记，所以各类型次数加起来可以大于异常指标数。关联未执行是跳过次数，不是 qualityJson 里的标记。不写 JUMP_CONT。和正式 qualityJson 的对照、试运行完整率这一期不做。</div>
+              </div>
+            </template>
+            <div class="info-section" v-if="dtCurrentTrial.status==='done' || dtCurrentTrial.status==='cancelled'">
+              <div class="info-section-title">明细 <span class="sub-nav-hint">一行 = 一条样本 × 一个指标 · 用的是试运行当时的测值</span></div>
+              <div class="toolbar">
+                <select class="select" v-model="dtTrialItemDevice" @change="dtTrialItemPage=1"><option value="">全部设备</option><option v-for="id in dtTrialItemDeviceChoices(dtCurrentTrial)" :key="id" :value="id">{{ dtDeviceName(id) }}</option></select>
+                <select class="select" v-model="dtTrialItemField" @change="dtTrialItemPage=1">
+                  <option value="">全部指标</option>
+                  <option v-for="m in (dtCurrentTrial.standardSnapshot.mappings || []).filter(x => x.enabled)" :key="m.identifier" :value="m.identifier">{{ dtIdentifierName(dtCurrentTrial.categoryId, m.identifier) }} · {{ m.identifier }}</option>
+                </select>
+                <select class="select" v-model="dtTrialItemMark" @change="dtTrialItemPage=1">
+                  <option value="">全部标记</option>
+                  <option value="RANGE">量程</option>
+                  <option value="EXTREME">极值</option>
+                  <option value="NULL_VALUE">空值</option>
+                  <option value="TYPE_UNIT">类型 / 单位</option>
+                  <option value="ENUM_INVALID">枚举</option>
+                  <option value="REQUIRED_MISS">缺必报</option>
+                  <option value="JUMP_FIRST">跳变初次</option>
+                  <option value="SKIP">关联未执行</option>
+                </select>
+                <button class="btn" @click="dtResetTrialItemFilters">重置</button>
+                <span class="cell-sub">{{ dtTrialFilteredItems.length }} 行</span>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>设备</th><th>采样时间</th><th>指标</th><th>试运行测值</th><th>试运行标记</th><th>未执行原因</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="it in dtTrialPagedItems" :key="it.id">
+                      <td>{{ dtDeviceName(it.deviceId) }}</td>
+                      <td>{{ it.sampleTime }}<div class="cell-sub"><code>{{ it.sampleId }}</code></div></td>
+                      <td>{{ it.identifierName || dtIdentifierName(dtCurrentTrial.categoryId, it.identifier) }}<div class="cell-sub"><code>{{ it.identifier }}</code></div></td>
+                      <td><code>{{ it.value == null ? 'null' : it.value }}</code></td>
+                      <td class="dt-wrap">
+                        <div class="dt-mark-tags" v-if="it.marks && it.marks.length"><span v-for="code in it.marks" :key="code" class="tag tag-red">{{ dtMarkName(code) }}</span></div>
+                        <span v-else class="tag tag-green">无异常</span>
+                        <div class="dt-trial-note" v-if="it.note">{{ it.note }}</div>
+                      </td>
+                      <td class="dt-wrap">{{ it.skipJson ? it.skipJson.reason : '—' }}</td>
+                      <td><button class="btn-link btn" @click="dtOpenTrialItem(it.sampleId)">本样本试运行</button></td>
+                    </tr>
+                    <tr v-if="!dtTrialPagedItems.length"><td colspan="7"><div class="empty-hint">{{ dtCurrentTrial.status==='cancelled' ? '取消前没有写出明细' : '没有明细' }}</div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="toolbar" v-if="dtTrialItemPageCount > 1">
+                <button class="btn btn-sm" :disabled="dtTrialItemPage<=1" @click="dtTrialItemPage=dtTrialItemPage-1">上一页</button>
+                <span class="cell-sub">{{ dtTrialItemPage }} / {{ dtTrialItemPageCount }}</span>
+                <button class="btn btn-sm" :disabled="dtTrialItemPage>=dtTrialItemPageCount" @click="dtTrialItemPage=dtTrialItemPage+1">下一页</button>
+              </div>
+              <div class="table-note">接口 <code>GET /iot/iotDataTrustTrial/{{ dtCurrentTrial.id }}/items</code>，分页 <code>pageNum</code> / <code>pageSize</code>。这里不展示正式 qualityJson，避免和试运行标记混在一起。</div>
+            </div>
           </template>
         </div>
 
@@ -9711,6 +10670,76 @@ createApp({
       </main>
     </div>
 
+
+    <!-- 品类标准 · 试运行 -->
+    <div v-if="dtTrialComposeOpen" class="overlay" @click.self="dtTrialComposeOpen=false">
+      <div class="modal modal-lg">
+        <div class="modal-header"><span>试运行</span><button class="close-x" @click="dtTrialComposeOpen=false">×</button></div>
+        <div class="modal-body">
+          <div class="banner-muted">按已保存的标准做一次预跑。启动时冻结快照，之后再改草稿不会改这条记录。不会自动发布，也不写正式判断。</div>
+          <div class="form-item" v-if="dtTrialComposeStandard">
+            <label>标准</label>
+            <div>{{ dtCategoryName(dtTrialComposeStandard.categoryId) }} · {{ dtTrialComposeStandard.status==='draft' ? ('草稿 v' + dtTrialComposeStandard.version) : ('已发布 v' + dtTrialComposeStandard.version) }}</div>
+            <div class="hint" v-if="dtTrialComposeStandard.status==='draft'">品类来自这一版草稿。用的是保存时间 {{ dtSavedAtMap[dtTrialComposeStandard.id] || '—' }} 的内容。</div>
+            <div class="hint" v-else>这是已发布版本的对照重跑，不是发布前的主路径。</div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label><span class="req">*</span>采样时间起</label><input class="input input-full" type="date" v-model="dtTrialForm.from" /></div>
+            <div class="form-item"><label><span class="req">*</span>采样时间止</label><input class="input input-full" type="date" v-model="dtTrialForm.to" /></div>
+          </div>
+          <div class="hint">默认最近 7 天（相对原型时钟 2026-11-12），最长 30 天。按 sampleTime 筛选。该时段没有实收样本也会建记录，状态为已完成，并说明没有数据。</div>
+          <div class="form-item">
+            <label>项目（可选）</label>
+            <select class="select input-full" v-model="dtTrialForm.projectId" @change="dtTrialProjectChanged">
+              <option value="">全部项目</option>
+              <option v-for="p in PROJECTS" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>设备（可选，可多选）</label>
+            <div class="dt-device-pick">
+              <label v-for="d in dtTrialDeviceOptions" :key="d.id" class="dt-check">
+                <input type="checkbox" :checked="dtTrialForm.deviceIds.indexOf(d.id)>=0" @change="dtToggleTrialDevice(d.id)" />
+                <span>{{ dtTrialDeviceOptionsText(d) }}</span>
+              </label>
+              <div v-if="!dtTrialDeviceOptions.length" class="empty-hint">这个项目下没有本品类设备</div>
+            </div>
+            <div class="hint">不选表示该项目（或全部项目）下的本品类设备都跑。子探头请勾选探头自己，试运行用探头的 sample，不用父设备报文解析。</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="dtTrialComposeOpen=false">取消</button>
+          <button class="btn btn-primary" @click="dtSubmitTrial">开始试运行</button>
+        </div>
+      </div>
+    </div>
+    <div v-if="dtTrialFocusSampleId && dtCurrentTrial" class="overlay" @click.self="dtTrialFocusSampleId=''">
+      <div class="modal modal-lg">
+        <div class="modal-header"><span>样本 {{ dtTrialFocusSampleId }} · 本次试运行</span><button class="close-x" @click="dtTrialFocusSampleId=''">×</button></div>
+        <div class="modal-body">
+          <div class="banner-muted">只看这条试运行里该样本的指标结果。不读取、不展示正式 qualityJson / repairJson。</div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>指标</th><th>试运行测值</th><th>试运行标记</th><th>未执行原因</th></tr></thead>
+              <tbody>
+                <tr v-for="it in dtTrialFocusItems" :key="it.id">
+                  <td>{{ it.identifierName }}<div class="cell-sub"><code>{{ it.identifier }}</code></div></td>
+                  <td><code>{{ it.value == null ? 'null' : it.value }}</code></td>
+                  <td class="dt-wrap">
+                    <div class="dt-mark-tags" v-if="it.marks && it.marks.length"><span v-for="code in it.marks" :key="code" class="tag tag-red">{{ dtMarkName(code) }}</span></div>
+                    <span v-else class="tag tag-green">无异常</span>
+                    <div class="dt-trial-note" v-if="it.note">{{ it.note }}</div>
+                  </td>
+                  <td class="dt-wrap">{{ it.skipJson ? it.skipJson.reason : '—' }}</td>
+                </tr>
+                <tr v-if="!dtTrialFocusItems.length"><td colspan="4"><div class="empty-hint">本记录里没有这个样本</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer"><button class="btn" @click="dtTrialFocusSampleId=''">关闭</button></div>
+      </div>
+    </div>
 
     <!-- 物模型：品类模态 -->
     <div v-if="showCategoryModal" class="overlay" @click.self="showCategoryModal=false">

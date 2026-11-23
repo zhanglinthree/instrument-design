@@ -40,10 +40,12 @@ sample 入库（含同窗口覆盖更新）之后才判断。判断不拦截入�
 1. 取上面的生效标准。
 2. 先跑完全部单条断言。多个指标都有问题就都打标记，不因第一个失败整单返回。
 3. 再跑关联。某指标的必报 / 类型与单位 / 量程 / 枚举 / 空值已失败，则依赖它的关联中停，明细 `status=skip`（未执行）；不依赖该指标的关联继续。
-4. 跳变二次标记是确认步骤，不是另一套规则引擎。该指标若已有上一条里的基础失败，二次标记同样 `skip`。只有极值、跳变初次、连续跳变失败时，二次标记仍执行。确认成立才把 `JUMP_CONFIRM` 写入 `qualityJson`；不成立不写，已有标记保留。
+4. 跳变二次标记是确认步骤，不是另一套规则引擎。该指标若已有基础失败（必报 / 类型与单位 / 量程 / 枚举 / 空值），二次标记同样 `skip`。只有极值、跳变初次失败时，二次标记仍执行。确认成立才把 `JUMP_CONFIRM` 写入 `qualityJson`；不成立不写，已有标记保留。
 5. 先写判断记录，再回写 sample 的 `judgeId` / `qualityJson`。总结果按各指标「且」汇总（`overallPass`）。判断不写 `repairJson`，不改测值。
 
-单条断言类型：必报、类型与单位、量程（优先测点字典 min/max）、极值（统计 / 历史极端，单独配置，不是字典量程）、枚举、空值、跳变初次标记（只跟本设备自身历史比）、连续跳变。
+跳变初次按第 9 节锁定：相对「上一条已接受测值」的百分比，不按绝对差值。第二次仍对照跳变前的同一个初始值；达到次数后校准，撤销 `JUMP_FIRST`，不另打连续跳变，不写 `JUMP_CONT`。既有判断页里带 `JUMP_CONT` 的记录是更早的示意，试运行不沿用。
+
+单条断言类型：必报、类型与单位、量程（优先测点字典 min/max）、极值（统计 / 历史极端，单独配置，不是字典量程）、枚举、空值、跳变初次标记（只跟本设备自身上一条已接受测值比）。
 
 关联类型：同包跨字段（读原始报文包内数据集，不读修复层）、T-1 / 同时段趋势、同项目同品类、关联设备同时段、跳变二次标记（用 T-1 或关联设备确认初次跳变）。
 
@@ -128,10 +130,11 @@ sample 仍是一条一行。测值 JSON 不拆成一行一个指标。
 | 修复策略（标准页页签，治理） | 仍是 `IotDataTrustStandard` | 同上，`tab=repair` | `#categoryStandard?tab=repair` |
 | 离线工作台（治理，第三周） | `iot/iot-data-trust/IotDataTrustWorkbench` | `/iot/iot-data-trust-workbench` | `#dataTrustWorkbench` |
 | 修复记录（治理，第三周） | `iot/iot-data-trust/IotDataTrustRepairLog` | `/iot/iot-data-trust-repair-log` | `#dataTrustRepairLog` |
+| 试运行（列表 / 结果同一组件） | `iot/iot-data-trust/IotDataTrustTrial` | `/iot/iot-data-trust-trial` | `#dataTrustTrial` · `#dataTrustTrial?id={trialId}` |
 
-品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页，不替换判断查询，也不把缺报并进来。侧栏「数据可信」仍只是目录（`/iot/data-trust` 没有业务页）。修复策略、离线工作台、修复记录仍是后加的治理入口，不替换上面的页面。
+品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页，不替换判断查询，也不把缺报并进来。侧栏「数据可信」仍只是目录（`/iot/data-trust` 没有业务页）。修复策略、离线工作台、修复记录仍是后加的治理入口，不替换上面的页面。试运行不进侧栏，从品类标准草稿的「试运行」进入，或直接打开 hash。
 
-侧栏顺序：品类标准、数据异常、判断查询、缺报与离线、完整率/有效率，其后是治理入口（修复策略页签、离线工作台、修复记录）。
+侧栏顺序：品类标准、数据异常、判断查询、缺报与离线、完整率/有效率，其后是治理入口（修复策略页签、离线工作台、修复记录）。没有「试运行」。
 
 分工：
 
@@ -143,7 +146,7 @@ sample 仍是一条一行。测值 JSON 不拆成一行一个指标。
 | 缺报与离线 | 只放缺报和离线。不进数据异常 |
 | 修复记录 / 离线工作台 | 治理。数据异常只链出去，不在本页改修复值、不回退、不改标记 |
 
-深链示例：`#categoryStandard?categoryId=C001`，`#categoryStandard?tab=tip`，`#categoryStandard?tab=repair`，`#dataTrustAnomaly`，`#dataTrustAnomaly?deviceId=D001`，`#dataTrustAnomaly?identifier=yewei`，`#dataTrustAnomaly?mark=RANGE_HIGH`，`#dataTrustAnomaly?repairStatus=none`，`#dataTrustJudgement?id=J102`，`#dataTrustJudgement?id=J108`，`#dataTrustWorkbench?deviceId=D001&metric=yewei`。
+深链示例：`#categoryStandard?categoryId=C001`，`#categoryStandard?tab=tip`，`#categoryStandard?tab=repair`，`#categoryStandard?categoryId=C001&versionId=STD-C001-3`，`#dataTrustAnomaly`，`#dataTrustAnomaly?deviceId=D001`，`#dataTrustAnomaly?identifier=yewei`，`#dataTrustAnomaly?mark=RANGE_HIGH`，`#dataTrustAnomaly?repairStatus=none`，`#dataTrustJudgement?id=J102`，`#dataTrustJudgement?id=J108`，`#dataTrustWorkbench?deviceId=D001&metric=yewei`，`#dataTrustTrial`，`#dataTrustTrial?id=TR20261110001`。
 
 监控列表 / 曲线 / 上报明细：按指标键读。默认 `repairJson` 有该键用修复值，否则用原来的测值 JSON（`latest_json` 或 sample 测值）。可切换原始或叠加。异常高亮按指标读 `qualityJson`。点击用 `judgeId` 打开判断详情。查询参数 `valueMode=repair|original|overlay`。
 
@@ -181,7 +184,7 @@ sample 仍是一条一行。测值 JSON 不拆成一行一个指标。
 |---|---|---|
 | standardId | string | |
 | identifier | string | |
-| type | string | `required` 必报 / `type` 类型与单位 / `range` 量程 / `extreme` 极值 / `enum` 枚举 / `null` 空值 / `jumpFirst` 跳变初次标记 / `jumpCont` 连续跳变 |
+| type | string | `required` 必报 / `type` 类型与单位 / `range` 量程 / `extreme` 极值 / `enum` 枚举 / `null` 空值 / `jumpFirst` 跳变初次标记。`jumpCont` 不再作为本期标记 |
 | enabled | bool | |
 | params | object | 见下 |
 
@@ -193,8 +196,7 @@ sample 仍是一条一行。测值 JSON 不拆成一行一个指标。
 - `enum`：`values` 逗号分隔
 - `null`：`allowNull`
 - `required`：无额外参数
-- `jumpFirst`：`delta`、`baseline=selfHistory`、`lookback`。只跟本设备自身历史比
-- `jumpCont`：`delta`、`count`。连续次数达到 `count` 且每次差值超过 `delta`。与初次跳变分开打标
+- `jumpFirst`：`percent`、`count`（默认 2）、`baseline=prevAccepted`。见第 9.4 节。只跟本设备自己的上一条已接受测值比，不另配一条基线。不使用绝对差值 `delta`
 
 ### 3.4 关联
 
@@ -486,3 +488,166 @@ sample 查询沿用 `GET /iot/iotDeviceSample`，响应增加 `judgeId`、`quali
 | 修复可回退 | `R004` 曾挂 `S103`，已回退。`S103.repairJson` 为空，测值仍 11.5 |
 | 数据异常当前行（最新 qualityJson） | `S102`/`J102` 拆成两行：`yewei` 标记 `RANGE_HIGH`，原始 11.2，`repairJson` 3.55，已修复；`wendu` 标记 `NULL_VALUE`，原始 null，无修复键，未修复。`S201`/`J201` `yaqiang` `RANGE_HIGH`，原始 280，修复 148，已修复。`S108`/`J108` `yewei` 为 `EXTREME_HIGH`、`JUMP_FIRST`、`TREND_JUMP`、`JUMP_CONFIRM`，原始 6.8，修复 4.2，已修复。`S109`/`J109` `yewei` 为 `EXTREME_HIGH`、`JUMP_FIRST`、`JUMP_CONT`、`TREND_JUMP`，无 `JUMP_CONFIRM`，原始 8.9，未修复。`S103` 只出最新 `J103b`：`yewei` `RANGE_HIGH`，原始 11.5，未修复 |
 | 数据异常不收 | `S101`/`J101`（`qualityJson` 空，通过）；历史判断 `J103a`（`S103` 的最新标记已不是那次通过）；缺报 / 离线 `G1`–`G5` |
+| 试运行（不进侧栏） | `TR20261110001`。口径见第 9 节。上表 `J109` 的 `JUMP_CONT` 是更早的判断页示意，试运行不打这个标记 |
+
+## 9. 试运行（规则预运行）
+
+草稿保存之后，用当时的规则在历史实收样本上预跑一遍，看会产生什么标记，再由人决定发不发布。试运行结束不会自动发布。v1 也不禁用「发布」按钮，页面文案提示先试运行再决定。
+
+和正式判断共用一个引擎，`mode=trial`。试运行只写下面两张表。
+
+试运行不做这些事：
+
+- 不改原始报文，不改测值
+- 不写 `sample.judgeId`、`sample.qualityJson`
+- 不写判断查询 / 异常列表用的正式判断记录
+- 不写 `repairJson`，不跑修复
+- 不创建、不修改缺报 / 离线记录
+- 不自动发布
+- 不把试运行有效率写进正式「完整率 / 有效率」
+
+只判断对照表里「对外展示且参与判断」的指标。子探头用探头自己的 sample，不用父设备的报文解析。
+
+同一份标准同时只能有一个排队中或运行中的试运行。跑完的历史记录保留，下一次另建一条，不覆盖。
+
+启动时把当时的对照、单条断言、关联、时效冻成 `standardSnapshot`。之后再改草稿，这条记录和它的结果不变。
+
+没有实收样本也建记录：`status=done`，`receivedCount=0`，结果里说明该时段没有收到样本。不编造测值。失败写 `errorMessage`。取消未完成的任务：状态改为 `cancelled`，已经写出的明细保留。
+
+实现顺序：正式引擎能写 `qualityJson` 之后再做试运行，不必等异常列表页。新表的 SQL 由后端另行给出，跑之前要先宣布；本文只描述字段，不附可执行的迁移脚本。
+
+异步任务。结果页在排队中 / 运行中轮询状态。
+
+### 9.1 页面
+
+组件 `IotDataTrustTrial`。没有 `id` 是列表，有 `id` 是这一条的结果。
+
+| | |
+|---|---|
+| 列表 | `/iot/iot-data-trust-trial` · `#dataTrustTrial` |
+| 结果 | `/iot/iot-data-trust-trial?id={trialId}` · `#dataTrustTrial?id={trialId}` |
+
+入口：
+
+1. 品类标准草稿页按钮「试运行」。必须先保存草稿。页面上还没保存的修改不能拿来跑。创建后进入该条结果页。
+2. 试运行记录列表，打开以往的记录和结果。
+3. 已发布版本可以再跑一次做对照，不是主路径。
+
+列表筛选：品类、状态、操作人、创建时间。按创建时间倒序。
+
+列：`trialId`、创建时间、品类、标准版本（草稿写「草稿 + 快照时间」，已发布写版本号）、数据范围（起止、项目或「全部项目」、设备台数）、状态、实收样本数（不含上下文）、异常指标数、试运行有效率（未完成留空）、操作人。操作：查看结果；排队中 / 运行中可取消；失败展示 `errorMessage`。运行中的状态旁显示 `processed/total`。
+
+状态：`queued` 排队中 / `running` 运行中 / `done` 已完成 / `failed` 失败 / `cancelled` 已取消。
+
+权限：读 `iot:device:query`；创建和取消 `iot:device:update`。
+
+结果页头：返回列表、范围、快照版本、状态、操作人。运行中自动刷新进度。
+
+完成后三块，都只属于这条记录：
+
+1. 汇总：实收样本、参与判断指标、异常指标、有效指标、试运行有效率。
+2. 标记分布：`RANGE`、`EXTREME`、`NULL_VALUE`、类型/单位、`ENUM`、`REQUIRED_MISS`、`JUMP_FIRST`、关联未执行。一个指标可以有多项标记，所以类型次数可以大于异常指标数。
+3. 明细：一行是一条样本 × 一个指标。设备、采样时间、标识、名称、本次试运行用的测值、试运行标记、未执行原因。可按设备、指标、标记筛选，并可下钻该样本在本试运行中的结果。本页不展示正式 `qualityJson`。
+
+和正式 `qualityJson` 对照、试运行完整率，留到后面，这一版页面不做。完整率即使以后要算，也不能写缺报记录。
+
+### 9.2 创建参数
+
+`standardId` 必填，默认当前草稿。品类从该版本来，不另传。
+
+`from` / `to` 必填，按 `sampleTime` 筛选。默认最近 7 天，最长 30 天。
+
+`projectId` 可选。`deviceIds` 可选，多选，必须属于该项目（若选了项目）和该品类。不选设备表示范围内全部设备。子探头勾选探头设备本身。
+
+### 9.3 上一条（试运行内重放）
+
+试运行里的「上一条」用这份草稿，按采样时间重放历史样本，得到接受链。不掺正式环境已经接受过的链。
+
+窗口开始之前的上下文也用同一份草稿走一遍，只为取出窗口起点的上一条。这些点不计入实收样本，也不出现在明细里。上下文至少取该设备该指标窗口前 2 个点，或向前 1 天，取足以覆盖这两者的点。
+
+T-1、同时段、同项目同品类、关联设备，也只用这段上下文，不把上下文点算进实收。
+
+单条断言先全部跑完。必报 / 类型与单位 / 量程 / 枚举 / 空值失败时，依赖该指标的关联记未执行（`skip`），和正式一样。极值、跳变初次失败不因此跳过跳变二次标记。基础失败的点不写入上一条。
+
+### 9.4 跳变初次（算法 1，本期锁定）
+
+本期只做算法 1。算法 2 不做。
+
+- 参数是 `params.percent`，相对初始值，不是绝对差值。
+- 初始值 = 该设备该指标在这次跳变之前的上一条已接受测值。不是单独配置的基线。
+- 第一次相对该初始值超过 `percent`：打 `JUMP_FIRST`。初始值不动。
+- 第一次跳变之后，下一次比较仍然对着同一个跳变前初始值，不改去对着刚跳过的那个点。若第二次也超过 `percent`（默认 `count=2`），校准：撤销 `JUMP_FIRST`，当前值成为新的上一条。不打 `JUMP_CONT`。
+- 若第二次改去对着刚跳过的点，变化会变成 0，校准永远不会发生。不能那样比。
+
+没有 `percent` 的旧快照，试运行不把绝对差值换算成跳变，也不写 `JUMP_FIRST`。
+
+### 9.5 有效率
+
+与正式相同：无异常标记的指标次数 / 参与判断的指标次数。只记在这条试运行上。未完成、或没有参与判断的指标时留空，不除零。
+
+### 9.6 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/iot/iotDataTrustTrial` | body：`standardId`、`from`、`to`、`projectId?`、`deviceIds?`。返回 `trialId`、`status=queued`。没有样本时记录仍会变成 `done` |
+| GET | `/iot/iotDataTrustTrial` | 列表。筛选 `categoryId`、`status`、`operator`、创建时间 |
+| GET | `/iot/iotDataTrustTrial/{id}` | 范围、快照摘要、状态、进度、汇总、`markBreakdown` |
+| GET | `/iot/iotDataTrustTrial/{id}/items` | 明细分页。筛选设备、指标、标记 |
+| POST | `/iot/iotDataTrustTrial/{id}/cancel` | 取消未完成的任务。记录改为 `cancelled`，已写出的明细保留 |
+
+列表和明细分页沿用 `pageNum` / `pageSize`。
+
+### 9.7 表
+
+新表和 SQL 由后端稍后提供。这里只列字段，不提供现在就可以拿去执行的迁移。
+
+`iot_data_trust_trial`：
+
+| 字段 | 说明 |
+|---|---|
+| id | trialId |
+| standardId | |
+| categoryId | 来自该版本 |
+| standardSnapshot | JSON。对照、断言、关联、时效 |
+| fromTime / toTime | 采样时间范围 |
+| projectId | 空表示全部项目 |
+| deviceIds | 空表示全部设备 |
+| status | `queued` / `running` / `done` / `failed` / `cancelled` |
+| receivedCount | 实收样本数，不含上下文 |
+| judgedMetrics / abnormalMetrics / validMetrics | 参与判断、有异常标记、无异常标记的指标次数 |
+| markBreakdown | JSON。第 9.1 节的分桶 |
+| errorMessage | 失败原因。没有样本不是失败 |
+| progress | 如 `{ "processed": 3, "total": 8 }` |
+| operator | |
+| createdAt / finishedAt | |
+
+`iot_data_trust_trial_item`：
+
+| 字段 | 说明 |
+|---|---|
+| id | |
+| trialId | |
+| sampleId / deviceId / sampleTime | |
+| identifier / identifierName | 复用物模型标识 |
+| value | 本次试运行用的测值。不读 `repairJson` |
+| qualityJson | 与正式同形：k = 指标，v = 标记码列表。只含标记，无异常为 `{}` |
+| skipJson | 可选。关联未执行时 `{ "status": "skip", "relations": [], "reason": "" }` |
+
+### 9.8 原型例子
+
+`TR20261110001`：草稿 `STD-C001-3` 在 `2026-11-10 09:20:00` 的快照，范围 2026-09-30，项目 PJ01，设备 D001 与探头 D002。液位 `percent=30`、`count=2`。
+
+窗口前上下文 4 条（D001、D002 各 2 点）不计入实收。实收 8，参与判断 24，异常指标 6，有效指标 18，试运行有效率 75%。标记分布：量程 2、极值 4、空值 1、`JUMP_FIRST` 2、关联未执行 8。类型 / 枚举 / 缺必报为 0。
+
+链（只看 D001 液位，初始值来自上下文，最后一条已接受值是 3.10）：
+
+| 样本 | 测值 | 结果 |
+|---|---|---|
+| S108 | 6.8 | 相对 3.10 超过 30%，先记 `JUMP_FIRST`，初始值不动。随后 S109 校准，这个标记被撤销。仍留 `EXTREME_HIGH` |
+| S109 | 8.9 | 第二次仍对照 3.10，不是对照 6.8。超过 30%。校准：撤销 `JUMP_FIRST`，8.9 成为新的上一条。不写 `JUMP_CONT`。仍留 `EXTREME_HIGH` |
+| S102 | 11.2 | 相对新的上一条 8.9 未超过 30%，不打跳变。量程失败，依赖液位的关联未执行。本点不写入上一条 |
+| S101 | 3.42 | 相对仍为 8.9 的上一条超过 30%，记 `JUMP_FIRST`。窗口里没有下一点，校准未发生 |
+
+D002 的 S103 用探头自己的 sample（液位 11.5），不读 D001 的报文。量程失败，所以虽有 `JUMP_FIRST`，但不进入校准计数。
+
+`TR20261109003`：最近 7 天没有实收样本，`status=done`，说明没有数据。`TR20261111008`：已发布 v2 的对照重跑，运行中。`TR20261108004` 失败。`TR20261107005` 已取消并留有取消前写出的明细。`TR20261106006` 排队中，挂在水质品类上。

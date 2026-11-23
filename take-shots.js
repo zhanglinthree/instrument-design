@@ -53,6 +53,10 @@ const shots = [
   { hash: 'monitorDetail?id=D004&valueMode=overlay', file: 'data-trust-13-monitor-overlay.png' },
   { hash: 'dataTrustAnomaly', file: 'data-trust-14-anomaly.png', fullPage: true },
   { hash: 'dataTrustAnomaly?repairStatus=none', file: 'data-trust-15-anomaly-unrepaired.png', fullPage: true },
+  { hash: 'dataTrustTrial', file: 'data-trust-16-trial-list.png', fullPage: true },
+  { hash: 'dataTrustTrial?id=TR20261110001', file: 'data-trust-17-trial-result.png', fullPage: true },
+  { hash: 'dataTrustTrial?id=TR20261111008', file: 'data-trust-18-trial-running.png', fullPage: true },
+  { hash: 'dataTrustTrial?id=TR20261109003', file: 'data-trust-19-trial-empty.png', fullPage: true },
 ];
 
 (async () => {
