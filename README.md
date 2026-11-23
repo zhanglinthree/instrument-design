@@ -67,11 +67,15 @@ python3 -m http.server 8877
 | 完整率/有效率 | `iot/iot-data-trust/IotDataTrustStats` | `/iot/iot-data-trust-stats` | `#dataTrustStats` |
 | 离线工作台（治理，第三周） | `iot/iot-data-trust/IotDataTrustWorkbench` | `/iot/iot-data-trust-workbench` | `#dataTrustWorkbench` · `#dataTrustWorkbench?deviceId=D001&metric=yewei` |
 | 修复记录（治理，第三周） | `iot/iot-data-trust/IotDataTrustRepairLog` | `/iot/iot-data-trust-repair-log` | `#dataTrustRepairLog` |
-| 试运行（不进侧栏；列表与结果同一组件） | `iot/iot-data-trust/IotDataTrustTrial` | `/iot/iot-data-trust-trial` | `#dataTrustTrial` · `#dataTrustTrial?id=TR20261110001` · `#dataTrustTrial?id=TR20261111008` · `#dataTrustTrial?id=TR20261109003` |
+| 试运行（不进侧栏；列表与结果同一组件） | `iot/iot-data-trust/IotDataTrustTrial` | `/iot/iot-data-trust-trial` | `#dataTrustTrial` · `#dataTrustTrial?id=TR20261110001` · `#dataTrustTrial?id=TR20261108004` · `#dataTrustTrial?id=TR20261109003` |
+| 按数据推荐（草稿面板，不进侧栏） | 仍是 `IotDataTrustStandard` | 同上 | `#categoryStandard?categoryId=C001&versionId=STD-C001-3&recommend=1` |
+| 正式开跑 | 结果仍在判断查询 | `/iot/iot-data-trust-judgement` | `#dataTrustJudgeRun` |
 
-修复策略不是新标准页，是品类标准上的「修复策略」页签。品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页：只列当前 sample 上仍有标记的指标，不替换判断查询，也不收缺报。侧栏「数据可信」仍只是目录。侧栏顺序：品类标准、数据异常、判断查询、缺报与离线、完整率/有效率，然后是治理入口（修复策略页签、离线工作台、修复记录）。没有「试运行」。默认筛选为全部修复状态。
+修复策略不是新标准页，是品类标准上的「修复策略」页签。品类标准、判断查询、缺报与离线、完整率/有效率这四个路由保持不变。数据异常是后加的同级查看页：只列当前 sample 上仍有标记的指标，不替换判断查询，也不收缺报。侧栏「数据可信」与「物联网」同级，仍只是目录。侧栏顺序：品类标准、数据异常、判断查询、正式开跑、缺报与离线、完整率/有效率，然后是治理入口（修复策略页签、离线工作台、修复记录）。没有「试运行」，也没有「按数据推荐」。不另写菜单 SQL。OTA 三个菜单不动。默认筛选为全部修复状态。
 
-试运行从品类标准草稿的「试运行」进入（须先保存草稿），或打开 `#dataTrustTrial`。用启动时冻结的快照预跑历史样本，上一条按这份草稿重放，不写正式 `qualityJson`，也不自动发布。跳变初次按相对初始值的百分比；第二次仍对照跳变前的初始值，校准后撤销 `JUMP_FIRST`，不写 `JUMP_CONT`。
+试运行从品类标准草稿的「试运行」进入（须先保存草稿）。`POST /iot/iotDataTrustTrial` 同步跑完并直接返回结果（对齐 `e270318a`）。用启动时冻结的快照预跑历史样本，上一条按这份草稿重放，不写正式 `qualityJson`，也不自动发布。项目先走 `GET /iot/iotDataTrustTrial/projects`，再走 `GET /iot/iotDataTrustTrial/devices`（`883047d8`），不用 `GET /iot/iotDevice?categoryId=`。未定义项目的 `projectId` 传空字符串。跳变初次按相对初始值的百分比；第二次仍对照跳变前的初始值，校准后撤销 `JUMP_FIRST`，不写 `JUMP_CONT`。排队 / 轮询 / 取消不在本期。
+
+按数据推荐在草稿上手工点，新建草稿不自动跑。按天看量程、极值、跳变。字典量程只引用。拟定接口见 `docs/api/iot-data-trust.md` 第 10 节，后端尚未落地。正式开跑是发布后的判断（`866403e3`：定时 + `POST /iot/iotDataTrustJudge/run`），会写 `qualityJson`，和试运行分开。
 
 - 数据异常只读。一行 = sample × 指标。`S102` 的 `yewei`（`RANGE_HIGH`，原始 11.2，修复 3.55，已修复）和 `wendu`（`NULL_VALUE`，未修复）分两行。`S201` 压强 280 / 修复 148 已修复。`S108` 液位 6.8 / 修复 4.2 已修复。`S109` 液位 8.9 未修复，有 `JUMP_CONT`、没有 `JUMP_CONFIRM`。`S103` 只出最新 `J103b`。`S101`、`J103a`、缺报 `G1`–`G5` 不出现。
 
@@ -193,10 +197,12 @@ take-shots.js # 截图脚本（需 puppeteer-core + Chrome）
 - `data-trust-13-monitor-overlay.png` 监控曲线叠加原始与修复层
 - `data-trust-14-anomaly.png` 数据异常（当前清单，默认全部修复状态）
 - `data-trust-15-anomaly-unrepaired.png` 数据异常 · 仅未修复
-- `data-trust-16-trial-list.png` 试运行记录（不进侧栏）
+- `data-trust-16-trial-list.png` 试运行记录（不进侧栏，同步完成 / 失败）
 - `data-trust-17-trial-result.png` 试运行 `TR20261110001`（草稿快照、跳变校准、探头用自己的 sample）
-- `data-trust-18-trial-running.png` 试运行进行中
+- `data-trust-18-trial-failed.png` 试运行同步失败 `TR20261108004`
 - `data-trust-19-trial-empty.png` 时段内没有实收样本
+- `data-trust-20-suggest.png` 草稿上的按数据推荐（不进侧栏）
+- `data-trust-21-formal-run.png` 正式开跑
 
 在线监控（设备数据）：
 - `monitor-01-list.png` 设备数据列表（latest_json 测点列）

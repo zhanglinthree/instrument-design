@@ -2481,13 +2481,29 @@ table.data-table td.dt-wrap { white-space: normal; vertical-align: top; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 180px;
+  max-height: 220px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
   background: #fafbfc;
 }
+.dt-device-pick .dt-check { align-items: flex-start; }
+.dt-suggest-field { margin: 8px 0 12px; }
+.dt-day-track {
+  display: inline-block;
+  width: 72px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 4px;
+  background: #eef2f6;
+  vertical-align: middle;
+  overflow: hidden;
+}
+.dt-day-bar { display: block; height: 100%; }
+.dt-day-range { background: #E78212; }
+.dt-day-extreme { background: #DC3545; }
+.dt-day-jump { background: #0D6EFD; }
 .dt-anomaly-table .actions { max-width: 168px; }
 .dt-anomaly-table td { vertical-align: top; }
 .nav-item.nav-later { font-size: 13px; }
